@@ -114,10 +114,13 @@ struct type_descr keyed_event_type =
 struct keyed_event
 {
     struct object  obj;             /* object header */
+    int inproc_sync;                /* in-process synchronization object */
 };
 
 static void keyed_event_dump( struct object *obj, int verbose );
 static int keyed_event_signaled( struct object *obj, struct wait_queue_entry *entry );
+static int keyed_event_get_inproc_sync( struct object *obj, enum inproc_sync_type *type );
+static void keyed_event_destroy( struct object *obj );
 
 static const struct object_ops keyed_event_ops =
 {
@@ -139,9 +142,9 @@ static const struct object_ops keyed_event_ops =
     default_unlink_name,         /* unlink_name */
     no_open_file,                /* open_file */
     no_kernel_obj_list,          /* get_kernel_obj_list */
-    no_get_inproc_sync,          /* get_inproc_sync */
+    keyed_event_get_inproc_sync, /* get_inproc_sync */
     no_close_handle,             /* close_handle */
-    no_destroy                   /* destroy */
+    keyed_event_destroy          /* destroy */
 };
 
 
@@ -270,6 +273,7 @@ struct keyed_event *create_keyed_event( struct object *root, const struct unicod
         if (get_error() != STATUS_OBJECT_NAME_EXISTS)
         {
             /* initialize it if it didn't already exist */
+            event->inproc_sync = create_inproc_event( TRUE, TRUE );
         }
     }
     return event;
@@ -311,6 +315,21 @@ static int keyed_event_signaled( struct object *obj, struct wait_queue_entry *en
         if (wake_thread_queue_entry( ptr )) return 1;
     }
     return 0;
+}
+
+static int keyed_event_get_inproc_sync( struct object *obj, enum inproc_sync_type *type )
+{
+    struct keyed_event *event = (struct keyed_event *)obj;
+
+    *type = INPROC_SYNC_MANUAL_SERVER;
+    return event->inproc_sync;
+}
+
+static void keyed_event_destroy( struct object *obj )
+{
+    struct keyed_event *event = (struct keyed_event *)obj;
+
+    if (use_inproc_sync()) close( event->inproc_sync );
 }
 
 /* create an event */
