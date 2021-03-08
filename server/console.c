@@ -96,6 +96,7 @@ static const struct object_ops console_ops =
     NULL,                             /* unlink_name */
     console_open_file,                /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     console_destroy                   /* destroy */
 };
@@ -173,6 +174,7 @@ static const struct object_ops console_server_ops =
     NULL,                             /* unlink_name */
     console_server_open_file,         /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     console_server_destroy            /* destroy */
 };
@@ -242,6 +244,7 @@ static const struct object_ops screen_buffer_ops =
     NULL,                             /* unlink_name */
     screen_buffer_open_file,          /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     screen_buffer_destroy             /* destroy */
 };
@@ -291,6 +294,7 @@ static const struct object_ops console_device_ops =
     default_unlink_name,              /* unlink_name */
     console_device_open_file,         /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     no_destroy                        /* destroy */
 };
@@ -330,6 +334,7 @@ static const struct object_ops console_input_ops =
     default_unlink_name,              /* unlink_name */
     console_input_open_file,          /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     console_input_destroy             /* destroy */
 };
@@ -389,6 +394,7 @@ static const struct object_ops console_output_ops =
     default_unlink_name,              /* unlink_name */
     console_output_open_file,         /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     console_output_destroy            /* destroy */
 };
@@ -447,6 +453,7 @@ static const struct object_ops console_connection_ops =
     default_unlink_name,              /* unlink_name */
     console_connection_open_file,     /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_get_inproc_sync,               /* get_inproc_sync */
     console_connection_close_handle,  /* close_handle */
     console_connection_destroy        /* destroy */
 };
