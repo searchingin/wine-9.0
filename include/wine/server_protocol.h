@@ -5940,6 +5940,30 @@ struct get_linux_sync_obj_reply
 };
 
 
+
+struct select_inproc_queue_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct select_inproc_queue_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct unselect_inproc_queue_request
+{
+    struct request_header __header;
+    int          signaled;
+};
+struct unselect_inproc_queue_reply
+{
+    struct reply_header __header;
+};
+
+
 enum request
 {
     REQ_new_process,
@@ -6237,6 +6261,8 @@ enum request
     REQ_set_keyboard_repeat,
     REQ_get_linux_sync_device,
     REQ_get_linux_sync_obj,
+    REQ_select_inproc_queue,
+    REQ_unselect_inproc_queue,
     REQ_NB_REQUESTS
 };
 
@@ -6539,6 +6565,8 @@ union generic_request
     struct set_keyboard_repeat_request set_keyboard_repeat_request;
     struct get_linux_sync_device_request get_linux_sync_device_request;
     struct get_linux_sync_obj_request get_linux_sync_obj_request;
+    struct select_inproc_queue_request select_inproc_queue_request;
+    struct unselect_inproc_queue_request unselect_inproc_queue_request;
 };
 union generic_reply
 {
@@ -6839,8 +6867,10 @@ union generic_reply
     struct set_keyboard_repeat_reply set_keyboard_repeat_reply;
     struct get_linux_sync_device_reply get_linux_sync_device_reply;
     struct get_linux_sync_obj_reply get_linux_sync_obj_reply;
+    struct select_inproc_queue_reply select_inproc_queue_reply;
+    struct unselect_inproc_queue_reply unselect_inproc_queue_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 865
+#define SERVER_PROTOCOL_VERSION 866
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

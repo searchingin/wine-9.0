@@ -3374,6 +3374,15 @@ static void dump_get_linux_sync_obj_reply( const struct get_linux_sync_obj_reply
     fprintf( stderr, ", access=%08x", req->access );
 }
 
+static void dump_select_inproc_queue_request( const struct select_inproc_queue_request *req )
+{
+}
+
+static void dump_unselect_inproc_queue_request( const struct unselect_inproc_queue_request *req )
+{
+    fprintf( stderr, " signaled=%d", req->signaled );
+}
+
 typedef void (*dump_func)( const void *req );
 
 static const dump_func req_dumpers[REQ_NB_REQUESTS] =
@@ -3673,6 +3682,8 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_set_keyboard_repeat_request,
     (dump_func)dump_get_linux_sync_device_request,
     (dump_func)dump_get_linux_sync_obj_request,
+    (dump_func)dump_select_inproc_queue_request,
+    (dump_func)dump_unselect_inproc_queue_request,
 };
 
 static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
@@ -3972,6 +3983,8 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_set_keyboard_repeat_reply,
     NULL,
     (dump_func)dump_get_linux_sync_obj_reply,
+    NULL,
+    NULL,
 };
 
 static const char * const req_names[REQ_NB_REQUESTS] =
@@ -4271,6 +4284,8 @@ static const char * const req_names[REQ_NB_REQUESTS] =
     "set_keyboard_repeat",
     "get_linux_sync_device",
     "get_linux_sync_obj",
+    "select_inproc_queue",
+    "unselect_inproc_queue",
 };
 
 static const struct
