@@ -56,7 +56,7 @@ static int get_linux_device(void)
 
 int use_inproc_sync(void)
 {
-    return 0;
+    return get_linux_device() >= 0;
 }
 
 int create_inproc_event( int manual_reset, int signaled )
