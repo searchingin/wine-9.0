@@ -95,6 +95,7 @@ struct thread
     WCHAR                 *desc;          /* thread description string */
     struct completion_wait *completion_wait; /* completion port wait object the thread is associated with */
     int                    inproc_sync;   /* in-process synchronization object */
+    struct event          *inproc_alert_event; /* in-process synchronization alert event */
 };
 
 extern struct thread *current;

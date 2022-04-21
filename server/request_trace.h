@@ -3383,6 +3383,15 @@ static void dump_unselect_inproc_queue_request( const struct unselect_inproc_que
     fprintf( stderr, " signaled=%d", req->signaled );
 }
 
+static void dump_get_inproc_alert_event_request( const struct get_inproc_alert_event_request *req )
+{
+}
+
+static void dump_get_inproc_alert_event_reply( const struct get_inproc_alert_event_reply *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
 typedef void (*dump_func)( const void *req );
 
 static const dump_func req_dumpers[REQ_NB_REQUESTS] =
@@ -3684,6 +3693,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_get_linux_sync_obj_request,
     (dump_func)dump_select_inproc_queue_request,
     (dump_func)dump_unselect_inproc_queue_request,
+    (dump_func)dump_get_inproc_alert_event_request,
 };
 
 static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
@@ -3985,6 +3995,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_get_linux_sync_obj_reply,
     NULL,
     NULL,
+    (dump_func)dump_get_inproc_alert_event_reply,
 };
 
 static const char * const req_names[REQ_NB_REQUESTS] =
@@ -4286,6 +4297,7 @@ static const char * const req_names[REQ_NB_REQUESTS] =
     "get_linux_sync_obj",
     "select_inproc_queue",
     "unselect_inproc_queue",
+    "get_inproc_alert_event",
 };
 
 static const struct
