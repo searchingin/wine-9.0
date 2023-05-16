@@ -1984,12 +1984,6 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
 
         if (fd->unix_fd == -1)
         {
-            if (stat( name, &st ))
-            {
-                file_set_error();
-                goto error;
-            }
-
             /* check for trailing slash on file path */
             if ((errno == ENOENT || (errno == ENOTDIR && !(options & FILE_DIRECTORY_FILE))) && name[strlen(name) - 1] == '/')
             {
@@ -2002,7 +1996,7 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
              * without lock support. Contrary to POSIX, Linux returns ENXIO in this
              * case, so we also check that error code here.
              */
-            else if ((errno == EOPNOTSUPP || errno == ENXIO) && S_ISSOCK(st.st_mode) && (options & FILE_DELETE_ON_CLOSE))
+            else if ((errno == EOPNOTSUPP || errno == ENXIO) && !stat(name, &st) && S_ISSOCK(st.st_mode) && (options & FILE_DELETE_ON_CLOSE))
                 ; /* no error, go to regular deletion code path */
             else
             {
@@ -2014,9 +2008,9 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
 
     fd->nt_name = dup_nt_name( root, nt_name, &fd->nt_namelen );
     fd->unix_name = NULL;
-    /* st was set from the file name if the file could not be opened */
     if (fd->unix_fd != -1)
         fstat( fd->unix_fd, &st );
+    /* st was set from the file name in case of sockets */
     *mode = st.st_mode;
 
     /* only bother with an inode for normal files and directories */
