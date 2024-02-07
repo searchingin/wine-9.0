@@ -228,32 +228,34 @@ static inline int facename_compare( const WCHAR *str1, const WCHAR *str2, SIZE_T
 
 static inline INT width_to_LP( DC *dc, INT width )
 {
-    return GDI_ROUND( (double)width * fabs( dc->xformVport2World.eM11 ));
+    float scale_x;
+
+    scale_x = hypotf( dc->xformWorld2Vport.eM11, dc->xformWorld2Vport.eM12 );
+    return GDI_ROUND( (float)width / scale_x );
 }
 
 static inline INT height_to_LP( DC *dc, INT height )
 {
-    return GDI_ROUND( (double)height * fabs( dc->xformVport2World.eM22 ));
+    float scale_y;
+
+    scale_y = hypotf( dc->xformWorld2Vport.eM21, dc->xformWorld2Vport.eM22 );
+    return GDI_ROUND( (float)height / scale_y );
 }
 
 static inline INT width_to_DP(DC *dc, INT width)
 {
-    POINT pt[2];
-    pt[0].x = pt[0].y = 0;
-    pt[1].x = width;
-    pt[1].y = 0;
-    lp_to_dp(dc, pt, 2);
-    return pt[1].x - pt[0].x;
+    float scale_x;
+
+    scale_x = hypotf( dc->xformWorld2Vport.eM11, dc->xformWorld2Vport.eM12 );
+    return GDI_ROUND( (float)width * scale_x );
 }
 
 static inline INT height_to_DP(DC *dc, INT height)
 {
-    POINT pt[2];
-    pt[0].x = pt[0].y = 0;
-    pt[1].x = 0;
-    pt[1].y = height;
-    lp_to_dp(dc, pt, 2);
-    return pt[1].y - pt[0].y;
+    float scale_y;
+
+    scale_y = hypotf( dc->xformWorld2Vport.eM21, dc->xformWorld2Vport.eM22 );
+    return GDI_ROUND( (float)height * scale_y );
 }
 
 static INT FONT_GetObjectW( HGDIOBJ handle, INT count, LPVOID buffer );
@@ -4104,8 +4106,8 @@ static void scale_outline_font_metrics( const struct gdi_font *font, OUTLINETEXT
     else
         scale_x = font->scale_y;
 
-    scale_x *= fabs(font->matrix.eM11);
-    scale_y = font->scale_y * fabs(font->matrix.eM22);
+    scale_x *= hypotf(font->matrix.eM11, font->matrix.eM12);
+    scale_y = font->scale_y * hypotf(font->matrix.eM21, font->matrix.eM22);
 
 /* Windows scales these values as signed integers even if they are unsigned */
 #define SCALE_X(x) (x) = GDI_ROUND((int)(x) * (scale_x))
@@ -4319,8 +4321,8 @@ static void scale_font_metrics( struct gdi_font *font, TEXTMETRICW *tm )
     else
         scale_x = font->scale_y;
 
-    scale_x *= fabs(font->matrix.eM11);
-    scale_y = font->scale_y * fabs(font->matrix.eM22);
+    scale_x *= hypotf(font->matrix.eM11, font->matrix.eM12);
+    scale_y = font->scale_y * hypotf(font->matrix.eM21, font->matrix.eM22);
 
 #define SCALE_X(x) (x) = GDI_ROUND((x) * scale_x)
 #define SCALE_Y(y) (y) = GDI_ROUND((y) * scale_y)

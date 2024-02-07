@@ -7969,17 +7969,12 @@ static void test_rotated_metrics(void)
         GetTextMetricsW(hdc, &tm);
         /* Windows produces noticeable diff for angles 45.0 and 135.0 */
         off = test[i].angle_d == 45.0f ? 4 : 2;
-        todo_wine_if(i == 1 || i == 2)
         ok(match_off_by_n(tm.tmHeight, test[i].tmHeight, off), "got %ld\n", tm.tmHeight);
-        todo_wine_if(i == 1 || i == 2)
         ok(match_off_by_n(tm.tmAscent, test[i].tmAscent, 2), "got %ld\n", tm.tmAscent);
-        todo_wine_if(i == 1 || i == 2)
         ok(match_off_by_n(tm.tmDescent, test[i].tmDescent, 2), "got %ld\n", tm.tmDescent);
 
         GetTextExtentPoint32W(hdc, str, wcslen(str), &sz);
-        todo_wine_if(i == 1 || i == 2)
         ok(match_off_by_n(sz.cx, test[i].ext.cx, 5), "got %ld\n", sz.cx);
-        todo_wine_if(i == 1 || i == 2)
         ok(match_off_by_n(sz.cy, test[i].ext.cy, off), "got %ld\n", sz.cy);
 
         winetest_pop_context();
