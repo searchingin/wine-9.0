@@ -52,6 +52,12 @@ struct shared_input_cache
     DWORD tid;
 };
 
+struct shared_user_object_cache
+{
+    const shared_object_t *object;
+    UINT64 id;
+};
+
 struct session_thread_data
 {
     const shared_object_t *shared_desktop;         /* thread desktop shared session cached object */
@@ -326,6 +332,26 @@ NTSTATUS get_shared_input( UINT tid, struct object_lock *lock, const input_shm_t
     while (!status && !cache->id);
 
     return status;
+}
+
+#define NB_USER_HANDLES  ((LAST_USER_HANDLE - FIRST_USER_HANDLE + 1) >> 1)
+#define USER_HANDLE_TO_INDEX(handle) ((LOWORD(handle) - FIRST_USER_HANDLE) >> 1)
+
+static struct shared_user_object_cache user_objects[NB_USER_HANDLES];
+static pthread_mutex_t user_objects_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void set_shared_user_object( HANDLE handle, struct obj_locator locator )
+{
+    WORD index = USER_HANDLE_TO_INDEX( handle );
+    struct shared_user_object_cache *cache;
+
+    if (index >= NB_USER_HANDLES) return;
+    cache = user_objects + index;
+
+    pthread_mutex_lock( &user_objects_lock );
+    cache->id = locator.id;
+    cache->object = find_shared_session_object( locator );
+    pthread_mutex_unlock( &user_objects_lock );
 }
 
 BOOL is_virtual_desktop(void)
@@ -777,6 +803,7 @@ HWND get_desktop_window(void)
     static const WCHAR wine_service_station_name[] =
         {'_','_','w','i','n','e','s','e','r','v','i','c','e','_','w','i','n','s','t','a','t','i','o','n',0};
     struct ntuser_thread_info *thread_info = NtUserGetThreadInfo();
+    struct obj_locator top_locator, msg_locator;
     WCHAR name[MAX_PATH];
     BOOL is_service;
 
@@ -796,6 +823,8 @@ HWND get_desktop_window(void)
         {
             thread_info->top_window = reply->top_window;
             thread_info->msg_window = reply->msg_window;
+            top_locator = reply->top_locator;
+            msg_locator = reply->msg_locator;
         }
     }
     SERVER_END_REQ;
@@ -878,13 +907,20 @@ HWND get_desktop_window(void)
             {
                 thread_info->top_window = reply->top_window;
                 thread_info->msg_window = reply->msg_window;
+                top_locator = reply->top_locator;
+                msg_locator = reply->msg_locator;
             }
         }
         SERVER_END_REQ;
     }
 
     if (!thread_info->top_window) ERR_(win)( "failed to create desktop window\n" );
-    else user_driver->pSetDesktopWindow( UlongToHandle( thread_info->top_window ));
+    else
+    {
+        set_shared_user_object( UlongToHandle( thread_info->top_window ), top_locator );
+        set_shared_user_object( UlongToHandle( thread_info->msg_window ), msg_locator );
+        user_driver->pSetDesktopWindow( UlongToHandle( thread_info->top_window ));
+    }
 
     register_builtin_classes();
     return UlongToHandle( thread_info->top_window );

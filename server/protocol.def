@@ -1007,11 +1007,17 @@ typedef volatile struct
     int                  keystate_lock;    /* keystate is locked */
 } input_shm_t;
 
+typedef volatile struct
+{
+    int                  placeholder;
+} window_shm_t;
+
 typedef volatile union
 {
     desktop_shm_t        desktop;
     queue_shm_t          queue;
     input_shm_t          input;
+    window_shm_t         window;
 } object_shm_t;
 
 typedef volatile struct
@@ -2531,12 +2537,13 @@ enum message_type
     unsigned int   ex_style;    /* window extended style */
     VARARG(class,unicode_str);  /* class name */
 @REPLY
-    user_handle_t  handle;      /* created window */
-    user_handle_t  parent;      /* full handle of parent */
-    user_handle_t  owner;       /* full handle of owner */
-    int            extra;       /* number of extra bytes */
-    client_ptr_t   class_ptr;   /* pointer to class in client address space */
-    unsigned int   dpi_context; /* window DPI context */
+    struct obj_locator  locator;     /* locator for the shared session object */
+    user_handle_t       handle;      /* created window */
+    user_handle_t       parent;      /* full handle of parent */
+    user_handle_t       owner;       /* full handle of owner */
+    int                 extra;       /* number of extra bytes */
+    client_ptr_t        class_ptr;   /* pointer to class in client address space */
+    unsigned int        dpi_context; /* window DPI context */
 @END
 
 
@@ -2550,8 +2557,10 @@ enum message_type
 @REQ(get_desktop_window)
     int            force;       /* force creation if it doesn't exist */
 @REPLY
-    user_handle_t  top_window;  /* handle to the desktop window */
-    user_handle_t  msg_window;  /* handle to the top-level HWND_MESSAGE parent */
+    user_handle_t       top_window;  /* handle to the desktop window */
+    user_handle_t       msg_window;  /* handle to the top-level HWND_MESSAGE parent */
+    struct obj_locator  top_locator; /* locator for the desktop window shared session object */
+    struct obj_locator  msg_locator; /* locator for the message window shared session object */
 @END
 
 
