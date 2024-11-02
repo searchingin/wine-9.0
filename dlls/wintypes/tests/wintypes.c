@@ -1296,7 +1296,6 @@ static void test_IPropertySet(void)
         goto done;
 
     hr = IPropertySet_QueryInterface( propset, &IID_IObservableMap_HSTRING_IInspectable, (void **)&observable_map );
-    todo_wine
     ok( hr == S_OK, "QueryInterface failed, got %#lx\n", hr );
     if (SUCCEEDED( hr ))
         IObservableMap_HSTRING_IInspectable_Release( observable_map );
