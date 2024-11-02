@@ -1273,18 +1273,15 @@ static void test_IPropertySet(void)
     ok( hr == S_OK, "got %#lx\n", hr );
     hr = RoGetActivationFactory( name, &IID_IActivationFactory, (void **)&propset_factory );
     WindowsDeleteString( name );
-    todo_wine
     ok( hr == S_OK || broken( hr == REGDB_E_CLASSNOTREG ), "RoGetActivationFactory failed, hr %#lx.\n", hr );
     if (hr != S_OK)
     {
-        todo_wine
         win_skip( "%s runtimeclass not registered, skipping tests.\n", wine_dbgstr_w( class_name ) );
         goto done;
     }
 
     hr = IActivationFactory_ActivateInstance( propset_factory, &inspectable );
     IActivationFactory_Release( propset_factory );
-    todo_wine
     ok( hr == S_OK, "got %#lx\n", hr );
     if (FAILED( hr ))
     {
@@ -1294,7 +1291,6 @@ static void test_IPropertySet(void)
 
     hr = IInspectable_QueryInterface( inspectable, &IID_IPropertySet, (void **)&propset );
     IInspectable_Release( inspectable );
-    todo_wine
     ok( hr == S_OK, "QueryInterface failed, got %#lx\n", hr );
     if (FAILED( hr ))
         goto done;
