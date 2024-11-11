@@ -124,6 +124,8 @@ struct media_stream
     IMFMediaStream IMFMediaStream_iface;
     LONG ref;
 
+    SRWLOCK source_lock;
+
     IMFMediaSource *media_source;
     IMFMediaEventQueue *event_queue;
     IMFStreamDescriptor *descriptor;
@@ -550,6 +552,8 @@ static void flush_token_queue(struct media_stream *stream, BOOL send)
         {
             IUnknown *op;
             HRESULT hr;
+
+            assert(stream->media_source);
 
             if (SUCCEEDED(hr = source_create_async_op(SOURCE_ASYNC_REQUEST_SAMPLE, &op)))
             {
@@ -994,7 +998,11 @@ static ULONG WINAPI media_stream_Release(IMFMediaStream *iface)
 
     if (!ref)
     {
-        IMFMediaSource_Release(stream->media_source);
+        if (stream->media_source)
+        {
+            IMFMediaSource_Release(stream->media_source);
+            stream->media_source = NULL;
+        }
         IMFStreamDescriptor_Release(stream->descriptor);
         IMFMediaEventQueue_Release(stream->event_queue);
         flush_token_queue(stream, FALSE);
@@ -1041,21 +1049,38 @@ static HRESULT WINAPI media_stream_QueueEvent(IMFMediaStream *iface, MediaEventT
     return IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, event_type, ext_type, hr, value);
 }
 
+static struct media_source *media_stream_get_media_source(struct media_stream *stream)
+{
+    IMFMediaSource *source_iface;
+
+    AcquireSRWLockShared(&stream->source_lock);
+    if ((source_iface = stream->media_source))
+        IMFMediaSource_AddRef(source_iface);
+    ReleaseSRWLockShared(&stream->source_lock);
+
+    return source_iface ? impl_from_IMFMediaSource(source_iface) : NULL;
+}
+
 static HRESULT WINAPI media_stream_GetMediaSource(IMFMediaStream *iface, IMFMediaSource **out)
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+    struct media_source *source = media_stream_get_media_source(stream);
     HRESULT hr = S_OK;
 
     TRACE("%p, %p.\n", iface, out);
 
+    if (!source)
+        return MF_E_SHUTDOWN;
+
     EnterCriticalSection(&source->cs);
 
     if (source->state == SOURCE_SHUTDOWN)
+    {
+        IMFMediaSource_Release(&source->IMFMediaSource_iface);
         hr = MF_E_SHUTDOWN;
+    }
     else
     {
-        IMFMediaSource_AddRef(&source->IMFMediaSource_iface);
         *out = &source->IMFMediaSource_iface;
     }
 
@@ -1067,10 +1092,13 @@ static HRESULT WINAPI media_stream_GetMediaSource(IMFMediaStream *iface, IMFMedi
 static HRESULT WINAPI media_stream_GetStreamDescriptor(IMFMediaStream* iface, IMFStreamDescriptor **descriptor)
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+    struct media_source *source = media_stream_get_media_source(stream);
     HRESULT hr = S_OK;
 
     TRACE("%p, %p.\n", iface, descriptor);
+
+    if (!source)
+        return MF_E_SHUTDOWN;
 
     EnterCriticalSection(&source->cs);
 
@@ -1084,17 +1112,21 @@ static HRESULT WINAPI media_stream_GetStreamDescriptor(IMFMediaStream* iface, IM
 
     LeaveCriticalSection(&source->cs);
 
+    IMFMediaSource_Release(&source->IMFMediaSource_iface);
     return hr;
 }
 
 static HRESULT WINAPI media_stream_RequestSample(IMFMediaStream *iface, IUnknown *token)
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+    struct media_source *source = media_stream_get_media_source(stream);
     IUnknown *op;
     HRESULT hr;
 
     TRACE("%p, %p.\n", iface, token);
+
+    if (!source)
+        return MF_E_SHUTDOWN;
 
     EnterCriticalSection(&source->cs);
 
@@ -1118,6 +1150,7 @@ static HRESULT WINAPI media_stream_RequestSample(IMFMediaStream *iface, IUnknown
 
     LeaveCriticalSection(&source->cs);
 
+    IMFMediaSource_Release(&source->IMFMediaSource_iface);
     return hr;
 }
 
@@ -1148,6 +1181,8 @@ static HRESULT media_stream_create(IMFMediaSource *source, IMFStreamDescriptor *
 
     object->IMFMediaStream_iface.lpVtbl = &media_stream_vtbl;
     object->ref = 1;
+
+    InitializeSRWLock(&object->source_lock);
 
     if (FAILED(hr = MFCreateEventQueue(&object->event_queue)))
     {
@@ -1683,6 +1718,12 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
         if (stream)
         {
             IMFMediaEventQueue_Shutdown(stream->event_queue);
+            /* Media Foundation documentation says circular references such as
+             * those between the source and its streams should be released here. */
+            IMFMediaSource_Release(stream->media_source);
+            AcquireSRWLockExclusive(&stream->source_lock);
+            stream->media_source = NULL;
+            ReleaseSRWLockExclusive(&stream->source_lock);
             IMFMediaStream_Release(&stream->IMFMediaStream_iface);
         }
     }
