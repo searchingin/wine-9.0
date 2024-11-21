@@ -1308,7 +1308,6 @@ static void test_IPropertySet(void)
 
     hr = IMap_HSTRING_IInspectable_QueryInterface( map, &IID_IIterable_IKeyValuePair_HSTRING_IInspectable,
                                                    (void **)&iterable );
-    todo_wine
     ok( hr == S_OK, "QueryInterface failed, got %#lx\n", hr );
     if (SUCCEEDED( hr ))
     {
