@@ -1815,6 +1815,7 @@ RETURN_CODE WCMD_pushd(const WCHAR *args)
 
 RETURN_CODE WCMD_popd(void)
 {
+    RETURN_CODE return_code;
     struct env_stack *temp = pushd_directories;
 
     if (!pushd_directories)
@@ -1822,10 +1823,11 @@ RETURN_CODE WCMD_popd(void)
 
     /* pop the old environment from the stack, and make it the current dir */
     pushd_directories = temp->next;
-    SetCurrentDirectoryW(temp->strings);
+    return_code = WCMD_cd_set_env(temp->strings, NULL);
     free(temp->strings);
     free(temp);
-    return NO_ERROR;
+    return return_code == NO_ERROR ?
+        return_code : (errorlevel = return_code);
 }
 
 /****************************************************************************
