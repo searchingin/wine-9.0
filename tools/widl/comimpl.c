@@ -59,6 +59,39 @@ static void write_imports( const statement_list_t *stmts )
     }
 }
 
+static void write_impl( const type_t *impl, const type_t *klass )
+{
+    struct strbuf str = {0};
+    const var_t *var;
+
+    put_str( indent, "#ifdef WIDL_impl_%s\n\n", impl->name );
+
+    put_str( indent, "struct %s\n", klass->name );
+    put_str( indent++, "{\n" );
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        append_declspec( &str, &var->declspec, NAME_C, "WINAPI", false, var->name );
+        put_str( indent, "%s;\n", str.buf );
+        str.pos = 0;
+    }
+    put_str( --indent, "};\n\n" );
+
+    put_str( indent, "#endif /* WIDL_impl_%s */\n", impl->name );
+}
+
+static void write_impls( const statement_list_t *stmts )
+{
+    const statement_t *stmt;
+
+    LIST_FOR_EACH_ENTRY( stmt, stmts, const statement_t, entry )
+    {
+        const type_t *type = stmt->u.type, *impl;
+        if (stmt->type != STMT_TYPE || !stmt->is_defined) continue;
+        if (!(impl = get_attrp( type->attrs, ATTR_IMPL ))) continue;
+        write_impl( impl, type );
+    }
+}
+
 void write_comimpl( const statement_list_t *stmts )
 {
     if (!do_comimpl) return;
@@ -68,5 +101,6 @@ void write_comimpl( const statement_list_t *stmts )
     write_imports( stmts );
     put_str( indent, "\n" );
 
+    write_impls( stmts );
     flush_output_buffer( comimpl_name );
 }
