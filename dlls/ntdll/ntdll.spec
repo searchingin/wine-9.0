@@ -152,6 +152,7 @@
 @ stdcall -syscall NtAllocateVirtualMemoryEx(long ptr ptr long long ptr long)
 @ stdcall -syscall NtAreMappedFilesTheSame(ptr ptr)
 @ stdcall -syscall NtAssignProcessToJobObject(long long)
+@ stdcall -syscall NtAssociateWaitCompletionPacket(ptr ptr ptr ptr ptr long ptr ptr)
 @ stdcall -syscall NtCallbackReturn(ptr long long)
 # @ stub NtCancelDeviceWakeupRequest
 @ stdcall -syscall NtCancelIoFile(long ptr)
