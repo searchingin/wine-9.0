@@ -495,6 +495,68 @@ DECL_HANDLER(associate_wait_completion_packet)
     release_object( completion );
 }
 
+/* cancel a wait completion packet */
+DECL_HANDLER(cancel_wait_completion_packet)
+{
+    struct wait_completion_packet *packet;
+
+    packet = get_wait_completion_packet_obj( current->process, req->packet, WAIT_COMPLETION_PACKET_QUERY_STATE );
+    if (!packet)
+        return;
+
+    if (!packet->in_object_packet_queue && !packet->in_completion_queue)
+    {
+        set_error( STATUS_CANCELLED );
+        release_object( packet );
+        return;
+    }
+
+    if (packet->in_completion_queue && !req->remove_signaled)
+    {
+        set_error( STATUS_PENDING );
+        release_object( packet );
+        return;
+    }
+
+    if (packet->in_object_packet_queue)
+    {
+        list_remove( &packet->entry );
+        packet->in_object_packet_queue = 0;
+    }
+
+    if (packet->in_completion_queue)
+    {
+        struct comp_msg *comp_msg;
+
+        LIST_FOR_EACH_ENTRY( comp_msg, &packet->completion->queue, struct comp_msg, queue_entry )
+        {
+            if (comp_msg->packet == packet)
+            {
+                list_remove( &comp_msg->queue_entry );
+                free( comp_msg );
+                packet->completion->depth--;
+                break;
+            }
+        }
+
+        packet->in_completion_queue = 0;
+    }
+
+    if (packet->target)
+    {
+        release_object( packet->target );
+        packet->target = NULL;
+    }
+
+    if (packet->completion)
+    {
+        release_object( packet->completion );
+        packet->completion = NULL;
+    }
+
+    release_object( packet );
+}
+
 /* create a completion */
 DECL_HANDLER(create_completion)
 {

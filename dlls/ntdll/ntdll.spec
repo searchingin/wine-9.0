@@ -159,6 +159,7 @@
 @ stdcall -syscall NtCancelIoFileEx(long ptr ptr)
 @ stdcall -syscall NtCancelSynchronousIoFile(long ptr ptr)
 @ stdcall -syscall NtCancelTimer(long ptr)
+@ stdcall -syscall NtCancelWaitCompletionPacket(ptr long)
 @ stdcall -syscall NtClearEvent(long)
 @ stdcall -syscall NtClose(long)
 # @ stub NtCloseObjectAuditAlarm
