@@ -48,6 +48,11 @@ struct async_queue
     struct list queue;          /* queue of async objects */
 };
 
+struct wait_completion_packet
+{
+    struct object      obj;                       /* object header */
+};
+
 /* operations valid on file descriptor objects */
 struct fd_ops
 {

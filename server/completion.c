@@ -36,6 +36,59 @@
 #include "handle.h"
 #include "request.h"
 
+static const WCHAR wait_completion_packet_name[] = {'W','a','i','t','C','o','m','p','l','e','t','i','o','n','P','a','c','k','e','t'};
+
+struct type_descr wait_completion_packet_type =
+{
+    { wait_completion_packet_name, sizeof(wait_completion_packet_name) }, /* name */
+    WAIT_COMPLETION_PACKET_ALL_ACCESS,                                    /* valid_access */
+    {                                                                     /* mapping */
+         WAIT_COMPLETION_PACKET_GENERIC_READ,
+         WAIT_COMPLETION_PACKET_GENERIC_WRITE,
+         WAIT_COMPLETION_PACKET_GENERIC_EXECUTE,
+         WAIT_COMPLETION_PACKET_ALL_ACCESS
+    },
+};
+
+static void wait_completion_packet_dump( struct object *, int );
+
+static const struct object_ops wait_completion_packet_ops =
+{
+    sizeof(struct wait_completion_packet),  /* size */
+    &wait_completion_packet_type,           /* type */
+    wait_completion_packet_dump,            /* dump */
+    no_add_queue,                           /* add_queue */
+    NULL,                                   /* remove_queue */
+    NULL,                                   /* signaled */
+    NULL,                                   /* satisfied */
+    no_signal,                              /* signal */
+    no_get_fd,                              /* get_fd */
+    default_map_access,                     /* map_access */
+    default_get_sd,                         /* get_sd */
+    default_set_sd,                         /* set_sd */
+    default_get_full_name,                  /* get_full_name */
+    no_lookup_name,                         /* lookup_name */
+    directory_link_name,                    /* link_name */
+    default_unlink_name,                    /* unlink_name */
+    no_open_file,                           /* open_file */
+    no_kernel_obj_list,                     /* get_kernel_obj_list */
+    no_close_handle,                        /* close_handle */
+    no_destroy                              /* destroy */
+};
+
+static void wait_completion_packet_dump( struct object *obj, int verbose )
+{
+    assert( obj->ops == &wait_completion_packet_ops );
+    fprintf( stderr, "WaitCompletionPacket\n" );
+}
+
+static struct wait_completion_packet *create_wait_completion_packet( struct object *root,
+                                                                     const struct unicode_str *name,
+                                                                     unsigned int attr,
+                                                                     const struct security_descriptor *sd )
+{
+    return create_named_object( root, &wait_completion_packet_ops, name, attr, sd );
+}
 
 static const WCHAR completion_name[] = {'I','o','C','o','m','p','l','e','t','i','o','n'};
 
@@ -308,6 +361,26 @@ void add_completion( struct completion *completion, apc_param_t ckey, apc_param_
         if (list_empty( &completion->queue )) return;
     }
     if (!list_empty( &completion->queue )) wake_up( &completion->obj, 0 );
+}
+
+/* create a wait completion packet */
+DECL_HANDLER(create_wait_completion_packet)
+{
+    struct wait_completion_packet *packet;
+    struct unicode_str name;
+    struct object *root;
+    const struct security_descriptor *sd;
+    const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, &root );
+
+    if (!objattr) return;
+    if ((packet = create_wait_completion_packet( root, &name, objattr->attributes, sd ))
+        && get_error() != STATUS_OBJECT_NAME_EXISTS)
+    {
+        reply->handle = alloc_handle( current->process, packet, req->access, objattr->attributes );
+        release_object( packet );
+    }
+
+    if (root) release_object( root );
 }
 
 /* create a completion */
