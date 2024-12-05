@@ -1318,11 +1318,13 @@ struct HTMLAttributeCollection {
     IHTMLAttributeCollection2 IHTMLAttributeCollection2_iface;
     IHTMLAttributeCollection3 IHTMLAttributeCollection3_iface;
 
+    nsIDOMMozNamedAttrMap *nsattrs;
     HTMLElement *elem;
     struct list attrs;
 };
 
 typedef struct {
+    /* valid only when attribute nodes are used (node.nsnode) */
     HTMLDOMNode node;
 
     IHTMLDOMAttribute IHTMLDOMAttribute_iface;
@@ -1340,7 +1342,7 @@ typedef struct {
 
 HTMLDOMAttribute *unsafe_impl_from_IHTMLDOMAttribute(IHTMLDOMAttribute*);
 
-HRESULT HTMLDOMAttribute_Create(const WCHAR*,HTMLElement*,DISPID,HTMLDocumentNode*,HTMLDOMAttribute**);
+HRESULT HTMLDOMAttribute_Create(const WCHAR*,HTMLElement*,DISPID,HTMLDocumentNode*,nsIDOMAttr*,HTMLDOMAttribute**);
 
 HRESULT HTMLElement_Create(HTMLDocumentNode*,nsIDOMNode*,BOOL,HTMLElement**);
 HRESULT HTMLCommentElement_Create(HTMLDocumentNode*,nsIDOMNode*,HTMLElement**);
