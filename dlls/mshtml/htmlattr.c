@@ -37,7 +37,7 @@ static inline HTMLDOMAttribute *impl_from_IHTMLDOMAttribute(IHTMLDOMAttribute *i
     return CONTAINING_RECORD(iface, HTMLDOMAttribute, IHTMLDOMAttribute_iface);
 }
 
-DISPEX_IDISPATCH_IMPL(HTMLDOMAttribute, IHTMLDOMAttribute, impl_from_IHTMLDOMAttribute(iface)->dispex)
+DISPEX_IDISPATCH_IMPL(HTMLDOMAttribute, IHTMLDOMAttribute, impl_from_IHTMLDOMAttribute(iface)->node.event_target.dispex)
 
 static HRESULT WINAPI HTMLDOMAttribute_get_nodeName(IHTMLDOMAttribute *iface, BSTR *p)
 {
@@ -147,7 +147,7 @@ static inline HTMLDOMAttribute *impl_from_IHTMLDOMAttribute2(IHTMLDOMAttribute2 
     return CONTAINING_RECORD(iface, HTMLDOMAttribute, IHTMLDOMAttribute2_iface);
 }
 
-DISPEX_IDISPATCH_IMPL(HTMLDOMAttribute2, IHTMLDOMAttribute2, impl_from_IHTMLDOMAttribute2(iface)->dispex)
+DISPEX_IDISPATCH_IMPL(HTMLDOMAttribute2, IHTMLDOMAttribute2, impl_from_IHTMLDOMAttribute2(iface)->node.event_target.dispex)
 
 static HRESULT WINAPI HTMLDOMAttribute2_get_name(IHTMLDOMAttribute2 *iface, BSTR *p)
 {
@@ -349,7 +349,7 @@ static const IHTMLDOMAttribute2Vtbl HTMLDOMAttribute2Vtbl = {
 
 static inline HTMLDOMAttribute *impl_from_DispatchEx(DispatchEx *iface)
 {
-    return CONTAINING_RECORD(iface, HTMLDOMAttribute, dispex);
+    return CONTAINING_RECORD(iface, HTMLDOMAttribute, node.event_target.dispex);
 }
 
 static void *HTMLDOMAttribute_query_interface(DispatchEx *dispex, REFIID riid)
@@ -434,7 +434,7 @@ HRESULT HTMLDOMAttribute_Create(const WCHAR *name, HTMLElement *elem, DISPID dis
     ret->dispid = dispid;
     ret->elem = elem;
 
-    init_dispatch(&ret->dispex, &Attr_dispex, doc->script_global,
+    init_dispatch(&ret->node.event_target.dispex, &Attr_dispex, doc->script_global,
                   dispex_compat_mode(&doc->script_global->event_target.dispex));
 
     /* For attributes attached to an element, (elem,dispid) pair should be valid used for its operation. */

@@ -1323,7 +1323,8 @@ struct HTMLAttributeCollection {
 };
 
 typedef struct {
-    DispatchEx dispex;
+    HTMLDOMNode node;
+
     IHTMLDOMAttribute IHTMLDOMAttribute_iface;
     IHTMLDOMAttribute2 IHTMLDOMAttribute2_iface;
 
