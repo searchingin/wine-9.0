@@ -631,6 +631,7 @@ const void *dispex_get_vtbl(DispatchEx*);
 void dispex_info_add_interface(dispex_data_t*,tid_t,const dispex_hook_t*);
 void dispex_info_add_dispids(dispex_data_t*,tid_t,const DISPID*);
 compat_mode_t dispex_compat_mode(DispatchEx*);
+BOOL dispex_is_builtin_method(DispatchEx*,DISPID);
 HRESULT dispex_to_string(DispatchEx*,BSTR*);
 HRESULT dispex_call_builtin(DispatchEx *dispex, DISPID id, DISPPARAMS *dp,
                             VARIANT *res, EXCEPINFO *ei, IServiceProvider *caller);

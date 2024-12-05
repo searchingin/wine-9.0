@@ -7829,7 +7829,10 @@ static inline HRESULT get_attr_dispid_by_name(HTMLAttributeCollection *This, con
         return *nsattr ? S_OK : DISP_E_UNKNOWNNAME;
     }
 
-    return dispex_get_id(&This->elem->node.event_target.dispex, name, fdexNameCaseInsensitive, id);
+    hres = dispex_get_id(&This->elem->node.event_target.dispex, name, fdexNameCaseInsensitive, id);
+    if(FAILED(hres))
+        return hres;
+    return dispex_is_builtin_method(&This->elem->node.event_target.dispex, *id) ? DISP_E_UNKNOWNNAME : S_OK;
 }
 
 static inline HRESULT get_domattr(HTMLAttributeCollection *This, DISPID id, nsIDOMAttr *nsattr, LONG *list_pos, HTMLDOMAttribute **attr)
