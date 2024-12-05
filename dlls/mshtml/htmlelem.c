@@ -552,6 +552,24 @@ static HTMLDOMAttribute *find_attr_in_list(HTMLAttributeCollection *attrs, DISPI
     return ret;
 }
 
+static DISPID get_dispid_for_nsattr(HTMLElement *elem, nsIDOMAttr *nsattr)
+{
+    DISPID dispid = 0;
+    nsAString nsstr;
+
+    nsAString_InitDepend(&nsstr, NULL);
+    if(SUCCEEDED(nsIDOMAttr_GetName(nsattr, &nsstr))) {
+        const PRUnichar *name;
+        nsAString_GetData(&nsstr, &name);
+
+        /* Supply a dummy non-builtin dispid so it can be checked for expando */
+        if(is_custom_attribute(&elem->node.event_target.dispex, name))
+            dispid = MSHTML_DISPID_CUSTOM_MIN;
+        nsAString_Finish(&nsstr);
+    }
+    return dispid;
+}
+
 typedef struct {
     DispatchEx dispex;
     IHTMLRect IHTMLRect_iface;
@@ -4450,6 +4468,7 @@ static HRESULT WINAPI HTMLElement4_setAttributeNode(IHTMLElement4 *iface, IHTMLD
             IHTMLAttributeCollection_Release(&attrs->IHTMLAttributeCollection_iface);
             return E_FAIL;
         }
+        dispid = get_dispid_for_nsattr(This, nsattr);
         replace = NULL;
         if(oldnsattr) {
             replace = find_attr_in_list(attrs, 0, oldnsattr, NULL);
@@ -7818,6 +7837,8 @@ static inline HRESULT get_domattr(HTMLAttributeCollection *This, DISPID id, nsID
     HRESULT hres;
 
     if(!(*attr = find_attr_in_list(This, id, nsattr, list_pos))) {
+        if(nsattr)
+            id = get_dispid_for_nsattr(This->elem, nsattr);
         hres = HTMLDOMAttribute_Create(NULL, This->elem, id, This->elem->node.doc, nsattr, attr);
         if(FAILED(hres))
             return hres;

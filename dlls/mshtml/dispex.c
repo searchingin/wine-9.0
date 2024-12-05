@@ -701,6 +701,33 @@ dispex_prop_type_t get_dispid_type(DISPID id)
     return DISPEXPROP_BUILTIN;
 }
 
+BOOL is_custom_attribute(DispatchEx *dispex, const WCHAR *name)
+{
+    compat_mode_t compat_mode = dispex->info->compat_mode;
+    const dispex_data_t *info = dispex->info;
+    func_info_t **funcs = info->name_table;
+    DWORD a, b, i;
+    int c;
+
+    assert(compat_mode >= COMPAT_MODE_IE9);
+
+    for(;;) {
+        info = object_descriptors[info->desc->prototype_id]->prototype_info[compat_mode - COMPAT_MODE_IE9];
+        funcs = info->name_table;
+
+        for(a = 0, b = info->name_cnt; a < b;) {
+            i = (a + b) / 2;
+            c = wcsicmp(funcs[i]->name, name);
+            if(!c)
+                return (funcs[i]->func_disp_idx >= 0);
+            if(c > 0) b = i;
+            else      a = i + 1;
+        }
+        if(!info->desc->prototype_id)
+            return DISP_E_UNKNOWNNAME;
+    }
+}
+
 static HRESULT variant_copy(VARIANT *dest, VARIANT *src)
 {
     if(V_VT(src) == VT_BSTR && !V_BSTR(src)) {

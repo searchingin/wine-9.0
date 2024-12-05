@@ -585,9 +585,8 @@ sync_test("attr_props", function() {
             ok(!(prop in attr), prop + " found in attribute.");
     }
 
-    function test_attr(expando, specified, expando_todo) {
+    function test_attr(expando, specified) {
         var r = attr.expando;
-        todo_wine_if(expando_todo).
         ok(r === expando, attr.name + " attr.expando = " + r);
         r = attr.specified;
         ok(r === specified, attr.name + " attr.specified = " + r);
@@ -629,10 +628,10 @@ sync_test("attr_props", function() {
     test_attr(false, true);
 
     attr = elem.getAttributeNode("test");
-    test_attr(true, true, v >= 9);
+    test_attr(true, true);
 
     attr = elem.getAttributeNode("z-index");
-    test_attr(true, true, v >= 9);
+    test_attr(true, true);
 
     attr = elem.getAttributeNode("tabIndex");
     if(v < 8)
