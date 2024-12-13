@@ -110,6 +110,7 @@ struct key_value
     unsigned int      type;    /* value type */
     data_size_t       len;     /* value data length in bytes */
     void             *data;    /* pointer to value data */
+    unsigned int      order;
 };
 
 #define MIN_SUBKEYS  8   /* min. number of allocated subkeys per key */
@@ -1165,6 +1166,7 @@ static struct key_value *insert_value( struct key *key, const struct unicode_str
     value->namelen = name->len;
     value->len     = 0;
     value->data    = NULL;
+    value->order   = key->last_value;
     return value;
 }
 
@@ -1251,7 +1253,7 @@ static void get_value( struct key *key, const struct unicode_str *name, int *typ
 /* enumerate a key value */
 static void enum_value( struct key *key, int i, int info_class, struct enum_key_value_reply *reply )
 {
-    struct key_value *value;
+    struct key_value *value = NULL;
 
     if (key->flags & KEY_PREDEF)
     {
@@ -1264,8 +1266,21 @@ static void enum_value( struct key *key, int i, int info_class, struct enum_key_
     {
         void *data;
         data_size_t namelen, maxlen;
+        for(int j = 0; j <= key->last_value; j++)
+        {
+            if (key->values[j].order == i)
+            {
+                value = &key->values[j];
+                break;
+            }
+        }
 
-        value = &key->values[i];
+        if (!value)
+        {
+            set_error( STATUS_OBJECT_NAME_NOT_FOUND );
+            return;
+        }
+
         reply->type = value->type;
         namelen = value->namelen;
 
@@ -1310,6 +1325,7 @@ static void delete_value( struct key *key, const struct unicode_str *name )
 {
     struct key_value *value;
     int i, index, nb_values;
+    int order;
 
     if (key->flags & KEY_PREDEF)
     {
@@ -1323,9 +1339,18 @@ static void delete_value( struct key *key, const struct unicode_str *name )
         return;
     }
     if (debug_level > 1) dump_operation( key, value, "Delete" );
+    order = value->order;
     free( value->name );
     free( value->data );
-    for (i = index; i < key->last_value; i++) key->values[i] = key->values[i + 1];
+    for (i = index; i < key->last_value; i++)
+    {
+        if (key->values[i].order > order) key->values[i].order--;
+        key->values[i] = key->values[i + 1];
+    }
+    for (int j = 0; j <= index; j++)
+    {
+        if (key->values[j].order > order) key->values[j].order--;
+    }
     key->last_value--;
     touch_key( key, REG_NOTIFY_CHANGE_LAST_SET );
 
