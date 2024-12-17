@@ -1704,7 +1704,17 @@ NTSTATUS WINAPI NtQueryPerformanceCounter( LARGE_INTEGER *counter, LARGE_INTEGER
  */
 NTSTATUS WINAPI NtQuerySystemTime( LARGE_INTEGER *time )
 {
-#ifdef HAVE_CLOCK_GETTIME
+#ifdef __APPLE__
+    /* On macOS clock_gettime() will eventually call into this, given a
+     * CLOCK_REALTIME clock_id.
+     * Similarly would gettimeofday(). For performance reasons this is directly
+     * linked against here. */
+    extern int __commpage_gettimeofday( struct timeval *tp ) __attribute__((weak_import));
+    struct timeval tp;
+    if (__commpage_gettimeofday != NULL && __commpage_gettimeofday( &tp ) == KERN_SUCCESS)
+        time->QuadPart = ticks_from_time_t( tp.tv_sec ) + tp.tv_usec * 10;
+    else
+#elif defined(HAVE_CLOCK_GETTIME)
     struct timespec ts;
     static clockid_t clock_id = CLOCK_MONOTONIC; /* placeholder */
 
