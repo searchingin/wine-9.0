@@ -536,6 +536,7 @@ static HRESULT WINAPI ddraw_IDirectDrawMediaStream_SetFormat(IDirectDrawMediaStr
         const DDSURFACEDESC *format, IDirectDrawPalette *palette)
 {
     struct ddraw_stream *stream = impl_from_IDirectDrawMediaStream(iface);
+    STREAM_STATE state;
     AM_MEDIA_TYPE old_media_type;
     struct format old_format;
     IPin *old_peer;
@@ -621,6 +622,13 @@ static HRESULT WINAPI ddraw_IDirectDrawMediaStream_SetFormat(IDirectDrawMediaStr
 
     if (stream->peer && !is_format_compatible(stream, old_format.width, old_format.height, &old_format.pf))
     {
+        hr = IMultiMediaStream_GetState(stream->parent, &state);
+        if (FAILED(hr) || state == STREAMSTATE_RUN)
+        {
+            stream->format = old_format;
+            LeaveCriticalSection(&stream->cs);
+            return DDERR_INVALIDSURFACETYPE;
+        }
         hr = CopyMediaType(&old_media_type, &stream->mt);
         if (FAILED(hr))
         {
