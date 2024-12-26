@@ -3,12 +3,12 @@
  <style>
   @import url(colors.css);
  </style>
- <circle cx="7.9376" cy="23.812" r="7.8053" fill="#fff" stroke="#3096fa" stroke-width=".26458"/>
+ <circle cx="7.9376" cy="23.812" r="7.8053" fill="#fff" class="Highlight" stroke="currentColor" stroke-width=".26458"/>
  <g transform="matrix(3.2 0 0 3.2001 -.10584 -.9535)" stroke-width=".16536">
   <path d="m3.8365 2.2922-1.3129 1.1474-0.18755-0.16391 1.3129-1.1474z"/>
   <path d="m1.3782 2.1167 1.3129 1.1474-0.18756 0.16391-1.3129-1.1474z"/>
  </g>
- <g transform="matrix(3.2 0 0 3.2001 -.10584 14.922)" fill="#3096fa" stroke-width=".16536">
+ <g transform="matrix(3.2 0 0 3.2001 -.10584 14.922)" class="Highlight" fill="currentColor" stroke-width=".16536">
   <path d="m3.8365 2.2922-1.3129 1.1474-0.18755-0.16391 1.3129-1.1474z"/>
   <path d="m1.3782 2.1167 1.3129 1.1474-0.18756 0.16391-1.3129-1.1474z"/>
  </g>

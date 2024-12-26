@@ -6,7 +6,7 @@
  <g fill="none">
   <g stroke-width=".26458">
    <rect x=".66146" y="1.1906" width="1.5875" height="1.5875" stroke="#aeaeae"/>
-   <rect x=".66146" y="4.6303" width="1.5875" height="1.5875" stroke="#3096fa"/>
+   <rect x=".66146" y="4.6303" width="1.5875" height="1.5875" class="Highlight" stroke="currentColor"/>
    <rect x=".66146" y="8.0699" width="1.5875" height="1.5875" class="HighlightOutline" stroke="currentColor"/>
   </g>
   <rect transform="scale(-1,1)" x="-2.9104" y=".52917" width="1.8521" height=".26459" fill="#aeaeae" stroke-width=".23932"/>
@@ -15,14 +15,14 @@
   <rect transform="scale(-1,1)" x="-2.9104" y="10.848" width="1.8521" height=".26459" fill="#aeaeae" stroke-width=".23932"/>
   <rect transform="scale(-1,1)" x="-2.9104" y="11.113" width=".26459" height="1.5875" fill="#aeaeae" stroke-width=".23932"/>
   <g stroke-width=".23932">
-   <rect transform="scale(-1,1)" x="-2.9104" y="3.9688" width="1.8521" height=".26459" fill="#3096fa"/>
-   <rect transform="scale(-1,1)" x="-2.9104" y="4.2334" width=".26459" height="1.5875" fill="#3096fa"/>
+   <rect transform="scale(-1,1)" x="-2.9104" y="3.9688" width="1.8521" height=".26459" class="Highlight" fill="currentColor"/>
+   <rect transform="scale(-1,1)" x="-2.9104" y="4.2334" width=".26459" height="1.5875" class="Highlight" fill="currentColor"/>
    <rect transform="scale(-1,1)" x="-2.9104" y="7.4084" width="1.8521" height=".26459" class="HighlightOutline" fill="currentColor"/>
    <rect transform="scale(-1,1)" x="-2.9104" y="7.673" width=".26459" height="1.5875" class="HighlightOutline" fill="currentColor"/>
   </g>
   <g stroke-width=".26458">
    <rect x=".66146" y="14.949" width="1.5875" height="1.5875" stroke="#aeaeae"/>
-   <rect x=".66146" y="18.389" width="1.5875" height="1.5875" stroke="#3096fa"/>
+   <rect x=".66146" y="18.389" width="1.5875" height="1.5875" class="Highlight" stroke="currentColor"/>
    <rect x=".66146" y="21.828" width="1.5875" height="1.5875" class="HighlightOutline" stroke="currentColor"/>
   </g>
   <rect transform="scale(-1,1)" x="-2.9104" y="14.288" width="1.8521" height=".26459" fill="#aeaeae" stroke-width=".23932"/>
@@ -31,8 +31,8 @@
   <rect transform="scale(-1,1)" x="-2.9104" y="24.607" width="1.8521" height=".26459" fill="#aeaeae" stroke-width=".23932"/>
   <rect transform="scale(-1,1)" x="-2.9104" y="24.871" width=".26459" height="1.5875" fill="#aeaeae" stroke-width=".23932"/>
   <g stroke-width=".23932">
-   <rect transform="scale(-1,1)" x="-2.9104" y="17.727" width="1.8521" height=".26459" fill="#3096fa"/>
-   <rect transform="scale(-1,1)" x="-2.9104" y="17.992" width=".26459" height="1.5875" fill="#3096fa"/>
+   <rect transform="scale(-1,1)" x="-2.9104" y="17.727" width="1.8521" height=".26459" class="Highlight" fill="currentColor"/>
+   <rect transform="scale(-1,1)" x="-2.9104" y="17.992" width=".26459" height="1.5875" class="Highlight" fill="currentColor"/>
    <rect transform="scale(-1,1)" x="-2.9104" y="21.167" width="1.8521" height=".26459" class="HighlightOutline" fill="currentColor"/>
    <rect transform="scale(-1,1)" x="-2.9104" y="21.432" width=".26459" height="1.5875" class="HighlightOutline" fill="currentColor"/>
   </g>

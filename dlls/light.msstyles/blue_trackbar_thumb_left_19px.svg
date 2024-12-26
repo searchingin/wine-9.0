@@ -14,8 +14,8 @@
  <path d="m1.4113 2.7781 3.474-0.00189v-2.642l-3.474-0.001895-1.2306 1.3229z" fill="#fff" stroke="#aeaeae" stroke-width=".26458"/>
  <path d="m1.315 8.7312 3.7121-0.00211v-2.9062l-3.7121-0.0021144-1.315 1.4552z" class="HighlightOutline" fill="currentColor" stroke-width=".26458"/>
  <g transform="translate(-.27412)" fill="#fff" stroke-width=".26458">
-  <path d="m1.6854 5.6885 3.474-0.00189v-2.642l-3.474-0.0018875-1.2306 1.3229z" stroke="#3096fa"/>
+  <path d="m1.6854 5.6885 3.474-0.00189v-2.642l-3.474-0.0018875-1.2306 1.3229z" class="Highlight" stroke="currentColor"/>
   <path d="m1.6854 14.42 3.474-0.0019v-2.642l-3.474-0.0019-1.2306 1.3229z" stroke="#aeaeae"/>
-  <path d="m1.6854 11.509 3.474-0.0019v-2.642l-3.474-0.0018875-1.2306 1.3229z" stroke="#3096fa"/>
+  <path d="m1.6854 11.509 3.474-0.0019v-2.642l-3.474-0.0018875-1.2306 1.3229z" class="Highlight" stroke="currentColor"/>
  </g>
 </svg>

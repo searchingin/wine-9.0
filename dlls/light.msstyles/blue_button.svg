@@ -16,7 +16,7 @@
   <g fill="#fff">
    <rect x="40.849" y="1.3236" width="5.5563" height="5.8208" rx=".52917" ry=".52917" stroke="#aeaeae"/>
    <rect x="40.849" y="19.58" width="5.5563" height="5.8208" rx=".52917" ry=".52917" stroke="#aeaeae"/>
-   <g stroke="#3096fa">
+   <g class="Highlight" stroke="currentColor">
     <rect x="40.849" y="25.665" width="5.5563" height="5.8208" rx=".52917" ry=".52917"/>
     <rect x="40.849" y="31.751" width="5.5563" height="5.8208" rx=".52917" ry=".52917"/>
     <rect x="40.849" y="7.409" width="5.5563" height="5.8208" rx=".52917" ry=".52917"/>

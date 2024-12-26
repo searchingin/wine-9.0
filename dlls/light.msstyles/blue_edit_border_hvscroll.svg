@@ -13,7 +13,7 @@
  </metadata>
  <g transform="translate(5.0184e-6,-6.4982e-5)" fill="#fff" stroke-width=".26458">
   <rect x=".13228" y=".13228" width="1.0583" height="1.0583" stroke="#aeaeae"/>
-  <rect x=".13228" y="1.4553" width="1.0583" height="1.0583" stroke="#3096fa"/>
+  <rect x=".13228" y="1.4553" width="1.0583" height="1.0583" class="Highlight" stroke="currentColor"/>
   <rect x=".13228" y="2.7782" width="1.0583" height="1.0583" class="HighlightOutline" stroke="currentColor"/>
   <rect x=".13228" y="4.1011" width="1.0583" height="1.0583" stroke="#aeaeae"/>
  </g>

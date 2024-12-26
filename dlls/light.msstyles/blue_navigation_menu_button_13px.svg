@@ -16,8 +16,8 @@
   <path d="m-0.11368 2.1167 1.0504 0.91854-0.15005 0.13122-1.0504-0.91854z" stroke-width=".26458"/>
   <g transform="matrix(1.1443 0 0 1 10.306 -10.039)" stroke-width=".23122">
    <g stroke-width=".23122">
-    <path d="m-7.3868 19.44-0.91792 0.91767-0.13113-0.1311 0.91792-0.91767z" fill="#3096fa"/>
-    <path d="m-9.1055 19.299 0.91792 0.91767-0.13113 0.1311-0.91792-0.91767z" fill="#3096fa"/>
+    <path d="m-7.3868 19.44-0.91792 0.91767-0.13113-0.1311 0.91792-0.91767z" class="Highlight" fill="currentColor"/>
+    <path d="m-9.1055 19.299 0.91792 0.91767-0.13113 0.1311-0.91792-0.91767z" class="Highlight" fill="currentColor"/>
     <path d="m-7.3868 26.583-0.91792 0.91854-0.13113-0.13122 0.91792-0.91854z" class="HighlightOutline" fill="currentColor"/>
     <path d="m-9.1055 26.443 0.91792 0.91854-0.13113 0.13122-0.91792-0.91854z" class="HighlightOutline" fill="currentColor"/>
    </g>

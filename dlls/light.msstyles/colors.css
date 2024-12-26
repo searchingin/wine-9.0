@@ -39,6 +39,11 @@
  * <rect ... class="WindowBackgroundHighlightOutline" />
  */
 
+.Highlight
+{
+    color:#3096fa; /* 48 150 250 */
+}
+
 .HighlightOutline
 {
     color:#2979ff; /* 41 121 255 */

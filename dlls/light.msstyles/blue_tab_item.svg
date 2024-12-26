@@ -30,7 +30,7 @@
   </g>
  </g>
  <g fill="#fff">
-  <rect x=".13229" y="5.1594" width="1.0583" height="4.7625" rx=".52917" ry=".52916" stroke="#3096fa" stroke-width=".26458"/>
+  <rect x=".13229" y="5.1594" width="1.0583" height="4.7625" rx=".52917" ry=".52916" class="Highlight" stroke="currentColor" stroke-width=".26458"/>
   <rect transform="rotate(90)" x="9.7896" y="-1.0583" width=".26458" height=".79375" stroke-width="0"/>
   <rect transform="rotate(90)" x="9.525" y="-.52917" width=".26458" height=".26458" stroke-width="0"/>
  </g>
@@ -43,7 +43,7 @@
    <rect transform="rotate(90)" x="9.2604" y="-1.0583" width=".26458" height=".26458"/>
    <rect transform="rotate(90)" x="9.7896" y="-1.3229" width=".26458" height=".26458"/>
   </g>
-  <g fill="#3096fa">
+  <g class="Highlight" fill="currentColor">
    <rect transform="rotate(90)" x="9.7896" y="-1.3229" width=".26458" height=".26458"/>
    <rect transform="rotate(90)" x="9.525" y="-.26458" width=".26458" height=".26458"/>
    <rect transform="rotate(90)" x="9.525" y="-1.3229" width=".26458" height=".26458"/>
@@ -80,7 +80,7 @@
    <rect transform="rotate(90)" x="24.342" y="-1.0583" width=".26458" height=".26458"/>
    <rect transform="rotate(90)" x="24.871" y="-1.3229" width=".26458" height=".26458"/>
   </g>
-  <rect transform="rotate(90)" x="24.871" y="-1.3229" width=".26458" height=".26458" fill="#3096fa"/>
+  <rect transform="rotate(90)" x="24.871" y="-1.3229" width=".26458" height=".26458" class="Highlight" fill="currentColor"/>
   <g class="HighlightOutline" fill="currentColor">
    <rect transform="rotate(90)" x="24.606" y="-1.3229" width=".26458" height=".26458"/>
    <rect transform="rotate(90)" x="24.871" y="-1.3229" width=".26458" height=".26458"/>
@@ -88,8 +88,8 @@
    <rect transform="rotate(90)" x="24.606" y="-.26458" width=".26458" height=".26458"/>
    <rect transform="rotate(90)" x="24.342" y="-1.3229" width=".26458" height=".26458"/>
   </g>
-  <rect transform="rotate(90)" x="9.2604" y="-1.3229" width=".26458" height=".26458" fill="#3096fa"/>
-  <rect transform="rotate(90)" x="9.2604" y="-.26458" width=".26458" height=".26458" fill="#3096fa"/>
+  <rect transform="rotate(90)" x="9.2604" y="-1.3229" width=".26458" height=".26458" class="Highlight" fill="currentColor"/>
+  <rect transform="rotate(90)" x="9.2604" y="-.26458" width=".26458" height=".26458" class="Highlight" fill="currentColor"/>
   <rect transform="rotate(90)" x="14.287" y="-.26458" width=".26458" height=".26458" fill="#aeaeae"/>
   <rect transform="rotate(90)" x="14.288" y="-1.3229" width=".26458" height=".26458" fill="#aeaeae"/>
   <rect transform="rotate(90)" x="24.606" y="-.26458" width=".26458" height=".26458" class="HighlightOutline" fill="currentColor"/>

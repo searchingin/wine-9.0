@@ -15,9 +15,9 @@
   <path d="m3.6158 2.7781-3.474-0.00189v-2.642l3.474-0.001895 1.2306 1.3229z" fill="#fff" stroke="#aeaeae"/>
   <path d="m3.7121 8.7312-3.7121-0.00211v-2.9062l3.7121-0.00211 1.315 1.4552z" class="HighlightOutline" fill="currentColor"/>
   <g transform="matrix(-1 0 0 1 5.3012 0)" fill="#fff">
-   <path d="m1.6854 5.6885 3.474-0.00189v-2.642l-3.474-0.00189-1.2306 1.3229z" stroke="#3096fa"/>
+   <path d="m1.6854 5.6885 3.474-0.00189v-2.642l-3.474-0.00189-1.2306 1.3229z" class="Highlight" stroke="currentColor"/>
    <path d="m1.6854 14.42 3.474-0.0019v-2.642l-3.474-0.0019-1.2306 1.3229z" stroke="#aeaeae"/>
-   <path d="m1.6854 11.509 3.474-0.0019v-2.642l-3.474-0.00189-1.2306 1.3229z" stroke="#3096fa"/>
+   <path d="m1.6854 11.509 3.474-0.0019v-2.642l-3.474-0.00189-1.2306 1.3229z" class="Highlight" stroke="currentColor"/>
   </g>
  </g>
 </svg>

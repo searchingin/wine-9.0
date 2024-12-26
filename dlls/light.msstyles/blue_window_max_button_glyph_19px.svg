@@ -6,11 +6,11 @@
  <g fill="none" stroke-width=".26458">
   <rect x=".92603" y=".92605" width="3.175" height="3.175" stroke="#aeaeae"/>
   <rect x=".92603" y="16.007" width="3.175" height="3.175" stroke="#aeaeae"/>
-  <rect x=".92603" y="5.9532" width="3.175" height="3.175" stroke="#3096fa"/>
+  <rect x=".92603" y="5.9532" width="3.175" height="3.175" class="Highlight" stroke="currentColor"/>
   <rect x=".92603" y="10.98" width="3.175" height="3.175" class="HighlightOutline" stroke="currentColor"/>
   <rect x=".92603" y="21.035" width="3.175" height="3.175" stroke="#aeaeae"/>
   <rect x=".92603" y="36.116" width="3.175" height="3.175" stroke="#aeaeae"/>
-  <rect x=".92603" y="26.062" width="3.175" height="3.175" stroke="#3096fa"/>
+  <rect x=".92603" y="26.062" width="3.175" height="3.175" class="Highlight" stroke="currentColor"/>
   <rect x=".92603" y="31.089" width="3.175" height="3.175" class="HighlightOutline" stroke="currentColor"/>
  </g>
 </svg>

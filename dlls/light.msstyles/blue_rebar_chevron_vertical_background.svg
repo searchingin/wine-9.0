@@ -12,7 +12,7 @@
   </rdf:RDF>
  </metadata>
  <g fill="#fffffe" stroke-linejoin="bevel" stroke-width=".26458">
-  <rect x=".13229" y="6.4823" width="4.7625" height="5.5563" rx=".52917" ry=".52917" stroke="#3096fa"/>
+  <rect x=".13229" y="6.4823" width="4.7625" height="5.5563" rx=".52917" ry=".52917" class="Highlight" stroke="currentColor"/>
   <rect x=".13224" y="12.568" width="4.7625" height="5.5563" rx=".52917" ry=".52917" class="HighlightOutline" stroke="currentColor"/>
  </g>
 </svg>

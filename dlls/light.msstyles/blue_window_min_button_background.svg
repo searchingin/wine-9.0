@@ -14,11 +14,11 @@
  <rect y="-7e-5" width="1.3229" height="35.984" fill="#fff" stroke-width=".26458"/>
  <g transform="translate(5.0184e-6,-6.4982e-5)" fill="none" stroke-width=".26458">
   <rect x=".13228" y=".13228" width="1.0583" height="4.2334" rx=".52917" ry=".52917" stroke="#aeaeae"/>
-  <rect x=".13228" y="4.6303" width="1.0583" height="4.2334" rx=".52917" ry=".52917" stroke="#3096fa"/>
+  <rect x=".13228" y="4.6303" width="1.0583" height="4.2334" rx=".52917" ry=".52917" class="Highlight" stroke="currentColor"/>
   <rect x=".13228" y="9.1282" width="1.0583" height="4.2334" rx=".52917" ry=".52917" class="HighlightOutline" stroke="currentColor"/>
   <rect x=".13228" y="13.626" width="1.0583" height="4.2334" rx=".52917" ry=".52917" stroke="#aeaeae"/>
   <rect x=".13228" y="18.124" width="1.0583" height="4.2334" rx=".52917" ry=".52917" stroke="#aeaeae"/>
-  <rect x=".13228" y="22.622" width="1.0583" height="4.2334" rx=".52917" ry=".52917" stroke="#3096fa"/>
+  <rect x=".13228" y="22.622" width="1.0583" height="4.2334" rx=".52917" ry=".52917" class="Highlight" stroke="currentColor"/>
   <rect x=".13228" y="27.12" width="1.0583" height="4.2334" rx=".52917" ry=".52917" class="HighlightOutline" stroke="currentColor"/>
   <rect x=".13228" y="31.618" width="1.0583" height="4.2334" rx=".52917" ry=".52917" stroke="#aeaeae"/>
  </g>

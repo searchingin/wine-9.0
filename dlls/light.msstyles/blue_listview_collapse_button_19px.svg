@@ -3,10 +3,10 @@
  <style>
   @import url(colors.css);
  </style>
- <ellipse cx="2.5136" cy="7.5407" rx="2.3813" ry="2.3813" fill="#fff" stroke="#3096fa" stroke-width=".26458"/>
+ <ellipse cx="2.5136" cy="7.5407" rx="2.3813" ry="2.3813" fill="#fff" class="Highlight" stroke="currentColor" stroke-width=".26458"/>
  <g stroke-width=".99996">
-  <path d="m3.8367 8.0267-1.3131-1.1474-0.18757 0.16391 1.3131 1.1474z" fill="#3096fa"/>
-  <path d="m1.3781 8.2022 1.3131-1.1474-0.18758-0.16391-1.3131 1.1474z" fill="#3096fa"/>
+  <path d="m3.8367 8.0267-1.3131-1.1474-0.18757 0.16391 1.3131 1.1474z" class="Highlight" fill="currentColor"/>
+  <path d="m1.3781 8.2022 1.3131-1.1474-0.18758-0.16391-1.3131 1.1474z" class="Highlight" fill="currentColor"/>
   <path d="m3.8368 2.9993-1.3131-1.1474-0.18757 0.16391 1.3131 1.1474z"/>
   <path d="m1.3782 3.1748 1.3131-1.1474-0.18758-0.16391-1.3131 1.1474z"/>
  </g>

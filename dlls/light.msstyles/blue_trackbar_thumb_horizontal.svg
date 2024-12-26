@@ -14,7 +14,7 @@
  <rect y="-.00023066" width="2.9104" height="27.781" fill="#fdffff" stroke-linejoin="round" stroke-width=".070004"/>
  <g stroke-width=".26458">
   <rect x=".13229" y=".13206" width="2.6458" height="5.2917" rx=".52917" ry=".52917" fill="#fff" stroke="#aeaeae"/>
-  <rect x=".13229" y="5.6883" width="2.6458" height="5.2917" rx=".52917" ry=".52917" fill="#fff" stroke="#3096fa"/>
+  <rect x=".13229" y="5.6883" width="2.6458" height="5.2917" rx=".52917" ry=".52917" fill="#fff" class="Highlight" stroke="currentColor"/>
   <rect x=".13229" y="11.245" width="2.6458" height="5.2917" rx=".52917" ry=".52917" class="HighlightOutline" fill="currentColor" stroke="currentColor"/>
   <rect x=".13229" y="16.801" width="2.6458" height="5.2917" rx=".52917" ry=".52917" fill="#fff" stroke="#aeaeae"/>
   <rect x=".13229" y="22.357" width="2.6458" height="5.2917" rx=".52917" ry=".52917" fill="#fff" stroke="#aeaeae"/>
