@@ -1482,7 +1482,7 @@ static void test_DriveCollection(void)
         hr = IDrive_get_DriveLetter(drive, &str);
         ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
         ok(SysStringLen(str) == 1, "got string %s\n", wine_dbgstr_w(str));
-        todo_wine{
+
         hr = IDrive_get_Path(drive, NULL);
         ok(hr == E_POINTER, "Unexpected hr %#lx.\n", hr);
 
@@ -1490,7 +1490,7 @@ static void test_DriveCollection(void)
         ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
         ok(SysStringLen(path) == 2 && path[0] == str[0] && path[1] == ':',
              "got string %s\n", wine_dbgstr_w(path));
-        }
+
         SysFreeString(str);
         SysFreeString(path);
 
