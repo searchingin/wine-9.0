@@ -1897,12 +1897,14 @@ NTSTATUS WINAPI harddisk_driver_entry( DRIVER_OBJECT *driver, UNICODE_STRING *pa
 static BOOL create_port_device( DRIVER_OBJECT *driver, int n, const char *unix_path,
                                 const char *dosdevices_path, HKEY windows_ports_key )
 {
-    const WCHAR *dos_name_format, *nt_name_format, *reg_value_format, *symlink_format, *default_device;
-    WCHAR dos_name[7], reg_value[256], nt_buffer[32], symlink_buffer[32];
+    const WCHAR *dos_name_format, *nt_name_format, *reg_value_format, *symlink_format, *default_device,
+                *desc_format, *pnp_name, *service_name;
+    WCHAR dos_name[7], reg_value[256], nt_buffer[32], symlink_buffer[32], instance[11];
     UNICODE_STRING nt_name, symlink_name, default_name;
     DEVICE_OBJECT *dev_obj;
     NTSTATUS status;
     struct set_dosdev_symlink_params params = { dosdevices_path, unix_path };
+    HKEY acpi_key, pnp_key, instance_key;
 
     /* create DOS device */
     if (MOUNTMGR_CALL( set_dosdev_symlink, &params )) return FALSE;
@@ -1914,6 +1916,9 @@ static BOOL create_port_device( DRIVER_OBJECT *driver, int n, const char *unix_p
         reg_value_format = L"COM%u";
         symlink_format = L"\\DosDevices\\COM%u";
         default_device = L"\\DosDevices\\AUX";
+        desc_format    = L"Communications Port (COM%u)";
+        pnp_name       = L"PNP0501";
+        service_name   = L"Serial";
     }
     else
     {
@@ -1922,6 +1927,9 @@ static BOOL create_port_device( DRIVER_OBJECT *driver, int n, const char *unix_p
         reg_value_format = L"\\DosDevices\\LPT%u";
         symlink_format = L"\\DosDevices\\LPT%u";
         default_device = L"\\DosDevices\\PRN";
+        desc_format    = L"Printer Port (LPT%u)";
+        pnp_name       = L"PNP0400";
+        service_name   = L"Parport";
     }
 
     swprintf( dos_name, ARRAY_SIZE(dos_name), dos_name_format, n );
@@ -1950,6 +1958,24 @@ static BOOL create_port_device( DRIVER_OBJECT *driver, int n, const char *unix_p
     swprintf( reg_value, ARRAY_SIZE(reg_value), reg_value_format, n );
     RegSetValueExW( windows_ports_key, nt_name.Buffer, 0, REG_SZ,
                     (BYTE *)reg_value, (lstrlenW( reg_value ) + 1) * sizeof(WCHAR) );
+
+    RegCreateKeyExW( HKEY_LOCAL_MACHINE, L"System\\CurrentControlSet\\Enum\\ACPI", 0, NULL, 0,
+                     KEY_CREATE_SUB_KEY, NULL, &acpi_key, NULL );
+    RegCreateKeyExW( acpi_key, pnp_name, 0, NULL, 0, KEY_CREATE_SUB_KEY, NULL, &pnp_key, NULL );
+    swprintf( instance, ARRAY_SIZE(instance), L"%u", n );
+    RegCreateKeyExW( pnp_key, instance, 0, NULL, 0, KEY_SET_VALUE, NULL, &instance_key, NULL );
+
+    swprintf( reg_value, ARRAY_SIZE(reg_value), desc_format, n );
+    RegSetValueExW( instance_key, L"DeviceDesc", 0, REG_SZ,
+                    (BYTE *)reg_value, (lstrlenW( reg_value ) + 1) * sizeof(WCHAR) );
+    RegSetValueExW( instance_key, L"ClassGUID", 0, REG_SZ, (const BYTE *)L"{4d36e978-e325-11ce-bfc1-08002be10318}",
+                    sizeof(L"{4d36e978-e325-11ce-bfc1-08002be10318}") );
+    RegSetValueExW( instance_key, L"Service", 0, REG_SZ, (const BYTE *)service_name,
+                    (lstrlenW( service_name ) + 1) * sizeof(WCHAR) );
+
+    RegCloseKey( instance_key );
+    RegCloseKey( pnp_key );
+    RegCloseKey( acpi_key );
 
     return TRUE;
 }
