@@ -4042,8 +4042,8 @@ static sltg_ref_lookup_t *SLTG_DoRefs(SLTG_RefInfo *pRef, ITypeLibImpl *pTL,
 static char *SLTG_DoImpls(char *pBlk, ITypeInfoImpl *pTI,
 			  BOOL OneOnly, const sltg_ref_lookup_t *ref_lookup)
 {
-    SLTG_ImplInfo *info;
-    TLBImplType *pImplType;
+    SLTG_ImplInfo *info = (SLTG_ImplInfo*)pBlk;
+
     /* I don't really get this structure, usually it's 0x16 bytes
        long, but iuser.tlb contains some that are 0x18 bytes long.
        That's ok because we can use the next ptr to jump to the next
@@ -4051,21 +4051,17 @@ static char *SLTG_DoImpls(char *pBlk, ITypeInfoImpl *pTI,
        at offs 0x8 might be the clue.  For now I'm just assuming that
        the last one is the regular 0x16 bytes. */
 
-    info = (SLTG_ImplInfo*)pBlk;
-    while(1){
+    for (SLTG_ImplInfo *pIInfo = info; pIInfo; pIInfo = (SLTG_ImplInfo *)(pBlk + pIInfo->next)) {
         pTI->typeattr.cImplTypes++;
-        if(info->next == 0xffff)
+        if (pIInfo->next == 0xffff)
             break;
-        info = (SLTG_ImplInfo*)(pBlk + info->next);
     }
 
-    info = (SLTG_ImplInfo*)pBlk;
     pTI->impltypes = TLBImplType_Alloc(pTI->typeattr.cImplTypes);
-    pImplType = pTI->impltypes;
-    while(1) {
+
+    for (TLBImplType *pImplType = pTI->impltypes; pImplType && info; ++pImplType) {
 	sltg_get_typelib_ref(ref_lookup, info->ref, &pImplType->hRef);
 	pImplType->implflags = info->impltypeflags;
-	++pImplType;
 
 	if(info->next == 0xffff)
 	    break;
@@ -4074,6 +4070,7 @@ static char *SLTG_DoImpls(char *pBlk, ITypeInfoImpl *pTI,
 	info = (SLTG_ImplInfo*)(pBlk + info->next);
     }
     info++; /* see comment at top of function */
+
     return (char*)info;
 }
 
