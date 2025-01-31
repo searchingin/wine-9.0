@@ -8807,7 +8807,7 @@ static ULONG WINAPI ITypeComp_fnRelease(ITypeComp * iface)
 static HRESULT WINAPI ITypeComp_fnBind(
     ITypeComp * iface,
     OLECHAR * szName,
-    ULONG lHash,
+    ULONG lHashVal,
     WORD wFlags,
     ITypeInfo ** ppTInfo,
     DESCKIND * pDescKind,
@@ -8819,7 +8819,10 @@ static HRESULT WINAPI ITypeComp_fnBind(
     HRESULT hr = DISP_E_MEMBERNOTFOUND;
     UINT fdc;
 
-    TRACE("%p, %s, %#lx, 0x%x, %p, %p, %p.\n", iface, debugstr_w(szName), lHash, wFlags, ppTInfo, pDescKind, pBindPtr);
+    TRACE("%p, %s, %#lx, 0x%x, %p, %p, %p.\n", iface, debugstr_w(szName), lHashVal, wFlags, ppTInfo, pDescKind, pBindPtr);
+
+    if((!szName && !lHashVal) || !ppTInfo || !pDescKind || !pBindPtr)
+        return E_INVALIDARG;
 
     *pDescKind = DESCKIND_NONE;
     pBindPtr->lpfuncdesc = NULL;
@@ -8874,7 +8877,7 @@ static HRESULT WINAPI ITypeComp_fnBind(
         }
         if (SUCCEEDED(hr))
         {
-            hr = ITypeComp_Bind(pTComp, szName, lHash, wFlags, ppTInfo, pDescKind, pBindPtr);
+            hr = ITypeComp_Bind(pTComp, szName, lHashVal, wFlags, ppTInfo, pDescKind, pBindPtr);
             ITypeComp_Release(pTComp);
             if (SUCCEEDED(hr) && *pDescKind == DESCKIND_FUNCDESC &&
                     This->typeattr.typekind == TKIND_DISPATCH)
@@ -8896,11 +8899,11 @@ static HRESULT WINAPI ITypeComp_fnBind(
 static HRESULT WINAPI ITypeComp_fnBindType(
     ITypeComp * iface,
     OLECHAR * szName,
-    ULONG lHash,
+    ULONG lHashVal,
     ITypeInfo ** ppTInfo,
     ITypeComp ** ppTComp)
 {
-    TRACE("%s, %#lx, %p, %p.\n", debugstr_w(szName), lHash, ppTInfo, ppTComp);
+    TRACE("%s, %#lx, %p, %p.\n", debugstr_w(szName), lHashVal, ppTInfo, ppTComp);
 
     /* strange behaviour (does nothing) but like the
      * original */
