@@ -5466,7 +5466,7 @@ static ULONG WINAPI ITypeLibComp_fnRelease(ITypeComp * iface)
 static HRESULT WINAPI ITypeLibComp_fnBind(
     ITypeComp * iface,
     OLECHAR * szName,
-    ULONG lHash,
+    ULONG lHashVal,
     WORD wFlags,
     ITypeInfo ** ppTInfo,
     DESCKIND * pDescKind,
@@ -5476,7 +5476,10 @@ static HRESULT WINAPI ITypeLibComp_fnBind(
     BOOL typemismatch = FALSE;
     int i;
 
-    TRACE("%p, %s, %#lx, %#x, %p, %p, %p.\n", iface, debugstr_w(szName), lHash, wFlags, ppTInfo, pDescKind, pBindPtr);
+    TRACE("%p, %s, %#lx, %#x, %p, %p, %p.\n", iface, debugstr_w(szName), lHashVal, wFlags, ppTInfo, pDescKind, pBindPtr);
+
+    if ((!szName && !lHashVal) || !ppTInfo || !pDescKind || !pBindPtr)
+        return E_INVALIDARG;
 
     *pDescKind = DESCKIND_NONE;
     pBindPtr->lptcomp = NULL;
@@ -5490,7 +5493,7 @@ static HRESULT WINAPI ITypeLibComp_fnBind(
         TRACE("testing %s\n", debugstr_w(TLB_get_bstr(pTypeInfo->Name)));
 
         /* FIXME: check wFlags here? */
-        /* FIXME: we should use a hash table to look this info up using lHash
+        /* FIXME: we should use a hash table to look this info up using lHashVal
          * instead of an O(n) search */
         if ((pTypeInfo->typeattr.typekind == TKIND_ENUM) ||
             (pTypeInfo->typeattr.typekind == TKIND_MODULE))
@@ -5504,7 +5507,7 @@ static HRESULT WINAPI ITypeLibComp_fnBind(
                 return S_OK;
             }
 
-            hr = ITypeComp_Bind(pSubTypeComp, szName, lHash, wFlags, ppTInfo, pDescKind, pBindPtr);
+            hr = ITypeComp_Bind(pSubTypeComp, szName, lHashVal, wFlags, ppTInfo, pDescKind, pBindPtr);
             if (SUCCEEDED(hr) && (*pDescKind != DESCKIND_NONE))
             {
                 TRACE("found in module or in enum: %s\n", debugstr_w(szName));
@@ -5521,7 +5524,7 @@ static HRESULT WINAPI ITypeLibComp_fnBind(
             BINDPTR subbindptr;
             DESCKIND subdesckind;
 
-            hr = ITypeComp_Bind(pSubTypeComp, szName, lHash, wFlags,
+            hr = ITypeComp_Bind(pSubTypeComp, szName, lHashVal, wFlags,
                 &subtypeinfo, &subdesckind, &subbindptr);
             if (SUCCEEDED(hr) && (subdesckind != DESCKIND_NONE))
             {
@@ -5599,16 +5602,16 @@ static HRESULT WINAPI ITypeLibComp_fnBind(
 static HRESULT WINAPI ITypeLibComp_fnBindType(
     ITypeComp * iface,
     OLECHAR * szName,
-    ULONG lHash,
+    ULONG lHashVal,
     ITypeInfo ** ppTInfo,
     ITypeComp ** ppTComp)
 {
     ITypeLibImpl *This = impl_from_ITypeComp(iface);
     ITypeInfoImpl *info;
 
-    TRACE("%p, %s, %#lx, %p, %p.\n", iface, debugstr_w(szName), lHash, ppTInfo, ppTComp);
+    TRACE("%p, %s, %#lx, %p, %p.\n", iface, debugstr_w(szName), lHashVal, ppTInfo, ppTComp);
 
-    if(!szName || !ppTInfo || !ppTComp)
+    if(!szName || !lHashVal || !ppTInfo || !ppTComp)
         return E_INVALIDARG;
 
     info = TLB_get_typeinfo_by_name(This, szName);
