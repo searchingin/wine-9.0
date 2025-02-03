@@ -3622,7 +3622,7 @@ static ITypeLib2* ITypeLib2_Constructor_MSFT(LPVOID pLib, DWORD dwTLBLength)
     pTypeLibImpl->dispatch_href = tlbHeader.dispatchpos;
 
     /* Allocate and fill typeinfos array. */
-    if(tlbHeader.nrtypeinfos >= 0 )
+    if(tlbHeader.nrtypeinfos > 0 )
     {
         pTypeLibImpl->typeinfos = calloc(tlbHeader.nrtypeinfos, sizeof(ITypeInfoImpl*));
         for(i = 0; i < tlbHeader.nrtypeinfos; i++)
