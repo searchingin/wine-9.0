@@ -2476,12 +2476,12 @@ static void test_unknown_font_name(void)
     GetClientRect(hDlg, &rcUnknown);
 
     hFont = (HFONT) SendMessageW(hDlg, WM_GETFONT, 0, 0);
-    todo_wine ok(hFont == GetStockObject(SYSTEM_FONT), "got %p\n", hFont);
+    ok(hFont == GetStockObject(SYSTEM_FONT), "got %p\n", hFont);
 
     DestroyWindow(hDlg);
 
     /* Are they the same window size? */
-    todo_wine ok(!memcmp(&rcDefault, &rcUnknown, sizeof(RECT)), "got %s, expected %s\n", wine_dbgstr_rect(&rcUnknown), wine_dbgstr_rect(&rcDefault));
+    ok(!memcmp(&rcDefault, &rcUnknown, sizeof(RECT)), "got %s, expected %s\n", wine_dbgstr_rect(&rcUnknown), wine_dbgstr_rect(&rcDefault));
 }
 
 START_TEST(dialog)
