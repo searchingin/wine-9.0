@@ -95,7 +95,7 @@ static inline ULONGLONG monotonic_counter(void)
     if (!clock_gettime( CLOCK_MONOTONIC, &ts ))
         return ts.tv_sec * (ULONGLONG)TICKSPERSEC + ts.tv_nsec / 100;
 #endif
-    gettimeofday( &now, 0 );
+    gettimeofday( &now, NULL );
     return ticks_from_time_t( now.tv_sec ) + now.tv_usec * 10 - server_start_time;
 }
 
@@ -1740,7 +1740,7 @@ NTSTATUS WINAPI NtQuerySystemTime( LARGE_INTEGER *time )
     {
         struct timeval now;
 
-        gettimeofday( &now, 0 );
+        gettimeofday( &now, NULL );
         time->QuadPart = ticks_from_time_t( now.tv_sec ) + now.tv_usec * 10;
     }
     return STATUS_SUCCESS;
@@ -1841,7 +1841,7 @@ NTSTATUS system_time_precise( void *args )
         return STATUS_SUCCESS;
     }
 #endif
-    gettimeofday( &now, 0 );
+    gettimeofday( &now, NULL );
     *ret = ticks_from_time_t( now.tv_sec ) + now.tv_usec * 10;
     return STATUS_SUCCESS;
 }
