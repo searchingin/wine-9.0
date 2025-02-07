@@ -1129,6 +1129,7 @@ struct init_first_thread_reply
     process_id_t pid;
     thread_id_t  tid;
     timeout_t    server_start;
+    timeout_t    monotonic_start;
     unsigned int session_id;
     data_size_t  info_size;
     /* VARARG(machines,ushorts); */
@@ -6775,6 +6776,6 @@ union generic_reply
     struct set_keyboard_repeat_reply set_keyboard_repeat_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 855
+#define SERVER_PROTOCOL_VERSION 856
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */
