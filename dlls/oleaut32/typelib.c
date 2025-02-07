@@ -5129,7 +5129,6 @@ static HRESULT WINAPI ITypeLib2_fnIsName(
 	BOOL *pfName)
 {
     ITypeLibImpl *This = impl_from_ITypeLib2(iface);
-    int tic;
 
     TRACE("%p, %s, %#lx, %p.\n", iface, debugstr_w(szNameBuf), lHashVal, pfName);
 
@@ -5137,7 +5136,7 @@ static HRESULT WINAPI ITypeLib2_fnIsName(
         return E_INVALIDARG;
 
     *pfName=TRUE;
-    for(tic = 0; tic < This->TypeInfoCount; ++tic){
+    for(int tic = 0; tic < This->TypeInfoCount; ++tic){
         ITypeInfoImpl *pTInfo = This->typeinfos[tic];
         TLBFuncDesc *pFDesc;
         TLBParDesc *pPDesc;
@@ -5191,7 +5190,6 @@ static HRESULT WINAPI ITypeLib2_fnFindName(
 	UINT16 *found)
 {
     ITypeLibImpl *This = impl_from_ITypeLib2(iface);
-    int tic;
     UINT count = 0;
 
     TRACE("%p, %s %#lx, %p, %p, %p.\n", iface, debugstr_w(szNameBuf), lHashVal, ppTInfo, memid, found);
@@ -5200,7 +5198,7 @@ static HRESULT WINAPI ITypeLib2_fnFindName(
         return E_INVALIDARG;
 
     // TODO: factor out common impl with fnIsName().
-    for(tic = 0; count < *found && tic < This->TypeInfoCount; ++tic) {
+    for(int tic = 0; count < *found && tic < This->TypeInfoCount; ++tic) {
         ITypeInfoImpl *pTInfo = This->typeinfos[tic];
         TLBFuncDesc *pFDesc;
         TLBVarDesc *pVDesc;
@@ -5226,6 +5224,7 @@ static HRESULT WINAPI ITypeLib2_fnFindName(
         }
 
         continue;
+
 ITypeLib2_fnFindName_exit:
         ITypeInfo2_AddRef(&pTInfo->ITypeInfo2_iface);
         ppTInfo[count] = (ITypeInfo *)&pTInfo->ITypeInfo2_iface;
