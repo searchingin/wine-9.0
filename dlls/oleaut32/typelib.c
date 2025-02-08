@@ -4829,6 +4829,10 @@ static ULONG WINAPI ITypeLib2_fnAddRef( ITypeLib2 *iface)
 static ULONG WINAPI ITypeLib2_fnRelease( ITypeLib2 *iface)
 {
     ITypeLibImpl *This = impl_from_ITypeLib2(iface);
+    TLBImpLib *pImpLib, *pImpLibNext;
+    TLBRefType *ref_type, *ref_type_next;
+    TLBString *tlbstr, *tlbstr_next;
+    TLBGuid *tlbguid, *tlbguid_next;
     ULONG ref;
 
     EnterCriticalSection(&cache_section);
@@ -4836,72 +4840,67 @@ static ULONG WINAPI ITypeLib2_fnRelease( ITypeLib2 *iface)
 
     TRACE("%p, refcount %lu.\n", iface, ref);
 
-    if (!ref)
-    {
-      TLBImpLib *pImpLib, *pImpLibNext;
-      TLBRefType *ref_type, *ref_type_next;
-      TLBString *tlbstr, *tlbstr_next;
-      TLBGuid *tlbguid, *tlbguid_next;
-      int i;
-
-      /* remove cache entry */
-      if(This->path)
-      {
-          TRACE("removing from cache list\n");
-          if(This->entry.next)
-              list_remove(&This->entry);
-          free(This->path);
-      }
-      TRACE(" destroying ITypeLib(%p)\n",This);
-
-      LIST_FOR_EACH_ENTRY_SAFE(tlbstr, tlbstr_next, &This->string_list, TLBString, entry) {
-          list_remove(&tlbstr->entry);
-          SysFreeString(tlbstr->str);
-          free(tlbstr);
-      }
-
-      LIST_FOR_EACH_ENTRY_SAFE(tlbstr, tlbstr_next, &This->name_list, TLBString, entry) {
-          list_remove(&tlbstr->entry);
-          SysFreeString(tlbstr->str);
-          free(tlbstr);
-      }
-
-      LIST_FOR_EACH_ENTRY_SAFE(tlbguid, tlbguid_next, &This->guid_list, TLBGuid, entry) {
-          list_remove(&tlbguid->entry);
-          free(tlbguid);
-      }
-
-      TLB_FreeCustData(&This->custdata_list);
-
-      for (i = 0; i < This->ctTypeDesc; i++)
-          if (This->pTypeDesc[i].vt == VT_CARRAY)
-              free(This->pTypeDesc[i].lpadesc);
-
-      free(This->pTypeDesc);
-
-      LIST_FOR_EACH_ENTRY_SAFE(pImpLib, pImpLibNext, &This->implib_list, TLBImpLib, entry)
-      {
-          if (pImpLib->pImpTypeLib)
-              ITypeLib2_Release(&pImpLib->pImpTypeLib->ITypeLib2_iface);
-          SysFreeString(pImpLib->name);
-
-          list_remove(&pImpLib->entry);
-          free(pImpLib);
-      }
-
-      LIST_FOR_EACH_ENTRY_SAFE(ref_type, ref_type_next, &This->ref_list, TLBRefType, entry)
-      {
-          list_remove(&ref_type->entry);
-          free(ref_type);
-      }
-
-      for (i = 0; i < This->TypeInfoCount; ++i){
-          free(This->typeinfos[i]->tdescAlias);
-          ITypeInfoImpl_Destroy(This->typeinfos[i]);
-      }
-      free(This->typeinfos);
-      free(This);
+    if (ref) {
+        LeaveCriticalSection(&cache_section);
+        return ref;
     }
+
+    /* remove cache entry */
+    if(This->path) {
+        TRACE("removing from cache list\n");
+        if(This->entry.next)
+            list_remove(&This->entry);
+        free(This->path);
+    }
+    TRACE(" destroying ITypeLib(%p)\n",This);
+
+    LIST_FOR_EACH_ENTRY_SAFE(tlbstr, tlbstr_next, &This->string_list, TLBString, entry) {
+        list_remove(&tlbstr->entry);
+        SysFreeString(tlbstr->str);
+        free(tlbstr);
+    }
+
+    LIST_FOR_EACH_ENTRY_SAFE(tlbstr, tlbstr_next, &This->name_list, TLBString, entry) {
+        list_remove(&tlbstr->entry);
+        SysFreeString(tlbstr->str);
+        free(tlbstr);
+    }
+
+    LIST_FOR_EACH_ENTRY_SAFE(tlbguid, tlbguid_next, &This->guid_list, TLBGuid, entry) {
+        list_remove(&tlbguid->entry);
+        free(tlbguid);
+    }
+
+    TLB_FreeCustData(&This->custdata_list);
+
+    for (int i = 0; i < This->ctTypeDesc; i++) {
+        if (This->pTypeDesc[i].vt == VT_CARRAY)
+            free(This->pTypeDesc[i].lpadesc);
+    }
+    free(This->pTypeDesc);
+
+    LIST_FOR_EACH_ENTRY_SAFE(pImpLib, pImpLibNext, &This->implib_list, TLBImpLib, entry)
+    {
+        if (pImpLib->pImpTypeLib)
+            ITypeLib2_Release(&pImpLib->pImpTypeLib->ITypeLib2_iface);
+        SysFreeString(pImpLib->name);
+
+        list_remove(&pImpLib->entry);
+        free(pImpLib);
+    }
+
+    LIST_FOR_EACH_ENTRY_SAFE(ref_type, ref_type_next, &This->ref_list, TLBRefType, entry)
+    {
+        list_remove(&ref_type->entry);
+        free(ref_type);
+    }
+
+    for (int i = 0; i < This->TypeInfoCount; ++i) {
+        free(This->typeinfos[i]->tdescAlias);
+        ITypeInfoImpl_Destroy(This->typeinfos[i]);
+    }
+    free(This->typeinfos);
+    free(This);
 
     LeaveCriticalSection(&cache_section);
     return ref;
