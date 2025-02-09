@@ -2898,16 +2898,20 @@ static inline TLB_PEFile *pefile_impl_from_IUnknown(IUnknown *iface)
     return CONTAINING_RECORD(iface, TLB_PEFile, IUnknown_iface);
 }
 
-static HRESULT WINAPI TLB_PEFile_QueryInterface(IUnknown *iface, REFIID riid, void **ppv)
+static HRESULT WINAPI TLB_QueryInterface(IUnknown *iface, REFIID riid, void **ppv)
 {
-    if (IsEqualIID(riid, &IID_IUnknown))
-    {
-        *ppv = iface;
-        IUnknown_AddRef(iface);
-        return S_OK;
+    if (!ppv)
+        return E_POINTER;
+
+    if (!IsEqualIID(riid, &IID_IUnknown)) {
+        *ppv = NULL;
+        return E_NOINTERFACE;
     }
-    *ppv = NULL;
-    return E_NOINTERFACE;
+
+    *ppv = iface;
+    IUnknown_AddRef(iface);
+
+    return S_OK;
 }
 
 static ULONG WINAPI TLB_PEFile_AddRef(IUnknown *iface)
@@ -2933,7 +2937,7 @@ static ULONG WINAPI TLB_PEFile_Release(IUnknown *iface)
 
 static const IUnknownVtbl TLB_PEFile_Vtable =
 {
-    TLB_PEFile_QueryInterface,
+    TLB_QueryInterface,
     TLB_PEFile_AddRef,
     TLB_PEFile_Release
 };
@@ -2997,18 +3001,6 @@ static inline TLB_NEFile *nefile_impl_from_IUnknown(IUnknown *iface)
     return CONTAINING_RECORD(iface, TLB_NEFile, IUnknown_iface);
 }
 
-static HRESULT WINAPI TLB_NEFile_QueryInterface(IUnknown *iface, REFIID riid, void **ppv)
-{
-    if (IsEqualIID(riid, &IID_IUnknown))
-    {
-        *ppv = iface;
-        IUnknown_AddRef(iface);
-        return S_OK;
-    }
-    *ppv = NULL;
-    return E_NOINTERFACE;
-}
-
 static ULONG WINAPI TLB_NEFile_AddRef(IUnknown *iface)
 {
     TLB_NEFile *This = nefile_impl_from_IUnknown(iface);
@@ -3029,7 +3021,7 @@ static ULONG WINAPI TLB_NEFile_Release(IUnknown *iface)
 
 static const IUnknownVtbl TLB_NEFile_Vtable =
 {
-    TLB_NEFile_QueryInterface,
+    TLB_QueryInterface,
     TLB_NEFile_AddRef,
     TLB_NEFile_Release
 };
@@ -3219,18 +3211,6 @@ static inline TLB_Mapping *mapping_impl_from_IUnknown(IUnknown *iface)
     return CONTAINING_RECORD(iface, TLB_Mapping, IUnknown_iface);
 }
 
-static HRESULT WINAPI TLB_Mapping_QueryInterface(IUnknown *iface, REFIID riid, void **ppv)
-{
-    if (IsEqualIID(riid, &IID_IUnknown))
-    {
-        *ppv = iface;
-        IUnknown_AddRef(iface);
-        return S_OK;
-    }
-    *ppv = NULL;
-    return E_NOINTERFACE;
-}
-
 static ULONG WINAPI TLB_Mapping_AddRef(IUnknown *iface)
 {
     TLB_Mapping *This = mapping_impl_from_IUnknown(iface);
@@ -3257,7 +3237,7 @@ static ULONG WINAPI TLB_Mapping_Release(IUnknown *iface)
 
 static const IUnknownVtbl TLB_Mapping_Vtable =
 {
-    TLB_Mapping_QueryInterface,
+    TLB_QueryInterface,
     TLB_Mapping_AddRef,
     TLB_Mapping_Release
 };
