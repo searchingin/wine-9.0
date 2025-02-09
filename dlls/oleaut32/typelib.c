@@ -4788,31 +4788,29 @@ static ITypeLib2* ITypeLib2_Constructor_SLTG(LPVOID pLib, DWORD dwTLBLength)
     return &pTypeLibImpl->ITypeLib2_iface;
 }
 
-static HRESULT WINAPI ITypeLib2_fnQueryInterface(ITypeLib2 *iface, REFIID riid, void **ppv)
+static HRESULT WINAPI ITypeLib2_fnQueryInterface(ITypeLib2 *iface, REFIID riid, void **ppvObject)
 {
     ITypeLibImpl *This = impl_from_ITypeLib2(iface);
 
-    TRACE("(%p)->(IID: %s)\n",This,debugstr_guid(riid));
+    TRACE("(%p)->(IID: %s)\n", This, debugstr_guid(riid));
+
+    if (!ppvObject)
+        return E_POINTER;
 
     if(IsEqualIID(riid, &IID_IUnknown) ||
        IsEqualIID(riid,&IID_ITypeLib)||
-       IsEqualIID(riid,&IID_ITypeLib2))
-    {
-        *ppv = &This->ITypeLib2_iface;
-    }
-    else if(IsEqualIID(riid, &IID_ICreateTypeLib) ||
-             IsEqualIID(riid, &IID_ICreateTypeLib2))
-    {
-        *ppv = &This->ICreateTypeLib2_iface;
-    }
-    else
-    {
-        *ppv = NULL;
+       IsEqualIID(riid,&IID_ITypeLib2)) {
+        *ppvObject = &This->ITypeLib2_iface;
+    } else if(IsEqualIID(riid, &IID_ICreateTypeLib) ||
+             IsEqualIID(riid, &IID_ICreateTypeLib2)) {
+        *ppvObject = &This->ICreateTypeLib2_iface;
+    } else {
         TRACE("-- Interface: E_NOINTERFACE\n");
+        *ppvObject = NULL;
         return E_NOINTERFACE;
     }
 
-    IUnknown_AddRef((IUnknown*)*ppv);
+    IUnknown_AddRef((IUnknown*)*ppvObject);
     return S_OK;
 }
 
@@ -5669,9 +5667,11 @@ static HRESULT WINAPI ITypeInfo_fnQueryInterface(
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo2(iface);
 
-    TRACE("(%p)->(IID: %s)\n",This,debugstr_guid(riid));
+    TRACE("(%p)->(IID: %s)\n", This, debugstr_guid(riid));
 
-    *ppvObject=NULL;
+    if (!ppvObject)
+        return E_POINTER;
+
     if(IsEqualIID(riid, &IID_IUnknown) ||
             IsEqualIID(riid,&IID_ITypeInfo)||
             IsEqualIID(riid,&IID_ITypeInfo2))
@@ -5681,9 +5681,9 @@ static HRESULT WINAPI ITypeInfo_fnQueryInterface(
         *ppvObject = &This->ICreateTypeInfo2_iface;
     else if(IsEqualIID(riid, &IID_ITypeComp))
         *ppvObject = &This->ITypeComp_iface;
-
-    if(!*ppvObject){
+    else {
         TRACE("-- Interface: E_NOINTERFACE\n");
+        *ppvObject = NULL;
         return E_NOINTERFACE;
     }
 
