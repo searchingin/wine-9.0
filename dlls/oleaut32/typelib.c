@@ -4784,6 +4784,8 @@ static HRESULT WINAPI ITypeLib2_fnQueryInterface(ITypeLib2 *iface, REFIID riid, 
     } else if(IsEqualIID(riid, &IID_ICreateTypeLib) ||
              IsEqualIID(riid, &IID_ICreateTypeLib2)) {
         *ppvObject = &This->ICreateTypeLib2_iface;
+    } else if(IsEqualIID(riid, &IID_ITypeComp)) {
+        *ppvObject = &This->ITypeComp_iface;
     } else {
         TRACE("-- Interface: E_NOINTERFACE\n");
         *ppvObject = NULL;
