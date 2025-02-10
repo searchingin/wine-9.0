@@ -7120,11 +7120,13 @@ static FORCEINLINE LONG ReadNoFence( LONG const volatile *src )
     return value;
 }
 
+#ifndef __WINESRC__
 static FORCEINLINE LONG64 ReadNoFence64( LONG64 const volatile *src )
 {
     LONG64 value = __WINE_LOAD64_NO_FENCE( (__int64 const volatile *)src );
     return value;
 }
+#endif
 
 static FORCEINLINE void WriteRelease( LONG volatile *dest, LONG value )
 {
