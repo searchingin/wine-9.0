@@ -300,6 +300,7 @@ DECL_HANDLER(resume_process);
 DECL_HANDLER(get_next_process);
 DECL_HANDLER(get_next_thread);
 DECL_HANDLER(set_keyboard_repeat);
+DECL_HANDLER(get_linux_sync_device);
 
 typedef void (*req_handler)( const void *req, void *reply );
 static const req_handler req_handlers[REQ_NB_REQUESTS] =
@@ -597,6 +598,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_get_next_process,
     (req_handler)req_get_next_thread,
     (req_handler)req_set_keyboard_repeat,
+    (req_handler)req_get_linux_sync_device,
 };
 
 C_ASSERT( sizeof(abstime_t) == 8 );
@@ -2281,3 +2283,4 @@ C_ASSERT( offsetof(struct set_keyboard_repeat_request, period) == 20 );
 C_ASSERT( sizeof(struct set_keyboard_repeat_request) == 24 );
 C_ASSERT( offsetof(struct set_keyboard_repeat_reply, enable) == 8 );
 C_ASSERT( sizeof(struct set_keyboard_repeat_reply) == 16 );
+C_ASSERT( sizeof(struct get_linux_sync_device_request) == 16 );

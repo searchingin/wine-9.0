@@ -4094,3 +4094,8 @@ struct handle_info
 @REPLY
     int enable;                /* previous state of auto-repeat enable */
 @END
+
+
+/* Obtain a fd for the ntsync device */
+@REQ(get_linux_sync_device)
+@END
