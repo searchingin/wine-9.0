@@ -1831,7 +1831,8 @@ NTSTATUS system_time_precise( void *args )
 {
     LONGLONG *ret = args;
     struct timeval now;
-#ifdef HAVE_CLOCK_GETTIME
+    /* Excluding macOS here for the reason outlined in NtQuerySystemTime */
+#if defined(HAVE_CLOCK_GETTIME) && !defined(__APPLE__)
     struct timespec ts;
 
     if (!clock_gettime( CLOCK_REALTIME, &ts ))
