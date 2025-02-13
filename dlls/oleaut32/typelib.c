@@ -4637,7 +4637,7 @@ static ITypeLib2* ITypeLib2_Constructor_SLTG(LPVOID pLib, DWORD dwTLBLength)
     }
 
     for(pBlk = pFirstBlk, order = pHeader->first_blk - 1, i = 0;
-	pBlkEntry[order].next != 0;
+	pBlkEntry[order].next != 0 && i < pTypeLibImpl->TypeInfoCount;
 	order = pBlkEntry[order].next - 1, i++) {
 
       SLTG_TypeInfoHeader *pTIHeader;
