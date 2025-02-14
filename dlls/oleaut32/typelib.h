@@ -259,6 +259,10 @@ typedef struct {
     INT   onext;    /* next offset, -1 if last */
 } MSFT_RefRecord;
 
+typedef struct {
+    UINT8 pad[0x80]; /* currently unknown structure. */
+} MSFT_GuidHashEntry;
+
 /* this is how a guid is stored */
 typedef struct {
     GUID guid;
@@ -269,7 +273,11 @@ typedef struct {
 			   by imported typeinfos) */
     INT   next_hash;    /* offset to next guid in the hash bucket */
 } MSFT_GuidEntry;
-/* some data preceding entries in the name table */
+
+typedef struct {
+    UINT8   pad[0x200]; /* currently unknown structure. */
+} MSFT_NameHash;
+
 typedef struct {
     INT   hreftype;     /* is -1 if name is for neither a typeinfo,
 			   a variable, or a function (that is, name

@@ -2094,6 +2094,18 @@ static DWORD MSFT_ReadLEWords(void *buffer,  DWORD count, TLBContext *pcx,
   return ret;
 }
 
+static HRESULT MSFT_ReadAllGuidsHashes(TLBContext *pcx)
+{
+    MSFT_GuidHashEntry entry;
+
+    FIXME("Reading hashmap data, structure unknown\n");
+
+    MSFT_Seek(pcx, pcx->pTblDir->pGuidHashTab.offset);
+    MSFT_ReadLEWords(&entry, sizeof(MSFT_GuidHashEntry), pcx, DO_NOT_SEEK);
+
+    return S_OK;
+}
+
 static HRESULT MSFT_ReadAllGuids(TLBContext *pcx)
 {
     MSFT_Seek(pcx, pcx->pTblDir->pGuidTab.offset);
@@ -2143,6 +2155,18 @@ static HREFTYPE MSFT_ReadHreftype( TLBContext *pcx, int offset )
 		      pcx->pTblDir->pNameTab.offset+offset);
 
     return niName.hreftype;
+}
+
+static HRESULT MSFT_ReadAllNameHashes(TLBContext *pcx)
+{
+    MSFT_NameHash entry;
+
+    FIXME("Reading hashmap data, structure unknown\n");
+
+    MSFT_Seek(pcx, pcx->pTblDir->pNameHashTab.offset);
+    MSFT_ReadLEWords(&entry, sizeof(MSFT_NameHash), pcx, DO_NOT_SEEK);
+
+    return S_OK;
 }
 
 static HRESULT MSFT_ReadAllNames(TLBContext *pcx)
@@ -3472,8 +3496,10 @@ static ITypeLib2* ITypeLib2_Constructor_MSFT(LPVOID pLib, DWORD dwTLBLength)
 	return NULL;
     }
 
+    MSFT_ReadAllNameHashes(&cx);
     MSFT_ReadAllNames(&cx);
     MSFT_ReadAllStrings(&cx);
+    MSFT_ReadAllGuidsHashes(&cx);
     MSFT_ReadAllGuids(&cx);
 
     /* now fill our internal data */
@@ -10059,14 +10085,14 @@ static void WMSFT_compile_impinfo(ITypeLibImpl *This, WMSFT_TLBFile *file)
 
 static void WMSFT_compile_guidhash(ITypeLibImpl *This, WMSFT_TLBFile *file)
 {
-    file->guidhash_seg.len = 0x80;
+    file->guidhash_seg.len = sizeof(MSFT_GuidHashEntry);
     file->guidhash_seg.data = malloc(file->guidhash_seg.len);
     memset(file->guidhash_seg.data, 0xFF, file->guidhash_seg.len);
 }
 
 static void WMSFT_compile_namehash(ITypeLibImpl *This, WMSFT_TLBFile *file)
 {
-    file->namehash_seg.len = 0x200;
+    file->namehash_seg.len = sizeof(MSFT_NameHash);
     file->namehash_seg.data = malloc(file->namehash_seg.len);
     memset(file->namehash_seg.data, 0xFF, file->namehash_seg.len);
 }
