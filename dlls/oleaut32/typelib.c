@@ -1266,7 +1266,7 @@ static const ITypeInfo2Vtbl tinfvt;
 static const ITypeCompVtbl  tcompvt;
 static const ICreateTypeInfo2Vtbl CreateTypeInfo2Vtbl;
 
-static ITypeInfoImpl* ITypeInfoImpl_Constructor(void);
+static ITypeInfoImpl* ITypeInfoImpl_Constructor(ITypeLibImpl *pTypeLibImpl, int index);
 static void ITypeInfoImpl_Destroy(ITypeInfoImpl *This);
 
 typedef struct tagTLBContext
@@ -2688,13 +2688,9 @@ static ITypeInfoImpl * MSFT_DoTypeInfo(
 
     TRACE_(typelib)("count=%u\n", count);
 
-    ptiRet = ITypeInfoImpl_Constructor();
+    ptiRet = ITypeInfoImpl_Constructor(pLibInfo, count);
     MSFT_ReadLEDWords(&tiBase, sizeof(tiBase) ,pcx ,
                       pcx->pTblDir->pTypeInfoTab.offset+count*sizeof(tiBase));
-
-/* this is where we are coming from */
-    ptiRet->pTypeLib = pLibInfo;
-    ptiRet->index=count;
 
     ptiRet->guid = MSFT_ReadGuid(tiBase.posguid, pcx);
     ptiRet->typeattr.lcid = pLibInfo->set_lcid;   /* FIXME: correct? */
@@ -3410,10 +3406,9 @@ static HRESULT TLB_ReadTypeLib(LPCWSTR pszFileName, LPWSTR pszPath, UINT cchPath
 
 static ITypeLibImpl* TypeLibImpl_Constructor(void)
 {
-    ITypeLibImpl* pTypeLibImpl;
-
-    pTypeLibImpl = calloc(1, sizeof(ITypeLibImpl));
-    if (!pTypeLibImpl) return NULL;
+    ITypeLibImpl* pTypeLibImpl = calloc(1, sizeof(ITypeLibImpl));
+    if (!pTypeLibImpl)
+        return NULL;
 
     pTypeLibImpl->ITypeLib2_iface.lpVtbl = &tlbvt;
     pTypeLibImpl->ITypeComp_iface.lpVtbl = &tlbtcvt;
@@ -3448,7 +3443,8 @@ static ITypeLib2* ITypeLib2_Constructor_MSFT(LPVOID pLib, DWORD dwTLBLength)
     TRACE("%p, TLB length = %ld\n", pLib, dwTLBLength);
 
     pTypeLibImpl = TypeLibImpl_Constructor();
-    if (!pTypeLibImpl) return NULL;
+    if (!pTypeLibImpl)
+        return NULL;
 
     /* get pointer to beginning of typelib data */
     cx.pos = 0;
@@ -4478,7 +4474,8 @@ static ITypeLib2* ITypeLib2_Constructor_SLTG(LPVOID pLib, DWORD dwTLBLength)
 
 
     pTypeLibImpl = TypeLibImpl_Constructor();
-    if (!pTypeLibImpl) return NULL;
+    if (!pTypeLibImpl)
+        return NULL;
 
     pHeader = pLib;
 
@@ -4661,9 +4658,7 @@ static ITypeLib2* ITypeLib2_Constructor_SLTG(LPVOID pLib, DWORD dwTLBLength)
         "pTIHeader->res16 = %lx, pTIHeader->res1e = %lx\n",
         pTIHeader->res06, pTIHeader->res0e, pTIHeader->res16, pTIHeader->res1e);
 
-      pTypeInfoImpl = ITypeInfoImpl_Constructor();
-      pTypeInfoImpl->pTypeLib = pTypeLibImpl;
-      pTypeInfoImpl->index = i;
+      pTypeInfoImpl = ITypeInfoImpl_Constructor(pTypeLibImpl, i);
       pTypeInfoImpl->Name = SLTG_ReadName(pNameTable, pOtherTypeInfoBlks[i].name_offs, pTypeLibImpl);
       pTypeInfoImpl->dwHelpContext = pOtherTypeInfoBlks[i].helpcontext;
       pTypeInfoImpl->DocString = decode_string(hlp_strings, pOtherTypeInfoBlks[i].extra, pOtherTypeInfoBlks[i].hlpstr_len, pTypeLibImpl);
@@ -5620,7 +5615,7 @@ static const ITypeCompVtbl tlbtcvt =
 };
 
 /*================== ITypeInfo(2) Methods ===================================*/
-static ITypeInfoImpl* ITypeInfoImpl_Constructor(void)
+static ITypeInfoImpl* ITypeInfoImpl_Constructor(ITypeLibImpl *pTypeLibImpl, int index)
 {
     ITypeInfoImpl *pTypeInfoImpl = calloc(1, sizeof(ITypeInfoImpl));
     if (!pTypeInfoImpl)
@@ -5634,6 +5629,9 @@ static ITypeInfoImpl* ITypeInfoImpl_Constructor(void)
     pTypeInfoImpl->typeattr.memidConstructor = MEMBERID_NIL;
     pTypeInfoImpl->typeattr.memidDestructor = MEMBERID_NIL;
     pTypeInfoImpl->pcustdata_list = &pTypeInfoImpl->custdata_list;
+    pTypeInfoImpl->pTypeLib = pTypeLibImpl;
+    pTypeInfoImpl->index = index;
+
     list_init(pTypeInfoImpl->pcustdata_list);
 
     TRACE("(%p)\n", pTypeInfoImpl);
@@ -7875,7 +7873,7 @@ static HRESULT WINAPI ITypeInfo_fnGetRefTypeInfo(
         /* when we meet a DUAL typeinfo, we must create the alternate
         * version of it.
         */
-        pTypeInfoImpl = ITypeInfoImpl_Constructor();
+        pTypeInfoImpl = ITypeInfoImpl_Constructor(NULL, 0);
 
         *pTypeInfoImpl = *This;
         pTypeInfoImpl->ref = 0;
@@ -8672,14 +8670,13 @@ HRESULT WINAPI CreateDispTypeInfo(
 
     TRACE("\n");
     pTypeLibImpl = TypeLibImpl_Constructor();
-    if (!pTypeLibImpl) return E_FAIL;
+    if (!pTypeLibImpl)
+        return E_OUTOFMEMORY;
 
     pTypeLibImpl->TypeInfoCount = 2;
     pTypeLibImpl->typeinfos = calloc(pTypeLibImpl->TypeInfoCount, sizeof(ITypeInfoImpl*));
 
-    pTIIface = pTypeLibImpl->typeinfos[0] = ITypeInfoImpl_Constructor();
-    pTIIface->pTypeLib = pTypeLibImpl;
-    pTIIface->index = 0;
+    pTIIface = pTypeLibImpl->typeinfos[0] = ITypeInfoImpl_Constructor(pTypeLibImpl, 0);
     pTIIface->Name = NULL;
     pTIIface->dwHelpContext = -1;
     pTIIface->guid = NULL;
@@ -8731,9 +8728,7 @@ HRESULT WINAPI CreateDispTypeInfo(
 
     dump_TypeInfo(pTIIface);
 
-    pTIClass = pTypeLibImpl->typeinfos[1] = ITypeInfoImpl_Constructor();
-    pTIClass->pTypeLib = pTypeLibImpl;
-    pTIClass->index = 1;
+    pTIClass = pTypeLibImpl->typeinfos[1] = ITypeInfoImpl_Constructor(pTypeLibImpl, 1);
     pTIClass->Name = NULL;
     pTIClass->dwHelpContext = -1;
     pTIClass->guid = NULL;
@@ -8981,11 +8976,9 @@ static HRESULT WINAPI ICreateTypeLib2_fnCreateTypeInfo(ICreateTypeLib2 *iface,
 
     This->typeinfos = realloc(This->typeinfos, sizeof(ITypeInfoImpl*) * (This->TypeInfoCount + 1));
 
-    info = This->typeinfos[This->TypeInfoCount] = ITypeInfoImpl_Constructor();
+    info = This->typeinfos[This->TypeInfoCount] = ITypeInfoImpl_Constructor(This, This->TypeInfoCount);
 
-    info->pTypeLib = This;
     info->Name = TLB_append_str(&This->name_list, name);
-    info->index = This->TypeInfoCount;
     info->typeattr.typekind = kind;
     info->typeattr.cbAlignment = 4;
 
