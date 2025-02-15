@@ -2144,7 +2144,7 @@ static HREFTYPE MSFT_ReadHreftype( TLBContext *pcx, int offset )
     }
 
     MSFT_ReadLEDWords(&niName, sizeof(niName), pcx,
-		      pcx->pTblDir->pNametab.offset+offset);
+		      pcx->pTblDir->pNameTab.offset+offset);
 
     return niName.hreftype;
 }
@@ -2156,11 +2156,11 @@ static HRESULT MSFT_ReadAllNames(TLBContext *pcx)
     INT16 len_piece;
     int offs = 0, lengthInChars;
 
-    MSFT_Seek(pcx, pcx->pTblDir->pNametab.offset);
+    MSFT_Seek(pcx, pcx->pTblDir->pNameTab.offset);
     while (1) {
         TLBString *tlbstr;
 
-        if (offs >= pcx->pTblDir->pNametab.length)
+        if (offs >= pcx->pTblDir->pNameTab.length)
             return S_OK;
 
         MSFT_ReadLEWords(&intro, sizeof(MSFT_NameIntro), pcx, DO_NOT_SEEK);
@@ -2784,11 +2784,11 @@ static HRESULT MSFT_ReadAllStrings(TLBContext *pcx)
     INT16 len_str, len_piece;
     int offs = 0, lengthInChars;
 
-    MSFT_Seek(pcx, pcx->pTblDir->pStringtab.offset);
+    MSFT_Seek(pcx, pcx->pTblDir->pStringTab.offset);
     while (1) {
         TLBString *tlbstr;
 
-        if (offs >= pcx->pTblDir->pStringtab.length)
+        if (offs >= pcx->pTblDir->pStringTab.length)
             return S_OK;
 
         MSFT_ReadLEWords(&len_str, sizeof(INT16), pcx, DO_NOT_SEEK);
@@ -10269,10 +10269,10 @@ static HRESULT WINAPI ICreateTypeLib2_fnSaveAllChanges(ICreateTypeLib2 *iface)
     tmp_fill_segdir_seg(&file.segdir.pNameHashTab, &file.namehash_seg, &running_offset);
 
     TRACE("nametab at: 0x%lx\n", running_offset);
-    tmp_fill_segdir_seg(&file.segdir.pNametab, &file.name_seg, &running_offset);
+    tmp_fill_segdir_seg(&file.segdir.pNameTab, &file.name_seg, &running_offset);
 
     TRACE("stringtab at: 0x%lx\n", running_offset);
-    tmp_fill_segdir_seg(&file.segdir.pStringtab, &file.string_seg, &running_offset);
+    tmp_fill_segdir_seg(&file.segdir.pStringTab, &file.string_seg, &running_offset);
 
     TRACE("typdesc at: 0x%lx\n", running_offset);
     tmp_fill_segdir_seg(&file.segdir.pTypdescTab, &file.typdesc_seg, &running_offset);
