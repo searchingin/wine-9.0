@@ -2096,14 +2096,10 @@ static DWORD MSFT_ReadLEWords(void *buffer,  DWORD count, TLBContext *pcx,
 
 static HRESULT MSFT_ReadAllGuids(TLBContext *pcx)
 {
-    TLBGuid *guid;
-    MSFT_GuidEntry entry;
-    int offs = 0;
-
     MSFT_Seek(pcx, pcx->pTblDir->pGuidTab.offset);
-    while (1) {
-        if (offs >= pcx->pTblDir->pGuidTab.length)
-            return S_OK;
+    for (int offs = 0; offs < pcx->pTblDir->pGuidTab.length; offs += sizeof(MSFT_GuidEntry)) {
+        MSFT_GuidEntry entry;
+        TLBGuid *guid;
 
         MSFT_ReadLEWords(&entry, sizeof(MSFT_GuidEntry), pcx, DO_NOT_SEEK);
 
@@ -2114,9 +2110,9 @@ static HRESULT MSFT_ReadAllGuids(TLBContext *pcx)
         guid->hreftype = entry.hreftype;
 
         list_add_tail(&pcx->pLibInfo->guid_list, &guid->entry);
-
-        offs += sizeof(MSFT_GuidEntry);
     }
+
+    return S_OK;
 }
 
 static TLBGuid *MSFT_ReadGuid( int offset, TLBContext *pcx)
@@ -2151,24 +2147,21 @@ static HREFTYPE MSFT_ReadHreftype( TLBContext *pcx, int offset )
 
 static HRESULT MSFT_ReadAllNames(TLBContext *pcx)
 {
-    char *string;
-    MSFT_NameIntro intro;
     INT16 len_piece;
-    int offs = 0, lengthInChars;
 
     MSFT_Seek(pcx, pcx->pTblDir->pNameTab.offset);
-    while (1) {
+    for (int offs = 0; offs < pcx->pTblDir->pNameTab.length; offs += len_piece) {
+        MSFT_NameIntro intro;
         TLBString *tlbstr;
-
-        if (offs >= pcx->pTblDir->pNameTab.length)
-            return S_OK;
+        int lengthInChars;
+        char *string;
 
         MSFT_ReadLEWords(&intro, sizeof(MSFT_NameIntro), pcx, DO_NOT_SEEK);
         intro.namelen &= 0xFF;
         len_piece = intro.namelen + sizeof(MSFT_NameIntro);
-        if(len_piece % 4)
+        if (len_piece % 4)
             len_piece = (len_piece + 4) & ~0x3;
-        if(len_piece < 8)
+        if (len_piece < 8)
             len_piece = 8;
 
         string = malloc(len_piece + 1);
@@ -2191,9 +2184,9 @@ static HRESULT MSFT_ReadAllNames(TLBContext *pcx)
         free(string);
 
         list_add_tail(&pcx->pLibInfo->name_list, &tlbstr->entry);
-
-        offs += len_piece;
     }
+
+    return S_OK;
 }
 
 static TLBString *MSFT_ReadName( TLBContext *pcx, int offset)
@@ -2780,16 +2773,14 @@ static ITypeInfoImpl * MSFT_DoTypeInfo(
 
 static HRESULT MSFT_ReadAllStrings(TLBContext *pcx)
 {
-    char *string;
-    INT16 len_str, len_piece;
-    int offs = 0, lengthInChars;
+    INT16 len_piece;
 
     MSFT_Seek(pcx, pcx->pTblDir->pStringTab.offset);
-    while (1) {
+    for (int offs = 0; offs < pcx->pTblDir->pStringTab.length; offs += len_piece) {
         TLBString *tlbstr;
-
-        if (offs >= pcx->pTblDir->pStringTab.length)
-            return S_OK;
+        int lengthInChars;
+        INT16 len_str;
+        char *string;
 
         MSFT_ReadLEWords(&len_str, sizeof(INT16), pcx, DO_NOT_SEEK);
         len_piece = len_str + sizeof(INT16);
@@ -2818,9 +2809,9 @@ static HRESULT MSFT_ReadAllStrings(TLBContext *pcx)
         free(string);
 
         list_add_tail(&pcx->pLibInfo->string_list, &tlbstr->entry);
-
-        offs += len_piece;
     }
+
+    return S_OK;
 }
 
 static HRESULT MSFT_ReadAllRefs(TLBContext *pcx)
