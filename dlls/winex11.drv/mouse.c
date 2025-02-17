@@ -504,7 +504,6 @@ static void map_event_coords( HWND hwnd, Window window, Window event_root, int x
            x_root, y_root, input );
 
     if (window == root_window) pt = root_to_virtual_screen( pt.x, pt.y );
-    else if (event_root == root_window) pt = root_to_virtual_screen( x_root, y_root );
     else if (!hwnd)
     {
         thread_data = x11drv_thread_data();
@@ -522,8 +521,8 @@ static void map_event_coords( HWND hwnd, Window window, Window event_root, int x
         }
         else
         {
-            pt.x += data->rects.visible.left;
-            pt.y += data->rects.visible.top;
+            pt.x += data->current_state.rect.left;
+            pt.y += data->current_state.rect.top;
         }
         release_win_data( data );
     }
