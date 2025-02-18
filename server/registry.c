@@ -242,7 +242,9 @@ static void dump_value( const struct key_value *value, FILE *f )
     {
         fputc( '\"', f );
         count = 1 + dump_strW( value->name, value->namelen, f, "\"\"" );
-        count += fprintf( f, "\"=" );
+        count += fprintf( f, "\"$" );
+        count += fprintf( f, "%x", value->order );
+        fputc( '=', f );
     }
     else count = fprintf( f, "@=" );
 
@@ -1144,7 +1146,7 @@ static struct key_value *find_value( const struct key *key, const struct unicode
 }
 
 /* insert a new value; the index must have been returned by find_value */
-static struct key_value *insert_value( struct key *key, const struct unicode_str *name, int index )
+static struct key_value *insert_value( struct key *key, const struct unicode_str *name, int index, int order )
 {
     struct key_value *value;
     WCHAR *new_name = NULL;
@@ -1166,7 +1168,7 @@ static struct key_value *insert_value( struct key *key, const struct unicode_str
     value->namelen = name->len;
     value->len     = 0;
     value->data    = NULL;
-    value->order   = key->last_value;
+    value->order   = order == -1 ? key->last_value : order;
     return value;
 }
 
@@ -1209,7 +1211,7 @@ static void set_value( struct key *key, const struct unicode_str *name,
 
     if (!value)
     {
-        if (!(value = insert_value( key, name, index )))
+        if (!(value = insert_value( key, name, index, -1 )))
         {
             free( ptr );
             return;
@@ -1614,6 +1616,8 @@ static struct key_value *parse_value_name( struct key *key, const char *buffer, 
     struct key_value *value;
     struct unicode_str name;
     int index;
+    char buf[512] = {0};
+    int order = -1;
 
     if (!get_file_tmp_space( info, strlen(buffer) * sizeof(WCHAR) )) return NULL;
     name.str = info->tmp;
@@ -1631,10 +1635,24 @@ static struct key_value *parse_value_name( struct key *key, const char *buffer, 
         name.len -= sizeof(WCHAR);  /* terminating null */
     }
     while (isspace(buffer[*len])) (*len)++;
+    if (buffer[*len] == '$')
+    {
+        const char *order_start = buffer + *len + 1;
+        int i = 0;
+        while(order_start[i] != '=')
+        {
+            buf[i] = order_start[i];
+            if (!isxdigit(buf[i])) goto error;
+            i++;
+        }
+        if (!i) goto error;
+        order = strtoul( buf, NULL, 16 );
+        (*len) += i + 1;
+    }
     if (buffer[*len] != '=') goto error;
     (*len)++;
     while (isspace(buffer[*len])) (*len)++;
-    if (!(value = find_value( key, &name, &index ))) value = insert_value( key, &name, index );
+    if (!(value = find_value( key, &name, &index ))) value = insert_value( key, &name, index , order );
     return value;
 
  error:
