@@ -138,6 +138,9 @@
 /* Define to 1 if you have the <libavutil/avutil.h> header file. */
 #undef HAVE_LIBAVUTIL_AVUTIL_H
 
+/* Define to 1 if you have the 'expat' library (-lexpat). */
+#undef HAVE_LIBEXPAT
+
 /* Define to 1 if you have the 'gettextpo' library (-lgettextpo). */
 #undef HAVE_LIBGETTEXTPO
 
