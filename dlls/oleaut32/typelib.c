@@ -2406,8 +2406,7 @@ MSFT_DoFuncs(TLBContext*     pcx,
     int infolen, nameoffset, reclength, i;
     int recoffset = offset + sizeof(INT);
 
-    char *recbuf = malloc(0xffff);
-    MSFT_FuncRecord *pFuncRec = (MSFT_FuncRecord*)recbuf;
+    MSFT_FuncRecord *pFuncRec = (MSFT_FuncRecord*) calloc(1, 0xffff);
     TLBFuncDesc *ptfd_prev = NULL, *ptfd;
 
     TRACE_(typelib)("\n");
@@ -2568,18 +2567,17 @@ MSFT_DoFuncs(TLBContext*     pcx,
         ++ptfd;
         recoffset += reclength;
     }
-    free(recbuf);
+    free(pFuncRec);
 }
 
 static void MSFT_DoVars(TLBContext *pcx, ITypeInfoImpl *pTI, int cFuncs,
 		       int cVars, int offset, TLBVarDesc ** pptvd)
 {
     int infolen, nameoffset, reclength;
-    char recbuf[256];
-    MSFT_VarRecord *pVarRec = (MSFT_VarRecord*)recbuf;
     TLBVarDesc *ptvd;
     int i;
     int recoffset;
+    MSFT_VarRecord *pVarRec = (MSFT_VarRecord*) calloc(1, 0xff);
 
     TRACE_(typelib)("\n");
 
@@ -2627,6 +2625,8 @@ static void MSFT_DoVars(TLBContext *pcx, ITypeInfoImpl *pTI, int cFuncs,
             ptvd->vardesc.oInst=pVarRec->OffsValue;
         recoffset += reclength;
     }
+
+    free(pVarRec);
 }
 
 /* process Implemented Interfaces of a com class */
