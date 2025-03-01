@@ -1753,6 +1753,18 @@ static inline ITypeInfoImpl *TLB_get_typeinfo_by_name(ITypeLibImpl *typelib, con
     return NULL;
 }
 
+static inline ITypeInfoImpl *TLB_get_typeinfo_by_guid(ITypeLibImpl *typelib, REFGUID guid)
+{
+    for (UINT i = 0; i < typelib->TypeInfoCount; ++i) {
+        ITypeInfoImpl *pTInfo = typelib->typeinfos[i];
+
+        if (IsEqualIID(TLB_get_guid_null(pTInfo->guid), guid))
+            return pTInfo;
+    }
+
+    return NULL;
+}
+
 static void TLBVarDesc_Constructor(TLBVarDesc *var_desc)
 {
     list_init(&var_desc->custdata_list);
@@ -4960,19 +4972,18 @@ static HRESULT WINAPI ITypeLib2_fnGetTypeInfoOfGuid(
     ITypeInfo **ppTInfo)
 {
     ITypeLibImpl *This = impl_from_ITypeLib2(iface);
-    int i;
+    ITypeInfoImpl *pTInfo;
 
     TRACE("%p %s %p\n", This, debugstr_guid(guid), ppTInfo);
 
-    for(i = 0; i < This->TypeInfoCount; ++i){
-        if(IsEqualIID(TLB_get_guid_null(This->typeinfos[i]->guid), guid)){
-            *ppTInfo = (ITypeInfo *)&This->typeinfos[i]->ITypeInfo2_iface;
-            ITypeInfo_AddRef(*ppTInfo);
-            return S_OK;
-        }
-    }
+    pTInfo = TLB_get_typeinfo_by_guid(This, guid);
+    if (!pTInfo)
+        return TYPE_E_ELEMENTNOTFOUND;
 
-    return TYPE_E_ELEMENTNOTFOUND;
+    *ppTInfo = (ITypeInfo *)&pTInfo->ITypeInfo2_iface;
+    ITypeInfo_AddRef(*ppTInfo);
+
+    return S_OK;
 }
 
 /* ITypeLib::GetLibAttr
