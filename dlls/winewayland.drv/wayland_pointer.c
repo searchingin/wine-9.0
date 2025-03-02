@@ -97,8 +97,14 @@ static void pointer_handle_motion(void *data, struct wl_pointer *wl_pointer,
 {
     struct wayland_pointer *pointer = &process_wayland.pointer;
 
-    /* Ignore absolute motion events if in relative mode. */
-    if (pointer->zwp_relative_pointer_v1) return;
+    /* Ignore absolute motion events if the pointer is locked and the pointer is
+     * focused on the lock surface. Relative mode is or will be enabled. The
+     * latter case may happen if a motion event is being handled immediately
+     * after an enter event, and the foreground thread has yet to re-enable
+     * relative motion. */
+    if (pointer->zwp_locked_pointer_v1 &&
+            pointer->focused_hwnd == pointer->constraint_hwnd)
+        return;
 
     pointer_handle_motion_internal(sx, sy);
 }
