@@ -111,6 +111,8 @@ static void pointer_handle_enter(void *data, struct wl_pointer *wl_pointer,
 {
     struct wayland_pointer *pointer = &process_wayland.pointer;
     HWND hwnd;
+    BOOL locked = FALSE;
+    BOOL focus_on_constraint_hwnd = FALSE;
 
     if (!wl_surface) return;
     /* The wl_surface user data remains valid and immutable for the whole
@@ -122,6 +124,10 @@ static void pointer_handle_enter(void *data, struct wl_pointer *wl_pointer,
     pthread_mutex_lock(&pointer->mutex);
     pointer->focused_hwnd = hwnd;
     pointer->enter_serial = serial;
+    if (pointer->zwp_locked_pointer_v1)
+        locked = TRUE;
+    if (hwnd == pointer->constraint_hwnd)
+        focus_on_constraint_hwnd = TRUE;
     pthread_mutex_unlock(&pointer->mutex);
 
     /* The cursor is undefined at every enter, so we set it again with
@@ -131,7 +137,8 @@ static void pointer_handle_enter(void *data, struct wl_pointer *wl_pointer,
     /* Handle the enter as a motion, to account for cases where the
      * window first appears beneath the pointer and won't get a separate
      * motion event. */
-    pointer_handle_motion_internal(sx, sy);
+    if (!locked || !focus_on_constraint_hwnd)
+        pointer_handle_motion_internal(sx, sy);
 }
 
 static void pointer_handle_leave(void *data, struct wl_pointer *wl_pointer,
