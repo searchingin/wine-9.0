@@ -110,6 +110,7 @@ struct wayland_pointer
     uint32_t enter_serial;
     uint32_t button_serial;
     struct wayland_cursor cursor;
+    BOOL lock_active;
     pthread_mutex_t mutex;
 };
 
