@@ -3173,7 +3173,7 @@ regedit /s regCleanup.reg
 set WINE_FOO=
 endlocal
 cd .. & rd /s/q foobar
-goto ContinueCall
+goto ExitFtype
 :SkipFType
 echo --- setting association
 echo ---
@@ -3190,8 +3190,22 @@ echo Skipped as not enough permissions
 echo Skipped as not enough permissions
 echo --- resetting association
 echo original value
+:ExitFtype
 
-:ContinueCall
+echo ------------ Testing mode ------------
+call :setError 666 & (mode CON >nul &&echo SUCCESS||echo FAILURE)
+echo %errorlevel%
+call :setError 666 & (mode CON | findstr "666" >nul &&echo SUCCESS||echo FAILURE)
+echo %errorlevel%
+call :setError 666 & (mode CON lines=666 &&echo SUCCESS||echo FAILURE)
+echo %errorlevel%
+call :setError 666 & (mode CON | findstr "666" >nul &&echo SUCCESS||echo FAILURE)
+echo %errorlevel%
+call :setError 666 & (mode CON lines=false >nul &&echo SUCCESS||echo FAILURE)
+echo %errorlevel%
+call :setError 666 & (mode NOTADEVICE >nul &&echo SUCCESS||echo FAILURE)
+echo %errorlevel%
+
 echo ------------ Testing CALL ------------
 mkdir foobar & cd foobar
 echo --- external script
