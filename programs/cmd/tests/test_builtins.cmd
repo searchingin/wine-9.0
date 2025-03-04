@@ -3174,7 +3174,7 @@ regedit /s regCleanup.reg
 set WINE_FOO=
 endlocal
 cd .. & rd /s/q foobar
-goto ContinueCall
+goto ExitFtype
 :SkipFType
 echo --- setting association
 echo ---
@@ -3191,8 +3191,25 @@ echo Skipped as not enough permissions
 echo Skipped as not enough permissions
 echo --- resetting association
 echo original value
+:ExitFtype
 
-:ContinueCall
+echo ------------ Testing mode ------------
+rem MODE only works if given an actual console, so it needs a START wrapper, which needs various escaping
+echo @mode CON ^| findstr "666" >> mode.bat
+echo @echo %%errorlevel%% ^>^> mode.txt >> mode.bat
+echo @mode CON lines=666 >> mode.bat
+echo @echo %%errorlevel%% ^>^> mode.txt >> mode.bat
+echo @mode CON ^| findstr ^"666^" >> mode.bat
+echo @echo %%errorlevel%% ^>^> mode.txt >> mode.bat
+echo @mode CON lines=false >> mode.bat
+echo @echo %%errorlevel%% ^>^> mode.txt >> mode.bat
+echo @mode CON lines= >> mode.bat
+echo @echo %%errorlevel%% ^>^> mode.txt >> mode.bat
+echo @mode NOTADEVICE >> mode.bat
+echo @echo %%errorlevel%% ^>^> mode.txt >> mode.bat
+start /wait cmd /c mode.bat
+type mode.txt
+del mode.bat mode.txt
 echo ------------ Testing CALL ------------
 mkdir foobar & cd foobar
 echo --- external script
