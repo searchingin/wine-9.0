@@ -168,6 +168,7 @@ BOOL WCMD_get_fullpath(const WCHAR *, SIZE_T, WCHAR *, WCHAR **);
 RETURN_CODE WCMD_give_help(WCHAR *args);
 RETURN_CODE WCMD_goto(void);
 RETURN_CODE WCMD_label(void);
+RETURN_CODE WCMD_mode(WCHAR *);
 void WCMD_leave_paged_mode(void);
 RETURN_CODE WCMD_more(WCHAR *);
 RETURN_CODE WCMD_move (void);
@@ -364,39 +365,40 @@ static inline BOOL WCMD_is_in_context(const WCHAR *ext)
 #define WCMD_LABEL    15
 #define WCMD_MD       16
 #define WCMD_MKDIR    17
-#define WCMD_MOVE     18
-#define WCMD_PATH     19
-#define WCMD_PAUSE    20
-#define WCMD_PROMPT   21
-#define WCMD_REM      22
-#define WCMD_REN      23
-#define WCMD_RENAME   24
-#define WCMD_RD       25
-#define WCMD_RMDIR    26
-#define WCMD_SET      27
-#define WCMD_SHIFT    28
-#define WCMD_START    29
-#define WCMD_TIME     30
-#define WCMD_TITLE    31
-#define WCMD_TYPE     32
-#define WCMD_VERIFY   33
-#define WCMD_VER      34
-#define WCMD_VOL      35
+#define WCMD_MODE     18
+#define WCMD_MOVE     19
+#define WCMD_PATH     20
+#define WCMD_PAUSE    21
+#define WCMD_PROMPT   22
+#define WCMD_REM      23
+#define WCMD_REN      24
+#define WCMD_RENAME   25
+#define WCMD_RD       26
+#define WCMD_RMDIR    27
+#define WCMD_SET      28
+#define WCMD_SHIFT    29
+#define WCMD_START    30
+#define WCMD_TIME     31
+#define WCMD_TITLE    32
+#define WCMD_TYPE     33
+#define WCMD_VERIFY   34
+#define WCMD_VER      35
+#define WCMD_VOL      36
 
-#define WCMD_ENDLOCAL 36
-#define WCMD_SETLOCAL 37
-#define WCMD_PUSHD    38
-#define WCMD_POPD     39
-#define WCMD_ASSOC    40
-#define WCMD_COLOR    41
-#define WCMD_FTYPE    42
-#define WCMD_MORE     43
-#define WCMD_CHOICE   44
-#define WCMD_MKLINK   45
-#define WCMD_CHGDRIVE 46
+#define WCMD_ENDLOCAL 37
+#define WCMD_SETLOCAL 38
+#define WCMD_PUSHD    39
+#define WCMD_POPD     40
+#define WCMD_ASSOC    41
+#define WCMD_COLOR    42
+#define WCMD_FTYPE    43
+#define WCMD_MORE     44
+#define WCMD_CHOICE   45
+#define WCMD_MKLINK   46
+#define WCMD_CHGDRIVE 47
 
 /* Must be last in list */
-#define WCMD_EXIT     47
+#define WCMD_EXIT     48
 
 /* Some standard messages */
 extern WCHAR anykey[];
@@ -452,3 +454,6 @@ extern WCHAR version_string[];
 #define WCMD_BADTOKEN         1047
 #define WCMD_ENDOFLINE        1048
 #define WCMD_ENDOFFILE        1049
+#define WCMD_MODE_NODEVICE    1050
+#define WCMD_MODE_CON_CANTRESIZE 1051
+#define WCMD_MODE_CON_OUTPUT  1052

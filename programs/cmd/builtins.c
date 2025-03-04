@@ -58,6 +58,7 @@ const WCHAR inbuilt[][10] = {
         L"LABEL",
         L"MD",
         L"MKDIR",
+        L"MODE",
         L"MOVE",
         L"PATH",
         L"PAUSE",
@@ -3415,6 +3416,101 @@ RETURN_CODE WCMD_title(const WCHAR *args)
 {
     SetConsoleTitleW(args);
     return NO_ERROR;
+}
+
+/****************************************************************************
+ * WCMD_mode
+ *
+ * Get or set the console size
+ */
+
+static RETURN_CODE WCMD_mode_con(WCHAR *args)
+{
+    CONSOLE_SCREEN_BUFFER_INFO inf;
+    UINT keybd_speed, keybd_delay;
+    RETURN_CODE return_code = 0;
+    WCHAR buf[1024];
+    HANDLE console;
+    WCHAR *num_end;
+    WCHAR *argN;
+    BOOL valid;
+    int argno;
+
+    console = CreateFileW(L"CONOUT$", GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
+                          NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (console == INVALID_HANDLE_VALUE || !GetConsoleScreenBufferInfo(console, &inf))
+    {
+        WCMD_output_stderr(WCMD_LoadMessage(WCMD_MODE_NODEVICE), L"CON");
+        return_code = -1;
+        goto out;
+    }
+    SystemParametersInfoA(SPI_GETKEYBOARDSPEED, 0, &keybd_speed, 0);
+    SystemParametersInfoA(SPI_GETKEYBOARDDELAY, 0, &keybd_delay, 0);
+
+    if (*args)
+    {
+        for (argno = 1; ; argno++)
+        {
+            WCHAR *arg = WCMD_parameter_with_delims(args, argno, &argN, FALSE, FALSE, L" ");
+            if (!*arg) break;
+
+            valid = FALSE;
+            if (!wcsnicmp(arg, L"COLS=", 5))
+            {
+                inf.dwSize.X = wcstoul(arg+5, &num_end, 10);
+                if (!*num_end)
+                    valid = TRUE;
+            }
+            else if (!wcsnicmp(arg, L"LINES=", 6))
+            {
+                inf.dwSize.Y = wcstoul(arg+6, &num_end, 10);
+                if (!*num_end)
+                    valid = TRUE;
+            }
+            if (!valid)
+            {
+                WCMD_output_stderr(WCMD_LoadMessage(WCMD_ARGERR));
+                return_code = -1;
+                goto out;
+            }
+        }
+        if (!SetConsoleScreenBufferSize(console, inf.dwSize))
+        {
+            WCMD_output_stderr(WCMD_LoadMessage(WCMD_MODE_CON_CANTRESIZE));
+            return_code = -1;
+        }
+    }
+    else
+    {
+        wsprintfW(buf, WCMD_LoadMessage(WCMD_MODE_CON_OUTPUT), inf.dwSize.Y, inf.dwSize.X, keybd_speed, keybd_delay, GetConsoleCP());
+        WCMD_output_asis(buf);
+    }
+out:
+    if (console != INVALID_HANDLE_VALUE)
+        CloseHandle(console);
+    return return_code;
+}
+
+RETURN_CODE WCMD_mode(WCHAR *args)
+{
+    WCHAR *device = WCMD_parameter(args, 0, NULL, FALSE, FALSE);
+
+    if (!*device)
+    {
+        /* just print everything (which is CON only for now) */
+        WCMD_mode_con(args);
+        errorlevel = 0;
+    }
+    else if (!wcsicmp(device, L"CON"))
+    {
+        errorlevel = WCMD_mode_con(args);
+    }
+    else
+    {
+        WCMD_output(L"Invalid parameter - %1\r\n", device);
+        errorlevel = -1;
+    }
+    return errorlevel;
 }
 
 /****************************************************************************
