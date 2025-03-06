@@ -354,6 +354,70 @@ void set_shared_user_object( HANDLE handle, struct obj_locator locator )
     pthread_mutex_unlock( &user_objects_lock );
 }
 
+static NTSTATUS get_shared_user_object( HANDLE handle, unsigned int type, struct object_lock *lock,
+                                        const object_shm_t **object_shm )
+{
+    WORD index = USER_HANDLE_TO_INDEX( handle );
+    struct shared_user_object_cache *cache;
+    const shared_object_t *object;
+    UINT status = STATUS_SUCCESS;
+    BOOL valid = TRUE;
+
+    if (index >= NB_USER_HANDLES) return STATUS_INVALID_PARAMETER;
+    cache = user_objects + index;
+
+    pthread_mutex_lock( &user_objects_lock );
+    if (!(object = cache->object))
+    {
+        struct obj_locator locator;
+
+        SERVER_START_REQ( get_shared_user_object )
+        {
+            req->handle = wine_server_user_handle( handle );
+            req->type = type;
+            wine_server_call( req );
+            locator = reply->locator;
+        }
+        SERVER_END_REQ;
+
+        cache->id = locator.id;
+        cache->object = find_shared_session_object( locator );
+        if (!(object = cache->object)) status = STATUS_INVALID_HANDLE;
+        memset( lock, 0, sizeof(*lock) );
+    }
+
+    /* check object validity by comparing ids, within the object seqlock */
+    if (!status) valid = cache->id == object->id;
+    pthread_mutex_unlock( &user_objects_lock );
+
+    if (!status && (!lock->id || !shared_object_release_seqlock( object, lock->seq )))
+    {
+        shared_object_acquire_seqlock( object, &lock->seq );
+        if (!(lock->id = object->id)) lock->id = -1;
+        *object_shm = &object->shm;
+        return STATUS_PENDING;
+    }
+
+    if (!valid)
+    {
+        memset( cache, 0, sizeof(*cache) ); /* object has been invalidated, clear the cache */
+        return STATUS_INVALID_HANDLE;
+    }
+    return status;
+}
+
+NTSTATUS get_shared_window( HWND hwnd, struct object_lock *lock, const window_shm_t **window_shm )
+{
+    const object_shm_t *object_shm;
+    UINT status = STATUS_SUCCESS;
+
+    TRACE( "hwnd %p, lock %p, input_shm %p\n", hwnd, lock, window_shm );
+
+    status = get_shared_user_object( hwnd, NTUSER_OBJ_WINDOW, lock, &object_shm );
+    if (status == STATUS_PENDING) *window_shm = &object_shm->window;
+    return status;
+}
+
 BOOL is_virtual_desktop(void)
 {
     struct object_lock lock = OBJECT_LOCK_INIT;

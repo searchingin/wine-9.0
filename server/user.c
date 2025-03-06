@@ -20,11 +20,13 @@
 
 #include "thread.h"
 #include "user.h"
+#include "file.h"
 #include "request.h"
 
 struct user_handle
 {
     void          *ptr;          /* pointer to object */
+    const volatile void *shm;    /* object shared memory */
     unsigned short type;         /* object type (0 if free) */
     unsigned short generation;   /* generation counter */
 };
@@ -84,17 +86,19 @@ static inline void *free_user_entry( struct user_handle *ptr )
     void *ret;
     ret = ptr->ptr;
     ptr->ptr  = freelist;
+    ptr->shm  = NULL;
     ptr->type = 0;
     freelist  = ptr;
     return ret;
 }
 
 /* allocate a user handle for a given object */
-user_handle_t alloc_user_handle( void *ptr, enum user_object type )
+user_handle_t alloc_user_handle( void *ptr, enum user_object type, const volatile void *object_shm )
 {
     struct user_handle *entry = alloc_user_entry();
     if (!entry) return 0;
     entry->ptr  = ptr;
+    entry->shm  = object_shm;
     entry->type = type;
     if (++entry->generation >= 0xffff) entry->generation = 1;
     return entry_to_handle( entry );
@@ -179,7 +183,7 @@ void free_process_user_handles( struct process *process )
 /* allocate an arbitrary user handle */
 DECL_HANDLER(alloc_user_handle)
 {
-    reply->handle = alloc_user_handle( current->process, USER_CLIENT );
+    reply->handle = alloc_user_handle( current->process, USER_CLIENT, NULL );
 }
 
 
@@ -192,4 +196,14 @@ DECL_HANDLER(free_user_handle)
         free_user_entry( entry );
     else
         set_error( STATUS_INVALID_HANDLE );
+}
+
+DECL_HANDLER(get_shared_user_object)
+{
+    struct user_handle *entry;
+
+    if (!(entry = handle_to_entry( req->handle )) || entry->type != req->type || !entry->shm)
+        set_error( STATUS_INVALID_HANDLE );
+    else
+        reply->locator = get_shared_object_locator( entry->shm );
 }

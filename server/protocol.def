@@ -2578,7 +2578,6 @@ enum message_type
 @REQ(get_window_info)
     user_handle_t  handle;      /* handle to the window */
 @REPLY
-    user_handle_t  full_handle; /* full 32-bit handle */
     user_handle_t  last_active; /* last active popup */
     process_id_t   pid;         /* process owning the window */
     thread_id_t    tid;         /* thread owning the window */
@@ -2979,6 +2978,14 @@ enum coords_relative
     obj_handle_t handle;          /* handle to the desktop */
 @REPLY
     struct obj_locator locator;   /* locator for the shared session object */
+@END
+
+
+@REQ(get_shared_user_object)
+    obj_handle_t handle;          /* handle to the object */
+    unsigned int type;            /* expected type of the object */
+@REPLY
+    struct obj_locator locator;
 @END
 
 

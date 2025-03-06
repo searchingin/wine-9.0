@@ -99,7 +99,7 @@ struct desktop
 
 /* user handles functions */
 
-extern user_handle_t alloc_user_handle( void *ptr, enum user_object type );
+extern user_handle_t alloc_user_handle( void *ptr, enum user_object type, const volatile void *object_shm );
 extern void *get_user_object( user_handle_t handle, enum user_object type );
 extern void *get_user_object_handle( user_handle_t *handle, enum user_object type );
 extern user_handle_t get_user_full_handle( user_handle_t handle );

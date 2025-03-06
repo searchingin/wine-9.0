@@ -672,7 +672,7 @@ static struct window *create_window( struct window *parent, struct window *owner
     list_init( &win->unlinked );
 
     if (!(win->shared = alloc_shared_object())) goto failed;
-    if (!(handle = alloc_user_handle( win, USER_WINDOW ))) goto failed;
+    if (!(handle = alloc_user_handle( win, USER_WINDOW, win->shared ))) goto failed;
     win->last_active = win->shared->handle;
 
     SHARED_WRITE_BEGIN( win->shared, window_shm_t )
@@ -2345,7 +2345,6 @@ DECL_HANDLER(get_window_info)
 
     if (!win) return;
 
-    reply->full_handle = win->shared->handle;
     reply->last_active = win->shared->handle;
     reply->is_unicode  = win->is_unicode;
     reply->dpi_context = win->dpi_context;
