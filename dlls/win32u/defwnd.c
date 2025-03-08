@@ -2732,6 +2732,12 @@ LRESULT default_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, 
         f10_key = menu_sys_key = 0;
         break;
 
+    case WM_POINTERDOWN:
+    case WM_POINTERUP:
+    case WM_POINTERUPDATE:
+        update_mouse_state_from_pointer( hwnd, msg, GET_POINTERID_WPARAM( wparam ) );
+        break;
+
     case WM_KEYDOWN:
         if (wparam == VK_F10) f10_key = VK_F10;
         break;
