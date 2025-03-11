@@ -591,21 +591,21 @@ static void test_WSALookupServiceNext_bth_devices( HANDLE lookup_handle, DWORD f
 
         if (flags & LUP_RETURN_NAME)
         {
-            todo_wine ok( !!results->lpszServiceInstanceName, "Expected lpszServiceInstanceName to not be NULL\n" );
+            ok( !!results->lpszServiceInstanceName, "Expected lpszServiceInstanceName to not be NULL\n" );
             if (verbose)
                 trace( "Name: %s\n", debugstr_a( results->lpszServiceInstanceName ) );
         }
 
         if (flags & LUP_RETURN_TYPE)
         {
-            todo_wine ok( !!results->lpServiceClassId, "Expected lpServiceClassId to not be NULL\n" );
+            ok( !!results->lpServiceClassId, "Expected lpServiceClassId to not be NULL\n" );
             if (results->lpServiceClassId && verbose)
                 trace( "CoD: %#lx\n", results->lpServiceClassId->Data1 );
         }
 
         if (flags & LUP_RETURN_BLOB)
         {
-            todo_wine ok( !!results->lpBlob, "Expected lpBlob to not be NULL\n" );
+            ok( !!results->lpBlob, "Expected lpBlob to not be NULL\n" );
             if (results->lpBlob)
             {
                 info = (BTH_DEVICE_INFO *)results->lpBlob->pBlobData;
@@ -628,7 +628,7 @@ static void test_WSALookupServiceNext_bth_devices( HANDLE lookup_handle, DWORD f
 
         if (flags & LUP_RETURN_ADDR)
         {
-            todo_wine ok( !!results->lpcsaBuffer, "Expected lpcsaBuffer to not be NULL\n" );
+            ok( !!results->lpcsaBuffer, "Expected lpcsaBuffer to not be NULL\n" );
             if (results->lpcsaBuffer)
             {
                 const SOCKET_ADDRESS *remote_sock_addr = &results->lpcsaBuffer->RemoteAddr;
@@ -760,8 +760,8 @@ static void test_WSALookupService_bth_devices( void )
     ret = WSALookupServiceNextA( lookup_handle, LUP_RETURN_TYPE | LUP_RETURN_BLOB, &buf_len, results );
     err = WSAGetLastError();
     ok( ret == -1, "Expected WSALookupServiceNextA to fail\n" );
-    todo_wine ok( err == WSAEFAULT, "%d != %d", err, WSAEFAULT );
-    todo_wine ok( buf_len > orig_len, "%ld should be greater than %ld\n", buf_len, orig_len );
+    ok( err == WSAEFAULT, "%d != %d\n", err, WSAEFAULT );
+    ok( buf_len > orig_len, "%ld should be greater than %ld\n", buf_len, orig_len );
     ok( !results->lpServiceClassId, "lpServiceClassId should not have been filled\n" );
     ok( !results->lpBlob, "lpBlob should not have been filled\n" );
     free( results );

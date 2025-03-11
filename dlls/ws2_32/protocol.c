@@ -2436,25 +2436,232 @@ int WINAPI WSALookupServiceEnd( HANDLE lookup_handle )
 }
 
 
+/* Known flags for device discovery:
+ *
+ * LUP_FLUSHPREVIOUS: Skip to the next device in the list.
+ * LUP_RETURN_TYPE: Return the class of device code inside the Data1 field of lpServiceClassId (yes, really).
+ * LUP_RETURN_NAME: Return the device name in lpszServiceInstanceName.
+ * LUP_RETURN_ADDR: Return the device address in lpcsaBuffer.LocalAddr as a SOCKADDR_BTH value.
+ * LUP_RES_SERVICE: If LUP_RETURN_ADDR is set, return the local address in lpcsaBuffer.RemoteAddr similarly as well.
+ * LUP_RETURN_BLOB: Return the BTH_DEVICE_INFO value associated with the device in lpBlob.
+ */
+static INT bth_devices_next( struct ws_bth_query_device *devices, DWORD flags, DWORD *buf_len, void *queryset, BOOL unicode )
+{
+    union {
+        WSAQUERYSETA resultsA;
+        WSAQUERYSETW resultsW;
+    } *results = queryset;
+    DWORD queryset_size = (unicode ? sizeof( results->resultsW ) : sizeof( results->resultsA ));
+    char *buf_start = (char *)queryset + queryset_size;
+    DWORD buf_required = queryset_size;
+    const BTH_DEVICE_INFO *device_info;
+
+    if (devices->list->numOfDevices == devices->idx)
+    {
+        SetLastError( WSA_E_NO_MORE );
+        return -1;
+    }
+
+    if (flags & LUP_RETURN_TYPE)
+        buf_required += sizeof( GUID );
+    if (flags & LUP_RETURN_NAME)
+        /* Windows will always require the maximum buffer length for storing a name, regardless of the name's actual length. */
+        buf_required += unicode ? BTH_MAX_NAME_SIZE * sizeof( WCHAR ) : BTH_MAX_NAME_SIZE;
+    if (flags & LUP_RETURN_ADDR)
+    {
+        buf_required += sizeof( CSADDR_INFO ) + sizeof( SOCKADDR_BTH );
+        if (flags & LUP_RES_SERVICE)
+            buf_required += sizeof( SOCKADDR_BTH );
+    }
+    if (flags & LUP_RETURN_BLOB)
+        buf_required += sizeof( BLOB ) + sizeof( BTH_DEVICE_INFO );
+
+    if (*buf_len < buf_required)
+    {
+        *buf_len = buf_required;
+        WSASetLastError( WSAEFAULT );
+        return -1;
+    }
+
+    if (flags & LUP_FLUSHPREVIOUS)
+    {
+        devices->idx++;
+        return bth_devices_next( devices, flags & ~LUP_FLUSHPREVIOUS, buf_len, queryset, unicode );
+    }
+    device_info = &devices->list->deviceList[devices->idx++];
+
+    if (flags & LUP_RETURN_TYPE)
+    {
+        GUID *cod = (GUID *)buf_start;
+
+        memset( cod, 0, sizeof( *cod ));
+        cod->Data1 = device_info->classOfDevice;
+        buf_start += sizeof( *cod );
+        if (unicode)
+            results->resultsW.lpServiceClassId = cod;
+        else
+            results->resultsA.lpServiceClassId = cod;
+    }
+    if (flags & LUP_RETURN_NAME)
+    {
+        if (unicode)
+        {
+            DWORD lenW = MultiByteToWideChar( CP_ACP, 0, device_info->name, -1, NULL, 0 );
+            results->resultsW.lpszServiceInstanceName = (WCHAR *)buf_start;
+            buf_start += lenW * sizeof( WCHAR );
+            MultiByteToWideChar( CP_ACP, 0, device_info->name, -1, results->resultsW.lpszServiceInstanceName,
+                                 lenW );
+        }
+        else
+        {
+            DWORD lenA = strlen( device_info->name ) + 1;
+            results->resultsA.lpszServiceInstanceName = buf_start;
+            buf_start += lenA;
+            memcpy( results->resultsA.lpszServiceInstanceName, device_info->name, lenA + 1 );
+        }
+    }
+    if (flags & LUP_RETURN_ADDR)
+    {
+        CSADDR_INFO *addr_info;
+        SOCKADDR_BTH *bth_addr;
+
+        addr_info = (CSADDR_INFO *)buf_start;
+        buf_start += sizeof( *addr_info );
+        bth_addr = (SOCKADDR_BTH *)buf_start;
+        buf_start += sizeof( *bth_addr );
+
+        addr_info->RemoteAddr.iSockaddrLength = sizeof( *bth_addr );
+        addr_info->RemoteAddr.lpSockaddr = (SOCKADDR *)bth_addr;
+        memset( bth_addr, 0, sizeof( *bth_addr ));
+        bth_addr->addressFamily = AF_BTH;
+        bth_addr->btAddr = device_info->address;
+        if (flags & LUP_RES_SERVICE)
+        {
+            FIXME( "LUP_RES_SERVICE: semi-stub!\n" );
+            bth_addr = (SOCKADDR_BTH *)buf_start;
+            buf_start += sizeof( *bth_addr );
+            memset( bth_addr, 0, sizeof( *bth_addr ));
+            bth_addr->addressFamily = AF_BTH;
+            addr_info->LocalAddr.iSockaddrLength = sizeof( *bth_addr );
+            addr_info->LocalAddr.lpSockaddr = (SOCKADDR *)bth_addr;
+        }
+        if (unicode)
+            results->resultsW.lpcsaBuffer = addr_info;
+        else
+            results->resultsA.lpcsaBuffer = addr_info;
+    }
+    if (flags & LUP_RETURN_BLOB)
+    {
+        BLOB *blob;
+        BTH_DEVICE_INFO *info;
+
+        blob = (BLOB *)buf_start;
+        buf_start += sizeof( *blob );
+        info = (BTH_DEVICE_INFO *)buf_start;
+        buf_start += sizeof( *info );
+
+        blob->cbSize = sizeof( *device_info );
+        blob->pBlobData = (BYTE *)info;
+        info->address = device_info->address;
+        info->classOfDevice = device_info->classOfDevice;
+        info->flags = device_info->flags;
+        if (flags & LUP_RETURN_NAME)
+            lstrcpynA( info->name, device_info->name, sizeof( info->name ) );
+
+        if (unicode)
+            results->resultsW.lpBlob = blob;
+        else
+            results->resultsA.lpBlob = blob;
+    }
+
+    WSASetLastError( ERROR_SUCCESS );
+    return 0;
+}
+
+static INT ws_bth_lookup_service_next( struct ws_bth_query_ctx *handle, DWORD flags, DWORD *buf_len, void *results,
+                                BOOL unicode )
+{
+    TRACE( "(%p, %#lx, %p, %p)\n", handle, flags, buf_len, results );
+
+    if (handle->lookup_devices)
+        return bth_devices_next( &handle->data.device, flags, buf_len, results, unicode );
+
+    WSASetLastError( WSA_INVALID_HANDLE );
+    return -1;
+}
+
 /***********************************************************************
  *      WSALookupServiceNextA   (ws2_32.@)
  */
-int WINAPI WSALookupServiceNextA( HANDLE lookup, DWORD flags, DWORD *len, WSAQUERYSETA *results )
+int WINAPI WSALookupServiceNextA( HANDLE lookup_handle, DWORD flags, DWORD *len, WSAQUERYSETA *results )
 {
-    FIXME( "(%p %#lx %p %p) Stub!\n", lookup, flags, len, results );
-    SetLastError( WSA_E_NO_MORE );
-    return -1;
+    struct ws_lookup_service_ctx *lookup = lookup_handle;
+
+    TRACE( "(%p %s %p %p)\n", lookup_handle, debugstr_WSALookupService_flags( flags ), len, results );
+
+    if (!len || !results || results->dwSize != sizeof( *results ))
+    {
+        WSASetLastError( WSAEINVAL );
+        return -1;
+    }
+    if (*len < sizeof( *results ))
+    {
+        *len = sizeof( *results );
+        WSASetLastError( WSAEFAULT );
+        return -1;
+    }
+    if (!lookup)
+    {
+        WSASetLastError( WSA_INVALID_HANDLE );
+        return -1;
+    }
+
+    switch (lookup->namespace)
+    {
+    case NS_BTH:
+        return ws_bth_lookup_service_next( &lookup->data.bth, flags, len, results, FALSE );
+    default:
+        WSASetLastError( WSA_INVALID_HANDLE );
+        return -1;
+    }
 }
 
 
 /***********************************************************************
  *      WSALookupServiceNextW   (ws2_32.@)
  */
-int WINAPI WSALookupServiceNextW( HANDLE lookup, DWORD flags, DWORD *len, WSAQUERYSETW *results )
+int WINAPI WSALookupServiceNextW( HANDLE lookup_handle, DWORD flags, DWORD *len, WSAQUERYSETW *results )
 {
-    FIXME( "(%p %#lx %p %p) Stub!\n", lookup, flags, len, results );
-    SetLastError( WSA_E_NO_MORE );
-    return -1;
+    struct ws_lookup_service_ctx *lookup = lookup_handle;
+
+    TRACE( "(%p %s %p %p)\n", lookup, debugstr_WSALookupService_flags( flags ), len, results );
+
+    if (!len || !results || results->dwSize != sizeof( *results ))
+    {
+        WSASetLastError( WSAEINVAL );
+        return -1;
+    }
+    if (*len < sizeof ( *results ))
+    {
+        *len = sizeof( *results );
+        WSASetLastError( WSAEFAULT );
+        return -1;
+    }
+    if (!lookup)
+    {
+        WSASetLastError( WSA_INVALID_HANDLE );
+        return -1;
+    }
+
+
+    switch (lookup->namespace)
+    {
+    case NS_BTH:
+        return ws_bth_lookup_service_next( &lookup->data.bth, flags, len, results, TRUE );
+    default:
+        WSASetLastError( WSA_INVALID_HANDLE );
+        return -1;
+    }
 }
 
 
