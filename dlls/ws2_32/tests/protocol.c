@@ -400,27 +400,23 @@ static void test_WSALookupService(void)
     ret = WSALookupServiceBeginW(NULL, 0, &handle);
     error = WSAGetLastError();
     ok(ret == SOCKET_ERROR, "WSALookupServiceBeginW should have failed\n");
-    todo_wine
     ok(error == WSAEFAULT, "expected 10014, got %ld\n", error);
 
     ret = WSALookupServiceBeginW(qs, 0, NULL);
     error = WSAGetLastError();
     ok(ret == SOCKET_ERROR, "WSALookupServiceBeginW should have failed\n");
-    todo_wine
     ok(error == WSAEFAULT, "expected 10014, got %ld\n", error);
 
     ret = WSALookupServiceBeginW(qs, 0, &handle);
     ok(ret == SOCKET_ERROR, "WSALookupServiceBeginW should have failed\n");
-    todo_wine ok(WSAGetLastError() == WSAEINVAL
-            || broken(WSAGetLastError() == ERROR_INVALID_PARAMETER)
-            || broken(WSAGetLastError() == WSASERVICE_NOT_FOUND) /* win10 1809 */,
-            "got error %u\n", WSAGetLastError());
+    ok(WSAGetLastError() == WSAEINVAL
+       || broken(WSAGetLastError() == ERROR_INVALID_PARAMETER)
+       || broken(WSAGetLastError() == WSASERVICE_NOT_FOUND) /* win10 1809 */,
+       "got error %u\n", WSAGetLastError());
 
     ret = WSALookupServiceEnd(NULL);
     error = WSAGetLastError();
-    todo_wine
     ok(ret == SOCKET_ERROR, "WSALookupServiceEnd should have failed\n");
-    todo_wine
     ok(error == ERROR_INVALID_HANDLE, "expected 6, got %ld\n", error);
 
     /* standard network list query */
@@ -438,6 +434,12 @@ static void test_WSALookupService(void)
     ok(!ret, "WSALookupServiceBeginW failed unexpectedly with error %ld\n", error);
     todo_wine
     ok(handle != (HANDLE)0xdeadbeef, "Handle was not filled\n");
+
+    if (ret)
+    {
+        skip( "WSALookupServiceBeginW failed, skipping.\n" );
+        return;
+    }
 
     offset = 0;
     do
@@ -573,7 +575,7 @@ static void test_WSALookupServiceNext_bth_devices( HANDLE lookup_handle, DWORD f
         if (ret)
         {
             ok( ret == -1, "%d != -1\n", ret );
-            todo_wine ok( err == WSA_E_NO_MORE || err == WSAEFAULT, "WSALookupServiceNextA failed: %d\n", err );
+            ok( err == WSA_E_NO_MORE || err == WSAEFAULT, "WSALookupServiceNextA failed: %d\n", err );
             if (err != WSAEFAULT)
             {
                 free( results );
@@ -721,7 +723,7 @@ static void test_WSALookupService_bth_devices( void )
         if (ret)
         {
             /* WSASERVICE_NOT_FOUND indicates that no Bluetooth devices were found. */
-            todo_wine ok( err == WSASERVICE_NOT_FOUND, "WSALookupServiceBeginA failed: %d\n", WSAGetLastError() );
+            ok( err == WSASERVICE_NOT_FOUND, "WSALookupServiceBeginA failed: %d\n", WSAGetLastError() );
             ok( !lookup_handle, "Handle should not have been filled\n");
             skip( "No Bluetooth devices found\n" );
             winetest_pop_context();
@@ -743,13 +745,13 @@ static void test_WSALookupService_bth_devices( void )
     err = WSAGetLastError();
     if (ret)
     {
-        todo_wine ok( err == WSASERVICE_NOT_FOUND, "WSALookupServiceBeginA failed: %d\n", err );
+        ok( err == WSASERVICE_NOT_FOUND, "WSALookupServiceBeginA failed: %d\n", err );
         ok( !lookup_handle, "Handle should not have been filled\n");
         skip( "No Bluetooth devices found\n" );
         return;
     }
 
-    todo_wine ok( !!lookup_handle, "Handle was not filled\n" );
+    ok( !!lookup_handle, "Handle was not filled\n" );
     /* Missing space for a BTH_DEVICE_INFO */
     orig_len = buf_len = sizeof( *results ) + sizeof( GUID ) + sizeof( BLOB );
     results = calloc( 1, buf_len );
