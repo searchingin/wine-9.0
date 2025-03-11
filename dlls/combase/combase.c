@@ -1385,8 +1385,9 @@ static BOOL guid_from_string(LPCWSTR s, GUID *id)
 
 static HRESULT clsid_from_string_reg(LPCOLESTR progid, CLSID *clsid)
 {
-    WCHAR buf2[CHARS_IN_GUID];
+    WCHAR buf2[CHARS_IN_GUID],buf3[CHARS_IN_GUID];
     LONG buf2len = sizeof(buf2);
+    LONG buf3len = sizeof(buf3);
     HKEY xhkey;
     WCHAR *buf;
 
@@ -1398,9 +1399,23 @@ static HRESULT clsid_from_string_reg(LPCOLESTR progid, CLSID *clsid)
     lstrcatW(buf, L"\\CLSID");
     if (open_classes_key(HKEY_CLASSES_ROOT, buf, MAXIMUM_ALLOWED, &xhkey))
     {
-        free(buf);
-        WARN("couldn't open key for ProgID %s\n", debugstr_w(progid));
-        return CO_E_CLASSSTRING;
+        lstrcpyW(buf, progid);
+        lstrcatW(buf, L"\\CurVer");
+        if (RegQueryValueW(HKEY_CLASSES_ROOT, buf, buf3, &buf3len))
+        {
+            free(buf);
+            WARN("couldn't query CurVer value for ProgID %s\n", debugstr_w(progid));
+            return CO_E_CLASSSTRING;
+        }
+        
+        lstrcpyW(buf, buf3);  
+        lstrcatW(buf, L"\\CLSID");      
+        if (open_classes_key(HKEY_CLASSES_ROOT, buf, MAXIMUM_ALLOWED, &xhkey))
+        {
+            WARN("couldn't open CLSID key for CurVer %s\n", debugstr_w(buf));
+            free(buf);
+            return CO_E_CLASSSTRING;
+        }
     }
     free(buf);
 
