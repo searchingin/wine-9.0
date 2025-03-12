@@ -46,6 +46,12 @@ struct marker_context
     void *user_context;
 };
 
+struct transform
+{
+    IMFTransform *transform;
+    GUID category;
+};
+
 struct pending_item
 {
     struct list entry;
@@ -58,9 +64,9 @@ struct pending_item
 struct stream
 {
     IMFStreamSink *stream_sink;
-    IMFTransform *encoder;
+    struct transform converter, encoder;
     MF_SINK_WRITER_STATISTICS stats;
-    struct list queue;
+    struct list queue; /* struct pending_item. */
 };
 
 struct sink_writer
@@ -166,6 +172,16 @@ static HRESULT create_marker_context(unsigned int marker_type, void *user_contex
 
     return S_OK;
 }
+static void stream_release_transforms(struct stream *stream)
+{
+    if (stream->converter.transform)
+        IMFTransform_Release(stream->converter.transform);
+    memset(&stream->converter, 0, sizeof(stream->converter));
+
+    if (stream->encoder.transform)
+        IMFTransform_Release(stream->encoder.transform);
+    memset(&stream->encoder, 0, sizeof(stream->encoder));
+}
 
 static void sink_writer_release_pending_item(struct pending_item *item)
 {
@@ -236,8 +252,7 @@ static ULONG WINAPI sink_writer_Release(IMFSinkWriter *iface)
 
             if (stream->stream_sink)
                 IMFStreamSink_Release(stream->stream_sink);
-            if (stream->encoder)
-                IMFTransform_Release(stream->encoder);
+            stream_release_transforms(stream);
             sink_writer_drop_pending_items(stream);
         }
         DeleteCriticalSection(&writer->cs);
@@ -360,8 +375,10 @@ static HRESULT WINAPI sink_writer_BeginWriting(IMFSinkWriter *iface)
                 WARN("Failed to subscribe to events for steam %u, hr %#lx.\n", i, hr);
             }
 
-            if (stream->encoder)
-                IMFTransform_ProcessMessage(stream->encoder, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+            if (stream->converter.transform)
+                IMFTransform_ProcessMessage(stream->converter.transform, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+            if (stream->encoder.transform)
+                IMFTransform_ProcessMessage(stream->encoder.transform, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
         }
 
         if (SUCCEEDED(hr))
@@ -469,8 +486,10 @@ static HRESULT sink_writer_flush(struct sink_writer *writer, unsigned int index)
 
     IMFStreamSink_Flush(stream->stream_sink);
 
-    if (stream->encoder)
-        IMFTransform_ProcessMessage(stream->encoder, MFT_MESSAGE_COMMAND_FLUSH, 0);
+    if (stream->converter.transform)
+        IMFTransform_ProcessMessage(stream->converter.transform, MFT_MESSAGE_COMMAND_FLUSH, 0);
+    if (stream->encoder.transform)
+        IMFTransform_ProcessMessage(stream->encoder.transform, MFT_MESSAGE_COMMAND_FLUSH, 0);
 
     return sink_writer_place_marker(writer, stream, MFSTREAMSINK_MARKER_ENDOFSEGMENT, 0, NULL);
 }
@@ -741,8 +760,11 @@ static HRESULT WINAPI sink_writer_GetServiceForStream(IMFSinkWriter *iface, DWOR
         hr = sink_writer_get_service(writer->sink, service, riid, object);
     else if ((stream = sink_writer_get_stream(writer, index)))
     {
-        if (stream->encoder)
-            hr = sink_writer_get_service(stream->encoder, service, riid, object);
+        if (stream->encoder.transform)
+            hr = sink_writer_get_service(stream->encoder.transform, service, riid, object);
+        else if (stream->converter.transform)
+            hr = sink_writer_get_service(stream->converter.transform, service, riid, object);
+
         if (FAILED(hr))
             hr = sink_writer_get_service(stream->stream_sink, service, riid, object);
     }
