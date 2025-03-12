@@ -433,6 +433,8 @@ static void test_CLSIDFromProgID(void)
     ULONG_PTR cookie = 0;
     HANDLE handle;
     CLSID clsid;
+    HKEY hKey;
+    WCHAR clsidstr[39]; 
     HRESULT hr = CLSIDFromProgID(stdfont, &clsid);
     ok(hr == S_OK, "CLSIDFromProgID failed with error 0x%08lx\n", hr);
     ok(IsEqualCLSID(&clsid, &CLSID_StdFont), "clsid wasn't equal to CLSID_StdFont\n");
@@ -442,6 +444,18 @@ static void test_CLSIDFromProgID(void)
     ok(IsEqualCLSID(&clsid, &CLSID_StdFont), "clsid wasn't equal to CLSID_StdFont\n");
 
     /* test some failure cases */
+    StringFromGUID2(&CLSID_non_existent, clsidstr, ARRAYSIZE(clsidstr));
+    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, L"MyApp.DocumentTest\\CurVer", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE *)L"MyApp.DocumentTest.1", (wcslen(L"MyApp.DocumentTest.1") + 1) * sizeof(WCHAR));
+        RegCloseKey(hKey);
+    }
+    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, L"MyApp.DocumentTest.1\\CLSID", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE *)clsidstr, (wcslen(clsidstr) + 1) * sizeof(WCHAR));
+        RegCloseKey(hKey);
+    }
+    hr = CLSIDFromProgID(L"MyApp.DocumentTest", &clsid);
+    ok(hr == S_OK, "CLSIDFromProgID failed with error 0x%08lx\n", hr);
+    ok(IsEqualCLSID(&clsid, &CLSID_non_existent), "got wrong clsid %s\n", wine_dbgstr_guid(&clsid));
 
     hr = CLSIDFromProgID(wszNonExistent, NULL);
     ok(hr == E_INVALIDARG, "CLSIDFromProgID should have returned E_INVALIDARG instead of 0x%08lx\n", hr);
