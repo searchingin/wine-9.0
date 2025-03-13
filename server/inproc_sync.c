@@ -54,6 +54,65 @@ static int get_linux_device(void)
     return fd;
 }
 
+int use_inproc_sync(void)
+{
+    return 0;
+}
+
+int create_inproc_event( int manual_reset, int signaled )
+{
+    struct ntsync_event_args args;
+    int device;
+
+    if ((device = get_linux_device()) < 0) return -1;
+
+    args.signaled = signaled;
+    args.manual = manual_reset;
+    return ioctl( device, NTSYNC_IOC_CREATE_EVENT, &args );
+}
+
+void set_inproc_event( int event )
+{
+    __u32 count;
+
+    if (!use_inproc_sync()) return;
+
+    if (debug_level) fprintf( stderr, "set_inproc_event %d\n", event );
+
+    ioctl( event, NTSYNC_IOC_EVENT_SET, &count );
+}
+
+void reset_inproc_event( int event )
+{
+    __u32 count;
+
+    if (!use_inproc_sync()) return;
+
+    if (debug_level) fprintf( stderr, "reset_inproc_event %d\n", event );
+
+    ioctl( event, NTSYNC_IOC_EVENT_RESET, &count );
+}
+
+#else
+
+int use_inproc_sync(void)
+{
+    return 0;
+}
+
+int create_inproc_event( int manual_reset, int signaled )
+{
+    return -1;
+}
+
+void set_inproc_event( int event )
+{
+}
+
+void reset_inproc_event( int event )
+{
+}
+
 #endif
 
 
