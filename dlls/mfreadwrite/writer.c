@@ -175,7 +175,15 @@ static HRESULT create_marker_context(unsigned int marker_type, void *user_contex
 
 static HRESULT create_transform_from_activate(IMFActivate *activate, struct transform *out_transform)
 {
-    return E_NOTIMPL;
+    struct transform transform;
+    HRESULT hr;
+
+    if (FAILED(hr = IMFActivate_GetGUID(activate, &MF_TRANSFORM_CATEGORY_Attribute, &transform.category)))
+        return hr;
+    if (SUCCEEDED(hr = IMFActivate_ActivateObject(activate, &IID_IMFTransform, (void **)&transform.transform)))
+        *out_transform = transform;
+
+    return hr;
 }
 
 static void stream_release_transforms(struct stream *stream)
