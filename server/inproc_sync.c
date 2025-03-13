@@ -71,6 +71,18 @@ int create_inproc_event( int manual_reset, int signaled )
     return ioctl( device, NTSYNC_IOC_CREATE_EVENT, &args );
 }
 
+int create_inproc_semaphore( unsigned int count, unsigned int max )
+{
+    struct ntsync_sem_args args;
+    int device;
+
+    if ((device = get_linux_device()) < 0) return -1;
+
+    args.count = count;
+    args.max = max;
+    return ioctl( device, NTSYNC_IOC_CREATE_SEM, &args );
+}
+
 void set_inproc_event( int event )
 {
     __u32 count;
@@ -101,6 +113,11 @@ int use_inproc_sync(void)
 }
 
 int create_inproc_event( int manual_reset, int signaled )
+{
+    return -1;
+}
+
+int create_inproc_semaphore( unsigned int count, unsigned int max )
 {
     return -1;
 }
