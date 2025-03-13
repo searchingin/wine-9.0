@@ -1723,29 +1723,23 @@ static void test_sink_writer_get_object(void)
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     init_media_type(input_type, video_input_type_desc, -1);
     hr = IMFSinkWriter_SetInputMediaType(writer, 0, input_type, NULL);
-    todo_wine
     ok(hr == S_OK, "SetInputMediaType returned %#lx.\n", hr);
     IMFMediaType_Release(input_type);
 
     /* Get transform after SetInputMediaType. */
     hr = IMFSinkWriter_GetServiceForStream(writer, 0, &GUID_NULL, &IID_IMFTransform, (void **)&transform);
-    todo_wine
     ok(hr == S_OK, "GetServiceForStream returned %#lx.\n", hr);
     if (hr == S_OK)
     IMFTransform_Release(transform);
 
     hr = IMFSinkWriterEx_GetTransformForStream(writer_ex, 0, 0, &guid, &transform);
-    todo_wine
     ok(hr == S_OK, "GetTransformForStream returned %#lx.\n", hr);
-    todo_wine
     ok(IsEqualGUID(&guid, &MFT_CATEGORY_VIDEO_PROCESSOR), "Unexpected guid %s.\n", debugstr_guid(&guid));
     if (hr == S_OK)
     IMFTransform_Release(transform);
 
     hr = IMFSinkWriterEx_GetTransformForStream(writer_ex, 0, 1, &guid, &transform);
-    todo_wine
     ok(hr == S_OK, "GetTransformForStream returned %#lx.\n", hr);
-    todo_wine
     ok(IsEqualGUID(&guid, &MFT_CATEGORY_VIDEO_ENCODER), "Unexpected guid %s.\n", debugstr_guid(&guid));
     if (hr == S_OK)
     IMFTransform_Release(transform);
@@ -1849,7 +1843,6 @@ static void test_sink_writer_add_stream(void)
     ok(hr == MF_E_INVALIDSTREAMNUMBER, "SetInputMediaType returned %#lx.\n", hr);
 
     hr = IMFSinkWriter_SetInputMediaType(writer, 0, input_type, NULL);
-    todo_wine
     ok(hr == S_OK, "SetInputMediaType returned %#lx.\n", hr);
 
     IMFMediaType_Release(input_type);
@@ -1909,7 +1902,6 @@ static void test_sink_writer_sample_process(void)
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     init_media_type(input_type, video_input_type_desc, -1);
     hr = IMFSinkWriter_SetInputMediaType(writer, 0, input_type, NULL);
-    todo_wine
     ok(hr == S_OK, "SetInputMediaType returned %#lx.\n", hr);
     IMFMediaType_Release(input_type);
 

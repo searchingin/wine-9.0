@@ -211,7 +211,20 @@ static HRESULT stream_get_type(struct stream *stream, IMFMediaType **out_type)
 
 static HRESULT transform_set_types(struct transform *transform, IMFMediaType *input_type, IMFMediaType *output_type)
 {
-    return E_NOTIMPL;
+    IMFMediaType *output_current_type = NULL;
+    HRESULT hr;
+
+    /* Set output type on transform. */
+    if (FAILED(hr = IMFTransform_SetOutputType(transform->transform, 0, output_type, 0))
+            || FAILED(hr = IMFTransform_GetOutputCurrentType(transform->transform, 0, &output_current_type)))
+        return hr;
+
+    /* Set input type on transform. */
+    if (SUCCEEDED(hr = update_media_type(input_type, output_current_type)))
+        hr = IMFTransform_SetInputType(transform->transform, 0, input_type, 0);
+
+    IMFMediaType_Release(output_current_type);
+    return hr;
 }
 
 static HRESULT stream_enumerate_transforms(struct stream *stream, IMFMediaType *input_type, IMFMediaType *output_type,
