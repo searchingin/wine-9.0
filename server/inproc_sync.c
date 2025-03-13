@@ -83,6 +83,18 @@ int create_inproc_semaphore( unsigned int count, unsigned int max )
     return ioctl( device, NTSYNC_IOC_CREATE_SEM, &args );
 }
 
+int create_inproc_mutex( thread_id_t owner, unsigned int count )
+{
+    struct ntsync_mutex_args args;
+    int device;
+
+    if ((device = get_linux_device()) < 0) return -1;
+
+    args.owner = owner;
+    args.count = count;
+    return ioctl( device, NTSYNC_IOC_CREATE_MUTEX, &args );
+}
+
 void set_inproc_event( int event )
 {
     __u32 count;
@@ -105,6 +117,11 @@ void reset_inproc_event( int event )
     ioctl( event, NTSYNC_IOC_EVENT_RESET, &count );
 }
 
+void abandon_inproc_mutex( thread_id_t tid, int mutex )
+{
+    ioctl( mutex, NTSYNC_IOC_MUTEX_KILL, &tid );
+}
+
 #else
 
 int use_inproc_sync(void)
@@ -122,11 +139,20 @@ int create_inproc_semaphore( unsigned int count, unsigned int max )
     return -1;
 }
 
+int create_inproc_mutex( thread_id_t owner, unsigned int count )
+{
+    return -1;
+}
+
 void set_inproc_event( int event )
 {
 }
 
 void reset_inproc_event( int event )
+{
+}
+
+void abandon_inproc_mutex( thread_id_t tid, int mutex )
 {
 }
 
