@@ -172,6 +172,12 @@ static HRESULT create_marker_context(unsigned int marker_type, void *user_contex
 
     return S_OK;
 }
+
+static HRESULT create_transform_from_activate(IMFActivate *activate, struct transform *out_transform)
+{
+    return E_NOTIMPL;
+}
+
 static void stream_release_transforms(struct stream *stream)
 {
     if (stream->transforms[0].transform)
@@ -194,10 +200,69 @@ static HRESULT stream_get_type(struct stream *stream, IMFMediaType **out_type)
     return hr;
 }
 
+static HRESULT transform_set_types(struct transform *transform, IMFMediaType *input_type, IMFMediaType *output_type)
+{
+    return E_NOTIMPL;
+}
+
+static HRESULT stream_enumerate_transforms(struct stream *stream, IMFMediaType *input_type, IMFMediaType *output_type,
+        BOOL use_encoder, IMFActivate ***out_activates, UINT32 *out_count)
+{
+    return E_NOTIMPL;
+}
+
 static HRESULT stream_create_transforms(struct stream *stream,
         IMFMediaType *input_type, IMFMediaType *output_type, BOOL use_encoder)
 {
-    return E_NOTIMPL;
+    IMFMediaType *encoder_input_type;
+    struct transform transform = {};
+    IMFActivate **activates;
+    UINT32 count = 0, i;
+    HRESULT hr;
+
+    /* Enumerate available transforms. */
+    if (FAILED(hr = stream_enumerate_transforms(stream, input_type, output_type, use_encoder, &activates, &count)))
+        return hr;
+    for (i = 0; i < count; i++)
+    {
+        /* Create transform. */
+        if (FAILED(hr = create_transform_from_activate(activates[i], &transform)))
+            continue;
+
+        /* Set types on transform. */
+        if (SUCCEEDED(hr = transform_set_types(&transform, input_type, output_type)))
+        {
+            TRACE("Created %s transform %p.", use_encoder ? "encoder" : "converter", transform.transform);
+            stream->transforms[0] = transform;
+            break;
+        }
+
+        /* Failed to use a single encoder, try using an encoder and a converter. */
+        if (use_encoder)
+        {
+            if (SUCCEEDED(hr = IMFTransform_GetInputAvailableType(transform.transform, 0, 0, &encoder_input_type)))
+            {
+                /* Create converter. */
+                if (SUCCEEDED(hr = stream_create_transforms(stream, input_type, encoder_input_type, FALSE)))
+                {
+                    /* We have converter on transforms[0], set transforms[1] to encoder. */
+                    TRACE("Created encoder transform %p.", transform.transform);
+                    stream->transforms[1] = transform;
+                    IMFMediaType_Release(encoder_input_type);
+                    break;
+                }
+                IMFMediaType_Release(encoder_input_type);
+            }
+        }
+
+        IMFTransform_Release(transform.transform);
+    }
+
+    for (i = 0; i < count; ++i)
+        IMFActivate_Release(activates[i]);
+    CoTaskMemFree(activates);
+
+    return hr;
 }
 
 static struct stream *sink_writer_get_stream(const struct sink_writer *writer, DWORD index)
