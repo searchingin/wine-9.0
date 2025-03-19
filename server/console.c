@@ -311,12 +311,14 @@ struct console_input
     struct fd            *fd;          /* pseudo-fd */
     struct list           entry;       /* entry in console->inputs */
     struct console       *console;     /* associated console at creation time */
+    int                   inproc_sync; /* in-process synchronization object */
 };
 
 static void console_input_dump( struct object *obj, int verbose );
 static int console_input_signaled( struct object *obj, struct wait_queue_entry *entry );
 static struct object *console_input_open_file( struct object *obj, unsigned int access,
                                                unsigned int sharing, unsigned int options );
+static int console_input_get_inproc_sync( struct object *obj, enum inproc_sync_type *type );
 static struct fd *console_input_get_fd( struct object *obj );
 static void console_input_destroy( struct object *obj );
 
@@ -340,7 +342,7 @@ static const struct object_ops console_input_ops =
     default_unlink_name,              /* unlink_name */
     console_input_open_file,          /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
-    no_get_inproc_sync,               /* get_inproc_sync */
+    console_input_get_inproc_sync,    /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     console_input_destroy             /* destroy */
 };
@@ -789,7 +791,10 @@ static void console_destroy( struct object *obj )
     }
 
     LIST_FOR_EACH_ENTRY( input, &console->inputs, struct console_input, entry )
+    {
         input->console = NULL;
+        reset_inproc_event( input->inproc_sync );
+    }
 
     LIST_FOR_EACH_ENTRY( output, &console->outputs, struct console_output, entry )
         output->console = NULL;
@@ -1402,6 +1407,7 @@ static struct object *console_device_lookup_name( struct object *obj, struct uni
         }
         console_input->console = current->process->console;
         list_add_head( &current->process->console->inputs, &console_input->entry );
+        console_input->inproc_sync = create_inproc_event( TRUE, current->process->console->signaled );
         return &console_input->obj;
     }
 
@@ -1500,6 +1506,14 @@ static struct object *console_input_open_file( struct object *obj, unsigned int 
     return grab_object( obj );
 }
 
+static int console_input_get_inproc_sync( struct object *obj, enum inproc_sync_type *type )
+{
+    struct console_input *console_input = (struct console_input *)obj;
+
+    *type = INPROC_SYNC_MANUAL_SERVER;
+    return console_input->inproc_sync;
+}
+
 static void console_input_destroy( struct object *obj )
 {
     struct console_input *console_input = (struct console_input *)obj;
@@ -1507,6 +1521,7 @@ static void console_input_destroy( struct object *obj )
     assert( obj->ops == &console_input_ops );
     if (console_input->fd) release_object( console_input->fd );
     if (console_input->console) list_remove( &console_input->entry );
+    if (use_inproc_sync()) close( console_input->inproc_sync );
 }
 
 static void console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
@@ -1638,6 +1653,8 @@ DECL_HANDLER(get_next_console_request)
         reset_inproc_event( server->console->inproc_sync );
         LIST_FOR_EACH_ENTRY( screen_buffer, &server->console->screen_buffers, struct screen_buffer, entry )
             reset_inproc_event( screen_buffer->inproc_sync );
+        LIST_FOR_EACH_ENTRY( input, &server->console->inputs, struct console_input, entry )
+            reset_inproc_event( input->inproc_sync );
     }
     else if (!server->console->signaled)
     {
@@ -1650,7 +1667,10 @@ DECL_HANDLER(get_next_console_request)
             set_inproc_event( screen_buffer->inproc_sync );
         }
         LIST_FOR_EACH_ENTRY( input, &server->console->inputs, struct console_input, entry )
+        {
             wake_up( &input->obj, 0 );
+            set_inproc_event( input->inproc_sync );
+        }
         LIST_FOR_EACH_ENTRY( output, &server->console->outputs, struct console_output, entry )
             wake_up( &output->obj, 0 );
     }
