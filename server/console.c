@@ -219,6 +219,7 @@ struct screen_buffer
     unsigned int          id;            /* buffer id */
     struct fd            *fd;            /* for bare console, attached output fd */
     struct async_queue    ioctl_q;       /* ioctl queue */
+    int                   inproc_sync;   /* in-process synchronization object */
 };
 
 static void screen_buffer_dump( struct object *obj, int verbose );
@@ -227,6 +228,7 @@ static int screen_buffer_signaled( struct object *obj, struct wait_queue_entry *
 static struct fd *screen_buffer_get_fd( struct object *obj );
 static struct object *screen_buffer_open_file( struct object *obj, unsigned int access,
                                                unsigned int sharing, unsigned int options );
+static int screen_buffer_get_inproc_sync( struct object *obj, enum inproc_sync_type *type );
 
 static const struct object_ops screen_buffer_ops =
 {
@@ -248,7 +250,7 @@ static const struct object_ops screen_buffer_ops =
     NULL,                             /* unlink_name */
     screen_buffer_open_file,          /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
-    no_get_inproc_sync,               /* get_inproc_sync */
+    screen_buffer_get_inproc_sync,    /* get_inproc_sync */
     no_close_handle,                  /* close_handle */
     screen_buffer_destroy             /* destroy */
 };
@@ -660,6 +662,7 @@ static struct object *create_screen_buffer( struct console *console )
 
     screen_buffer->id    = ++console->last_id;
     screen_buffer->input = console;
+    screen_buffer->inproc_sync = create_inproc_event( TRUE, console->signaled );
     init_async_queue( &screen_buffer->ioctl_q );
     list_add_head( &console->screen_buffers, &screen_buffer->entry );
 
@@ -780,7 +783,10 @@ static void console_destroy( struct object *obj )
     console->active = NULL;
 
     LIST_FOR_EACH_ENTRY( curr, &console->screen_buffers, struct screen_buffer, entry )
+    {
         curr->input = NULL;
+        reset_inproc_event( curr->inproc_sync );
+    }
 
     LIST_FOR_EACH_ENTRY( input, &console->inputs, struct console_input, entry )
         input->console = NULL;
@@ -885,6 +891,7 @@ static void screen_buffer_destroy( struct object *obj )
     }
     if (screen_buffer->fd) release_object( screen_buffer->fd );
     free_async_queue( &screen_buffer->ioctl_q );
+    if (use_inproc_sync()) close( screen_buffer->inproc_sync );
 }
 
 static int screen_buffer_signaled( struct object *obj, struct wait_queue_entry *entry )
@@ -899,6 +906,14 @@ static struct object *screen_buffer_open_file( struct object *obj, unsigned int 
                                                unsigned int sharing, unsigned int options )
 {
     return grab_object( obj );
+}
+
+static int screen_buffer_get_inproc_sync( struct object *obj, enum inproc_sync_type *type )
+{
+    struct screen_buffer *screen_buffer = (struct screen_buffer *)obj;
+
+    *type = INPROC_SYNC_MANUAL_SERVER;
+    return screen_buffer->inproc_sync;
 }
 
 static struct fd *screen_buffer_get_fd( struct object *obj )
@@ -1621,6 +1636,8 @@ DECL_HANDLER(get_next_console_request)
     {
         server->console->signaled = 0;
         reset_inproc_event( server->console->inproc_sync );
+        LIST_FOR_EACH_ENTRY( screen_buffer, &server->console->screen_buffers, struct screen_buffer, entry )
+            reset_inproc_event( screen_buffer->inproc_sync );
     }
     else if (!server->console->signaled)
     {
@@ -1628,7 +1645,10 @@ DECL_HANDLER(get_next_console_request)
         wake_up( &server->console->obj, 0 );
         set_inproc_event( server->console->inproc_sync );
         LIST_FOR_EACH_ENTRY( screen_buffer, &server->console->screen_buffers, struct screen_buffer, entry )
+        {
             wake_up( &screen_buffer->obj, 0 );
+            set_inproc_event( screen_buffer->inproc_sync );
+        }
         LIST_FOR_EACH_ENTRY( input, &server->console->inputs, struct console_input, entry )
             wake_up( &input->obj, 0 );
         LIST_FOR_EACH_ENTRY( output, &server->console->outputs, struct console_output, entry )
