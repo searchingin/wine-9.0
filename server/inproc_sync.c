@@ -172,3 +172,29 @@ DECL_HANDLER(get_linux_sync_device)
     set_error( STATUS_NOT_IMPLEMENTED );
 #endif
 }
+
+DECL_HANDLER(get_linux_sync_obj)
+{
+#ifdef NTSYNC_IOC_EVENT_READ
+    struct object *obj;
+    int fd;
+
+    if ((obj = get_handle_obj( current->process, req->handle, 0, NULL )))
+    {
+        enum inproc_sync_type type;
+
+        if ((fd = obj->ops->get_inproc_sync( obj, &type )) >= 0)
+        {
+            reply->type = type;
+            reply->access = get_handle_access( current->process, req->handle );
+            send_client_fd( current->process, fd, req->handle );
+        }
+        else
+            set_error( STATUS_NOT_IMPLEMENTED );
+
+        release_object( obj );
+    }
+#else
+    set_error( STATUS_NOT_IMPLEMENTED );
+#endif
+}

@@ -301,6 +301,7 @@ DECL_HANDLER(get_next_process);
 DECL_HANDLER(get_next_thread);
 DECL_HANDLER(set_keyboard_repeat);
 DECL_HANDLER(get_linux_sync_device);
+DECL_HANDLER(get_linux_sync_obj);
 
 typedef void (*req_handler)( const void *req, void *reply );
 static const req_handler req_handlers[REQ_NB_REQUESTS] =
@@ -599,6 +600,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_get_next_thread,
     (req_handler)req_set_keyboard_repeat,
     (req_handler)req_get_linux_sync_device,
+    (req_handler)req_get_linux_sync_obj,
 };
 
 C_ASSERT( sizeof(abstime_t) == 8 );
@@ -2284,3 +2286,8 @@ C_ASSERT( sizeof(struct set_keyboard_repeat_request) == 24 );
 C_ASSERT( offsetof(struct set_keyboard_repeat_reply, enable) == 8 );
 C_ASSERT( sizeof(struct set_keyboard_repeat_reply) == 16 );
 C_ASSERT( sizeof(struct get_linux_sync_device_request) == 16 );
+C_ASSERT( offsetof(struct get_linux_sync_obj_request, handle) == 12 );
+C_ASSERT( sizeof(struct get_linux_sync_obj_request) == 16 );
+C_ASSERT( offsetof(struct get_linux_sync_obj_reply, type) == 8 );
+C_ASSERT( offsetof(struct get_linux_sync_obj_reply, access) == 12 );
+C_ASSERT( sizeof(struct get_linux_sync_obj_reply) == 16 );
