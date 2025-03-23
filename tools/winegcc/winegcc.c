@@ -176,6 +176,7 @@ static bool is_win16_app;
 static bool is_arm64x;
 static bool use_msvcrt;
 static bool use_pic = true;
+static int use_lto = -1; /* tristate */
 static bool use_build_id;
 static bool nostdinc;
 static bool nostdlib;
@@ -501,6 +502,7 @@ static struct strarray get_link_args( const char *output_name )
     struct strarray flags = empty_strarray;
 
     strarray_addall( &link_args, linker_args );
+    append_lto_flags( &link_args, use_lto, 1 /* prefer flags from env */ );
 
     if (verbose > 1) strarray_add( &flags, "-v" );
 
@@ -885,6 +887,11 @@ static void compile( struct strarray files, const char *output_name, int compile
 
     if (!is_pe) strarray_addall( &comp_args, get_compat_defines( gcc_defs ));
 
+    if ((processor == proc_cc) || (processor == proc_cxx))
+    {
+        append_lto_flags( &comp_args, use_lto, 1 /* prefer flags from env */ );
+    }
+
     strarray_add(&comp_args, "-D__WINE__");
 
     /* options we handle explicitly */
@@ -970,6 +977,7 @@ static struct strarray get_winebuild_args( const char *target )
     strarray_add( &spec_args, binary );
     if (verbose) strarray_add( &spec_args, "-v" );
     if (keep_generated) strarray_add( &spec_args, "--save-temps" );
+    append_lto_flags( &spec_args, use_lto, 0 /* generic LTO flags */ );
     if (target)
     {
         strarray_add( &spec_args, "--target" );
@@ -1752,6 +1760,10 @@ int main(int argc, char **argv)
                         use_pic = true;
                     else if (!strcmp("-fno-PIC", args.str[i]) || !strcmp("-fno-pic", args.str[i]))
                         use_pic = false;
+                    else if (!strcmp( "-flto", args.str[i] ))
+                        use_lto = 1;
+                    else if (!strcmp( "-fno-lto", args.str[i] ))
+                        use_lto = 0;
 		    break;
                 case 'i':
                     if (!strcmp( "-isysroot", args.str[i] )) isysroot = args.str[i + 1];
@@ -2038,6 +2050,7 @@ int main(int argc, char **argv)
 	    strarray_add( &file_args, args.str[i] );
 	}
     }
+    verbose = adjust_verbose_lto( use_lto, verbose );
 
     if (target_alias && !parse_target( target_alias, &target ))
         error( "Invalid target specification '%s'\n", target_alias );
