@@ -1,0 +1,6 @@
+# __wine_setjmpex
+# __wine_longjmp
+dlls/winecrt0/setjmp.c
+
+# GetProcAddress
+dlls/kernel32/module.c

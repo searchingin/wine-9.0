@@ -1,0 +1,2 @@
+# _chkstk (i386) / __chkstk (others)
+dlls/ntoskrnl.exe/ntoskrnl.c
