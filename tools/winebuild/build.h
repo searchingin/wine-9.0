@@ -363,6 +363,7 @@ extern void put_pword( unsigned int val );
 
 extern int current_line;
 extern int UsePIC;
+extern int UseLTO;
 extern int nb_errors;
 extern int display_warnings;
 extern int kill_at;
