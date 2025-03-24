@@ -125,6 +125,7 @@ typedef UINT16 winebluetooth_radio_props_mask_t;
 #define WINEBLUETOOTH_RADIO_PROPERTY_VERSION      (1 << 7)
 #define WINEBLUETOOTH_RADIO_PROPERTY_DISCOVERING  (1 << 8)
 #define WINEBLUETOOTH_RADIO_PROPERTY_PAIRABLE     (1 << 9)
+#define WINEBLUETOOTH_RADIO_PROPERTY_LE           (1 << 10)
 
 #define WINEBLUETOOTH_RADIO_ALL_PROPERTIES                                                         \
     (WINEBLUETOOTH_RADIO_PROPERTY_NAME | WINEBLUETOOTH_RADIO_PROPERTY_ADDRESS |                    \
@@ -152,7 +153,7 @@ typedef UINT16 winebluetooth_device_props_mask_t;
     (WINEBLUETOOTH_DEVICE_PROPERTY_NAME | WINEBLUETOOTH_DEVICE_PROPERTY_ADDRESS |           \
      WINEBLUETOOTH_DEVICE_PROPERTY_CONNECTED | WINEBLUETOOTH_DEVICE_PROPERTY_PAIRED |       \
      WINEBLUETOOTH_DEVICE_PROPERTY_LEGACY_PAIRING | WINEBLUETOOTH_DEVICE_PROPERTY_TRUSTED | \
-     WINEBLUETOOTH_DEVICE_PROPERTY_CLASS)
+     WINEBLUETOOTH_DEVICE_PROPERTY_CLASS | WINEBLUETOOTH_RADIO_PROPERTY_LE)
 
 union winebluetooth_property
 {
@@ -160,6 +161,22 @@ union winebluetooth_property
     ULONG ulong;
     BLUETOOTH_ADDRESS address;
     WCHAR name[BLUETOOTH_MAX_NAME_SIZE];
+};
+
+#define WINEBLUETOOTH_LE_RADIO_ROLE_CENTRAL            (1)
+#define WINEBLUETOOTH_LE_RADIO_ROLE_PERIPHERAL         (1 << 1)
+
+#define WINEBLUETOOTH_LE_RADIO_ADV_CHANNEL_1M    (1)
+#define WINEBLUETOOTH_LE_RADIO_ADV_CHANNEL_2M    (1 << 1)
+#define WINEBLUETOOTH_LE_RADIO_ADV_CHANNEL_CODED (1 << 2)
+
+struct winebluetooth_radio_le_properties
+{
+    UINT8 roles;
+    BOOL adv_phy_2M_uncoded;
+    BOOL adv_phy_coded;
+    BOOL adv_offload;
+    UINT32 adv_max_len;
 };
 
 struct winebluetooth_radio_properties
@@ -173,6 +190,7 @@ struct winebluetooth_radio_properties
     ULONG class;
     USHORT manufacturer;
     BYTE version;
+    struct winebluetooth_radio_le_properties le;
 };
 
 struct winebluetooth_device_properties
