@@ -1,5 +1,5 @@
 MODULE  = windows.devices.bluetooth.dll
-IMPORTS = combase setupapi
+IMPORTS = combase setupapi bluetoothapis
 
 SOURCES = \
 	async.c \

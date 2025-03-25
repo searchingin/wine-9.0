@@ -20,6 +20,8 @@
 
 #include "private.h"
 #include "setupapi.h"
+#include "bthsdpdef.h"
+#include "bluetoothapis.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(bluetooth);
@@ -207,6 +209,7 @@ struct bluetoothadapter
 {
     IBluetoothAdapter IBluetoothAdapter_iface;
     HSTRING id;
+    HANDLE radio;
     LONG ref;
 };
 
@@ -252,6 +255,7 @@ static ULONG WINAPI bluetoothadapter_Release( IBluetoothAdapter *iface )
     if (!ref)
     {
         WindowsDeleteString( impl->id );
+        CloseHandle( impl->radio );
         free( impl );
     }
     return ref;
@@ -286,8 +290,19 @@ static HRESULT WINAPI bluetoothadapter_get_DeviceId( IBluetoothAdapter *iface, H
 
 static HRESULT WINAPI bluetoothadapter_get_BluetoothAddress( IBluetoothAdapter *iface, UINT64 *addr )
 {
-    FIXME( "iface %p, addr %p stub!\n", iface, addr );
-    return E_NOTIMPL;
+    struct bluetoothadapter *impl = impl_from_IBluetoothAdapter( iface );
+    BLUETOOTH_RADIO_INFO info = {0};
+    DWORD err;
+
+    TRACE( "iface %p, addr %p\n", iface, addr );
+
+    info.dwSize = sizeof( info );
+    err = BluetoothGetRadioInfo( impl->radio, &info );
+    if (err)
+        return HRESULT_FROM_WIN32( GetLastError() );
+
+    *addr = info.address.ullLong;
+    return S_OK;
 }
 
 static HRESULT WINAPI bluetoothadapter_get_IsClassicSupported( IBluetoothAdapter *iface, boolean *value )
@@ -361,6 +376,15 @@ static HRESULT bluetoothadapter_create( const WCHAR *device_path, IBluetoothAdap
     {
         free( impl );
         return ret;
+    }
+
+    impl->radio = CreateFileW( device_path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               NULL, OPEN_EXISTING, 0, NULL);
+    if (impl->radio == INVALID_HANDLE_VALUE)
+    {
+        WindowsDeleteString( impl->id );
+        free( impl );
+        return HRESULT_FROM_WIN32( GetLastError() );
     }
 
     impl->IBluetoothAdapter_iface.lpVtbl = &bluetooth_adapter_vtbl;
