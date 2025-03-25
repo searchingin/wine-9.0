@@ -22,6 +22,9 @@
 #include "setupapi.h"
 #include "bthsdpdef.h"
 #include "bluetoothapis.h"
+#include "bthdef.h"
+#include "winioctl.h"
+#include "wine/winebth.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(bluetooth);
@@ -311,10 +314,33 @@ static HRESULT WINAPI bluetoothadapter_get_IsClassicSupported( IBluetoothAdapter
     return E_NOTIMPL;
 }
 
+static HRESULT bluetoothadapter_get_le_info( IBluetoothAdapter *iface, struct winebth_radio_le_info_params *info )
+{
+    struct bluetoothadapter *impl = impl_from_IBluetoothAdapter( iface );
+    DWORD bytes;
+
+    if (!DeviceIoControl( impl->radio, IOCTL_WINEBTH_RADIO_GET_LE_INFO, info, sizeof( *info), info,
+                          sizeof( *info ), &bytes, NULL ))
+    {
+        DWORD err = GetLastError();
+        ERR("DeviceIoControl failed: %lu\n", err );
+        return HRESULT_FROM_WIN32( err );
+    }
+    return S_OK;
+}
+
 static HRESULT WINAPI bluetoothadapter_get_IsLowEnergySupported( IBluetoothAdapter *iface, boolean *value )
 {
-    FIXME( "iface %p, value %p stub!\n", iface, value );
-    return E_NOTIMPL;
+    struct winebth_radio_le_info_params info = {0};
+    HRESULT hr;
+
+    TRACE( "iface %p, value %p\n", iface, value );
+
+    *value = FALSE;
+    if (FAILED((hr = bluetoothadapter_get_le_info( iface, &info ))))
+        return hr;
+    *value = !!info.le_supported;
+    return S_OK;
 }
 
 static HRESULT WINAPI bluetoothadapter_get_IsPeripheralRoleSupported( IBluetoothAdapter *iface, boolean *value )
