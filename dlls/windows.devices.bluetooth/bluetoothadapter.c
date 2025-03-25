@@ -373,8 +373,16 @@ static HRESULT WINAPI bluetoothadapter_get_IsCentralRoleSupported( IBluetoothAda
 
 static HRESULT WINAPI bluetoothadapter_get_IsAdvertisementOffloadSupported( IBluetoothAdapter *iface, boolean *value )
 {
-    FIXME( "iface %p, value %p stub!\n", iface, value );
-    return E_NOTIMPL;
+    struct winebth_radio_le_info_params info = {0};
+    HRESULT hr;
+
+    TRACE( "iface %p, value %p\n", iface, value );
+
+    *value = FALSE;
+    if (FAILED((hr = bluetoothadapter_get_le_info( iface, &info ))))
+        return hr;
+    *value = !!info.adv_offload;
+    return S_OK;
 }
 
 static HRESULT WINAPI bluetoothadapter_GetRadioAsync( IBluetoothAdapter *iface, IAsyncOperation_Radio **op )
