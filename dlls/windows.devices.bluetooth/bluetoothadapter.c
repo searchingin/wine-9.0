@@ -345,8 +345,16 @@ static HRESULT WINAPI bluetoothadapter_get_IsLowEnergySupported( IBluetoothAdapt
 
 static HRESULT WINAPI bluetoothadapter_get_IsPeripheralRoleSupported( IBluetoothAdapter *iface, boolean *value )
 {
-    FIXME( "iface %p, value %p stub!\n", iface, value );
-    return E_NOTIMPL;
+    struct winebth_radio_le_info_params info = {0};
+    HRESULT hr;
+
+    TRACE( "iface %p, value %p\n", iface, value );
+
+    *value = FALSE;
+    if (FAILED((hr = bluetoothadapter_get_le_info( iface, &info ))))
+        return hr;
+    *value = !!info.role_peripheral;
+    return S_OK;
 }
 
 static HRESULT WINAPI bluetoothadapter_get_IsCentralRoleSupported( IBluetoothAdapter *iface, boolean *value )
