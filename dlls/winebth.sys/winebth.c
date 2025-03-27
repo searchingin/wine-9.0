@@ -257,6 +257,38 @@ static NTSTATUS WINAPI dispatch_bluetooth( DEVICE_OBJECT *device, IRP *irp )
     case IOCTL_WINEBTH_RADIO_STOP_DISCOVERY:
         status = winebluetooth_radio_stop_discovery( ext->radio );
         break;
+    case IOCTL_WINEBTH_RADIO_GET_LE_INFO:
+    {
+        struct winebth_radio_le_info_params *params = irp->AssociatedIrp.SystemBuffer;
+
+        if (!params)
+        {
+            status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+        if (outsize < sizeof( *params ))
+        {
+            status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        memset( params, 0, sizeof( *params ) );
+
+        EnterCriticalSection( &ext->props_cs );
+        if ((params->le_supported = !!(ext->props_mask & WINEBLUETOOTH_RADIO_PROPERTY_LE)))
+        {
+            params->role_central = !!(ext->props.le.roles & WINEBLUETOOTH_LE_RADIO_ROLE_CENTRAL);
+            params->role_peripheral = !!(ext->props.le.roles & WINEBLUETOOTH_LE_RADIO_ROLE_PERIPHERAL);
+            params->phy_coded = ext->props.le.adv_phy_coded;
+            params->phy_2M_uncoded = ext->props.le.adv_phy_2M_uncoded;
+            params->adv_offload = ext->props.le.adv_offload;
+            params->adv_max_len = ext->props.le.adv_max_len;
+        }
+        LeaveCriticalSection( &ext->props_cs );
+        irp->IoStatus.Information = sizeof( *params );
+        status = STATUS_SUCCESS;
+        break;
+    }
     default:
         FIXME( "Unimplemented IOCTL code: %#lx\n", code );
         break;

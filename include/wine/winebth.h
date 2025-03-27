@@ -24,11 +24,13 @@
 
 /* Set the discoverability or connectable flag for a local radio. Enabling discoverability will also enable incoming
  * connections, while disabling incoming connections disables discoverability as well. */
-#define IOCTL_WINEBTH_RADIO_SET_FLAG CTL_CODE(FILE_DEVICE_BLUETOOTH, 0xa3, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_WINEBTH_RADIO_SET_FLAG        CTL_CODE(FILE_DEVICE_BLUETOOTH, 0xa3, METHOD_BUFFERED, FILE_ANY_ACCESS)
 /* Start device inquiry for a local radio. */
 #define IOCTL_WINEBTH_RADIO_START_DISCOVERY CTL_CODE(FILE_DEVICE_BLUETOOTH, 0xa6, METHOD_BUFFERED, FILE_ANY_ACCESS)
 /* Stop device inquiry for a local radio. */
 #define IOCTL_WINEBTH_RADIO_STOP_DISCOVERY  CTL_CODE(FILE_DEVICE_BLUETOOTH, 0xa7, METHOD_BUFFERED, FILE_ANY_ACCESS)
+/* Get information about the LE capabilities for a local radio. */
+#define IOCTL_WINEBTH_RADIO_GET_LE_INFO     CTL_CODE(FILE_DEVICE_BLUETOOTH, 0xa8, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #include <pshpack1.h>
 
@@ -39,6 +41,19 @@ struct winebth_radio_set_flag_params
 {
     unsigned int flag: 2;
     unsigned int enable : 1;
+};
+
+struct winebth_radio_le_info_params
+{
+    unsigned int le_supported : 1;
+    unsigned int role_central : 1;
+    unsigned int role_peripheral: 1;
+
+    unsigned int phy_coded : 1;
+    unsigned int phy_2M_uncoded: 1;
+
+    unsigned int adv_offload: 1;
+    UINT32 adv_max_len;
 };
 
 #include <poppack.h>

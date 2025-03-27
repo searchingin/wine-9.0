@@ -114,8 +114,9 @@ const int bluez_timeout = -1;
     DBUS_TYPE_ARRAY_AS_STRING DBUS_TYPE_STRING_AS_STRING
 
 #define BLUEZ_DEST "org.bluez"
-#define BLUEZ_INTERFACE_ADAPTER "org.bluez.Adapter1"
-#define BLUEZ_INTERFACE_DEVICE  "org.bluez.Device1"
+#define BLUEZ_INTERFACE_ADAPTER                "org.bluez.Adapter1"
+#define BLUEZ_INTERFACE_DEVICE                 "org.bluez.Device1"
+#define BLUEZ_INTERFACE_LE_ADVERTISING_MANAGER "org.bluez.LEAdvertisingManager1"
 
 #define DO_FUNC( f ) typeof( f ) (*p_##f)
 DBUS_FUNCS;
@@ -571,6 +572,21 @@ NTSTATUS bluez_adapter_set_prop( void *connection, struct bluetooth_adapter_set_
     return STATUS_SUCCESS;
 }
 
+static BOOL bluez_str_arr_iter_find( DBusMessageIter *arr_iter, const char *str )
+{
+    while (p_dbus_message_iter_has_next( arr_iter ))
+    {
+        const char *elem;
+        p_dbus_message_iter_get_basic( arr_iter, &elem );
+        if (!strcmp( str, elem ))
+            return TRUE;
+
+        p_dbus_message_iter_next( arr_iter );
+    }
+
+    return FALSE;
+}
+
 static void bluez_radio_prop_from_dict_entry( const char *prop_name, DBusMessageIter *variant,
                                               struct winebluetooth_radio_properties *props,
                                               winebluetooth_radio_props_mask_t *props_mask,
@@ -660,6 +676,28 @@ static void bluez_radio_prop_from_dict_entry( const char *prop_name, DBusMessage
     {
         p_dbus_message_iter_get_basic( variant, &props->version );
         *props_mask |= WINEBLUETOOTH_RADIO_PROPERTY_VERSION;
+    }
+    else if (wanted_props_mask & WINEBLUETOOTH_RADIO_PROPERTY_LE &&
+             !strcmp( prop_name, "Roles" ) &&
+             p_dbus_message_iter_get_arg_type( variant ) == DBUS_TYPE_ARRAY)
+    {
+        DBusMessageIter roles_iter;
+        int type;
+
+        type = p_dbus_message_iter_get_element_type( variant );
+        if (type != DBUS_TYPE_STRING)
+        {
+            ERR( "Unexpected element type for property \"Roles\": %c\n", type );
+            return;
+        }
+        p_dbus_message_iter_recurse( variant, &roles_iter );
+
+        if (bluez_str_arr_iter_find( &roles_iter, "central" ))
+            props->le.roles |= WINEBLUETOOTH_LE_RADIO_ROLE_CENTRAL;
+        if (bluez_str_arr_iter_find( &roles_iter, "peripheral" ))
+            props->le.roles |= WINEBLUETOOTH_LE_RADIO_ROLE_PERIPHERAL;
+        if (props->le.roles)
+            *props_mask |= WINEBLUETOOTH_RADIO_PROPERTY_LE;
     }
 }
 
@@ -1488,6 +1526,73 @@ void bluez_watcher_close( void *connection, void *ctx )
     p_dbus_connection_remove_filter( connection, bluez_filter, ctx );
 }
 
+static void bluez_get_adapter_properties( const char *path, const char *iface,
+                                          DBusMessageIter *ifaces_iter, DBusMessageIter *props_iter,
+                                          struct winebluetooth_radio_properties *props,
+                                          winebluetooth_radio_props_mask_t *mask)
+{
+
+    do {
+        if (!strcmp( iface, BLUEZ_INTERFACE_ADAPTER ))
+        {
+            DBusMessageIter variant;
+            const char *prop_name;
+
+            while ((prop_name = bluez_next_dict_entry( props_iter, &variant )))
+                bluez_radio_prop_from_dict_entry( prop_name, &variant, props, mask,
+                                                  WINEBLUETOOTH_RADIO_ALL_PROPERTIES );
+        }
+        else if (!strcmp( iface, BLUEZ_INTERFACE_LE_ADVERTISING_MANAGER ))
+        {
+            DBusMessageIter variant;
+            const char *prop_name;
+            *mask |= WINEBLUETOOTH_RADIO_PROPERTY_LE;
+
+            while ((prop_name = bluez_next_dict_entry( props_iter, &variant )))
+            {
+                if ((!strcmp( prop_name, "SupportedSecondaryChannels" ) || !strcmp( prop_name, "SupportedFeatures" ))
+                    && p_dbus_message_iter_get_arg_type( &variant ) == DBUS_TYPE_ARRAY)
+                {
+                    DBusMessageIter arr_iter;
+                    int type;
+
+                    type = p_dbus_message_iter_get_element_type( &variant );
+                    if (type != DBUS_TYPE_STRING)
+                    {
+                        ERR( "Unexpected element type for property %s: %c\n", debugstr_a( prop_name ), type );
+                        continue;
+                    }
+                    p_dbus_message_iter_recurse( &variant, &arr_iter );
+                    if (!strcmp( prop_name, "SupportedSecondaryChannels"))
+                    {
+                        props->le.adv_phy_2M_uncoded = bluez_str_arr_iter_find( &arr_iter, "2M" );
+                        props->le.adv_phy_coded = bluez_str_arr_iter_find( &arr_iter, "Coded" );
+                    }
+                    else
+                        props->le.adv_offload = bluez_str_arr_iter_find( &arr_iter, "HardwareOffload" );
+                }
+                else if (!strcmp( prop_name, "SupportedCapabilities" )
+                         && p_dbus_message_iter_get_arg_type( &variant ) == DBUS_TYPE_DICT_ENTRY)
+                {
+                    DBusMessageIter cap_val;
+                    const char *cap_name;
+
+                    while ((cap_name = bluez_next_dict_entry( &variant, &cap_val )))
+                    {
+                        if (!strcmp( cap_name, "MaxAdvLen" )
+                            && p_dbus_message_iter_get_arg_type( &cap_val ) == DBUS_TYPE_BYTE )
+                        {
+                            unsigned char len;
+                            p_dbus_message_iter_get_basic( &cap_val, &len );
+                            props->le.adv_max_len = len;
+                        }
+                    }
+                }
+            }
+        }
+    } while ((iface = bluez_next_dict_entry ( ifaces_iter, props_iter )));
+}
+
 static NTSTATUS bluez_build_initial_device_lists( DBusMessage *reply, struct list *adapter_list,
                                                   struct list *device_list )
 {
@@ -1510,10 +1615,8 @@ static NTSTATUS bluez_build_initial_device_lists( DBusMessage *reply, struct lis
         const char *iface;
         while ((iface = bluez_next_dict_entry ( &iface_iter, &prop_iter )))
         {
-            if (!strcmp( iface, BLUEZ_INTERFACE_ADAPTER ))
+            if (!strcmp( iface, BLUEZ_INTERFACE_ADAPTER ) || !strcmp( iface, BLUEZ_INTERFACE_LE_ADVERTISING_MANAGER ))
             {
-                const char *prop_name;
-                DBusMessageIter variant;
                 struct bluez_init_entry *init_device = calloc( 1, sizeof( *init_device ) );
                 struct unix_name *radio_name;
 
@@ -1529,16 +1632,13 @@ static NTSTATUS bluez_build_initial_device_lists( DBusMessage *reply, struct lis
                     status = STATUS_NO_MEMORY;
                     goto done;
                 }
-                while ((prop_name = bluez_next_dict_entry( &prop_iter, &variant )))
-                {
-                    bluez_radio_prop_from_dict_entry(
-                        prop_name, &variant, &init_device->object.radio.props,
-                        &init_device->object.radio.props_mask, WINEBLUETOOTH_RADIO_ALL_PROPERTIES );
-                }
+                bluez_get_adapter_properties( path, iface, &iface_iter, &prop_iter, &init_device->object.radio.props,
+                                              &init_device->object.radio.props_mask );
                 init_device->object.radio.radio.handle = (UINT_PTR)radio_name;
                 list_add_tail( adapter_list, &init_device->entry );
-                TRACE( "Found BlueZ org.bluez.Adapter1 object %s: %p\n",
-                       debugstr_a( radio_name->str ), radio_name );
+                TRACE( "Found BlueZ org.bluez.Adapter1 object %s (LE: %d): %p\n",
+                       debugstr_a( radio_name->str ),
+                       !!(init_device->object.radio.props_mask & WINEBLUETOOTH_RADIO_PROPERTY_LE), radio_name );
                 break;
             }
             else if (!strcmp( iface, BLUEZ_INTERFACE_DEVICE ))
