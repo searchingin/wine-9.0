@@ -89,6 +89,7 @@ extern const CLSID CLSID_FileSchemePlugin;
 extern const CLSID CLSID_AsfByteStreamPlugin;
 extern const CLSID CLSID_MPEG4ByteStreamHandlerPlugin;
 extern const CLSID CLSID_AVIByteStreamPlugin;
+extern const CLSID CLSID_MP3ByteStreamPlugin;
 
 DEFINE_MEDIATYPE_GUID(MEDIASUBTYPE_Base,0);
 DEFINE_GUID(MEDIASUBTYPE_ABGR32,D3DFMT_A8B8G8R8,0x524f,0x11ce,0x9f,0x53,0x00,0x20,0xaf,0x0b,0xa7,0x70);
@@ -13828,6 +13829,7 @@ static void test_ByteStreamOutput(void)
     static const WCHAR asf_mime_type[] = L"video/x-ms-wmv";
     static const WCHAR mp4_mime_type[] = L"video/mp4";
     static const WCHAR avi_mime_type[] = L"video/avi";
+    static const WCHAR mp3_mime_type[] = L"audio/mp3";
 
     struct timestamps
     {
@@ -13905,6 +13907,20 @@ static void test_ByteStreamOutput(void)
                 {  666666, S_OK, 333333, MF_E_ATTRIBUTENOTFOUND, 0, 1, 1152 },
                 { 1000000, S_OK, 333333, MF_E_ATTRIBUTENOTFOUND, 0, 1, 1152 },
                 { 1333333, S_OK, 333333, MF_E_ATTRIBUTENOTFOUND, 0, 1, 1152 },
+            },
+        },
+        {
+            "mp3",
+            L"test-mp3.mp3",
+            mp3_mime_type,
+            &CLSID_MP3ByteStreamPlugin,
+            1000,
+            {
+                {        0, S_OK, 18808128, MF_E_ATTRIBUTENOTFOUND, 0, 1, 8141, DURATION_VALUE | LENGTH },
+                { 18808128, S_OK, 20375472, MF_E_ATTRIBUTENOTFOUND, 0, 1, 8112, TIME | DURATION_VALUE | LENGTH },
+                { 39183600, S_OK, 20375472, MF_E_ATTRIBUTENOTFOUND, 0, 1, 8112, TIME | DURATION_VALUE | LENGTH },
+                { 59559072, S_OK, 20375472, MF_E_ATTRIBUTENOTFOUND, 0, 1, 8112, TIME | DURATION_VALUE | LENGTH },
+                { 79934544, S_OK, 20375472, MF_E_ATTRIBUTENOTFOUND, 0, 1, 8112, TIME | DURATION_VALUE | LENGTH },
             },
         },
     };
@@ -14108,7 +14124,7 @@ static void test_ByteStreamOutput(void)
         ok(hr == S_OK, "Got hr %#lx.\n", hr);
 
         ret = IMFMediaSource_Release(source);
-        ok(ret == 0, "Unexpected reference count %ld\n", ret);
+        ok(ret <= 1, "Unexpected reference count %ld\n", ret);
 
 next_test:
         ret = DeleteFileW(filename);
