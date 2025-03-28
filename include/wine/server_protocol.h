@@ -3238,6 +3238,9 @@ struct cancel_async_request
 struct cancel_async_reply
 {
     struct reply_header __header;
+    data_size_t  handles_size;
+    /* VARARG(handles,uints,handles_size); */
+    char __pad_12[4];
 };
 
 
@@ -6798,6 +6801,6 @@ union generic_reply
     struct set_keyboard_repeat_reply set_keyboard_repeat_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 863
+#define SERVER_PROTOCOL_VERSION 864
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

@@ -6424,21 +6424,40 @@ NTSTATUS WINAPI NtFlushBuffersFileEx( HANDLE handle, ULONG flags, void *params, 
 static NTSTATUS cancel_io( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_BLOCK *io_status,
                            BOOL only_thread )
 {
-    unsigned int status;
+    unsigned int status, count = 8;
+    HANDLE *handles;
+    int i;
 
-    SERVER_START_REQ( cancel_async )
+    do
     {
-        req->handle      = wine_server_obj_handle( handle );
-        req->iosb        = wine_server_client_ptr( io );
-        req->only_thread = only_thread;
-        if (!(status = wine_server_call( req )))
-        {
-            io_status->Status = status;
-            io_status->Information = 0;
-        }
-    }
-    SERVER_END_REQ;
+        if (!(handles = malloc( count * sizeof(*handles) ))) return STATUS_NO_MEMORY;
 
+        SERVER_START_REQ( cancel_async )
+        {
+            obj_handle_t *server_handles = (obj_handle_t *)handles;
+
+            req->handle      = wine_server_obj_handle( handle );
+            req->iosb        = wine_server_client_ptr( io );
+            req->only_thread = only_thread;
+            wine_server_set_reply( req, server_handles, count * sizeof(*server_handles) );
+            if (!(status = wine_server_call( req )))
+            {
+                count = reply->handles_size / sizeof(*server_handles);
+                for (i = count - 1; i >= 0; i--) handles[i] = wine_server_ptr_handle( server_handles[i] );
+                io_status->Status = status;
+                io_status->Information = 0;
+            }
+            else if (status == STATUS_BUFFER_OVERFLOW)
+            {
+                count = reply->handles_size / sizeof(*server_handles);
+                free( handles );
+            }
+        }
+        SERVER_END_REQ;
+    } while (status == STATUS_BUFFER_OVERFLOW);
+
+    if (!status) NtWaitForMultipleObjects( count, handles, FALSE, TRUE, NULL );
+    free( handles );
     return status;
 }
 
