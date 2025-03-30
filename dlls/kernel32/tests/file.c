@@ -2182,9 +2182,7 @@ static void test_MoveFileA(void)
     }
     FindClose(hfind);
     ret = GetFileAttributesA(source);
-    todo_wine
     ok(ret == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND, "GetFileAttributesA: error %ld\n", GetLastError());
-    if(ret != INVALID_FILE_ATTRIBUTES) DeleteFileA(source);
 
     /* test renaming a regular file to a name with trailing slash */
     lstrcpyA(source, dest);
