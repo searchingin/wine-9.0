@@ -2185,6 +2185,24 @@ static void test_MoveFileA(void)
     todo_wine
     ok(ret == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND, "GetFileAttributesA: error %ld\n", GetLastError());
     if(ret != INVALID_FILE_ATTRIBUTES) DeleteFileA(source);
+
+    /* test renaming a regular file to a name with trailing slash */
+    lstrcpyA(source, dest);
+    lstrcpyA(strrchr(dest, '\\') + 1, "dir\\");
+    ret = MoveFileA(source, dest);
+    ok(ret, "MoveFileA: error %ld\n", GetLastError());
+    *strrchr(dest, '\\') = '\0';
+
+    hfind = FindFirstFileA(dest, &find_data);
+    ok(hfind != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
+    if (hfind != INVALID_HANDLE_VALUE)
+    {
+        ok(!lstrcmpA(find_data.cFileName, "dir"),
+           "MoveFile failed to rename regular file to name with trailing slash: got %s\n", find_data.cFileName);
+    }
+    FindClose(hfind);
+    ret = GetFileAttributesA(source);
+    ok(ret == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND, "GetFileAttributesA: error %ld\n", GetLastError());
     ret = DeleteFileA(dest);
     ok(ret, "DeleteFileA: error %ld\n", GetLastError());
 

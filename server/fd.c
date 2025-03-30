@@ -2568,6 +2568,11 @@ static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr, da
         set_error( STATUS_OBJECT_PATH_SYNTAX_BAD );
         return;
     }
+
+    /* strip trailing slashes */
+    while (len > 1 && nameptr[len - 1] == '/')
+        len--;
+
     if (!(name = mem_alloc( len + 1 ))) return;
     memcpy( name, nameptr, len );
     name[len] = 0;
