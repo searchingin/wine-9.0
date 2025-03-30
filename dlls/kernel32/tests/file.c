@@ -1994,9 +1994,8 @@ static void test_MoveFileA(void)
     char tempdir[MAX_PATH];
     char source[MAX_PATH], dest[MAX_PATH];
     static const char prefix[] = "pfx";
+    HANDLE hfile, hfind, hmapfile;
     WIN32_FIND_DATAA find_data;
-    HANDLE hfile;
-    HANDLE hmapfile;
     DWORD ret;
     BOOL retok;
 
@@ -2076,14 +2075,14 @@ static void test_MoveFileA(void)
     ret = MoveFileA(source, tempdir);
     ok(ret, "MoveFileA: failed, error %ld\n", GetLastError());
 
-    hfile = FindFirstFileA(tempdir, &find_data);
-    ok(hfile != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
-    if (hfile != INVALID_HANDLE_VALUE)
+    hfind = FindFirstFileA(tempdir, &find_data);
+    ok(hfind != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
+    if (hfind != INVALID_HANDLE_VALUE)
     {
         todo_wine ok(!lstrcmpA(strrchr(tempdir, '\\') + 1, find_data.cFileName),
            "MoveFile failed to change casing on same file: got %s\n", find_data.cFileName);
     }
-    CloseHandle(hfile);
+    FindClose(hfind);
 
     /* test renaming another file "Remove Be" to "Remove Me", which replaces the existing "Remove me" */
     tempdir[lstrlenA(tempdir) - 2] = 'B';
@@ -2100,14 +2099,14 @@ static void test_MoveFileA(void)
 
     tempdir[lstrlenA(tempdir) - 2] = 'm';
 
-    hfile = FindFirstFileA(tempdir, &find_data);
-    ok(hfile != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
-    if (hfile != INVALID_HANDLE_VALUE)
+    hfind = FindFirstFileA(tempdir, &find_data);
+    ok(hfind != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
+    if (hfind != INVALID_HANDLE_VALUE)
     {
         ok(!lstrcmpA(strrchr(source, '\\') + 1, find_data.cFileName),
            "MoveFile failed to change casing on existing target file: got %s\n", find_data.cFileName);
     }
-    CloseHandle(hfile);
+    FindClose(hfind);
 
     ret = DeleteFileA(tempdir);
     ok(ret, "DeleteFileA: error %ld\n", GetLastError());
@@ -2121,14 +2120,14 @@ static void test_MoveFileA(void)
     ret = MoveFileA(source, tempdir);
     ok(ret, "MoveFileA: failed, error %ld\n", GetLastError());
 
-    hfile = FindFirstFileA(tempdir, &find_data);
-    ok(hfile != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
-    if (hfile != INVALID_HANDLE_VALUE)
+    hfind = FindFirstFileA(tempdir, &find_data);
+    ok(hfind != INVALID_HANDLE_VALUE, "FindFirstFileA: failed, error %ld\n", GetLastError());
+    if (hfind != INVALID_HANDLE_VALUE)
     {
         todo_wine ok(!lstrcmpA(strrchr(tempdir, '\\') + 1, find_data.cFileName),
            "MoveFile failed to change casing on same directory: got %s\n", find_data.cFileName);
     }
-    CloseHandle(hfile);
+    FindClose(hfind);
 
     lstrcpyA(source, dest);
     lstrcpyA(dest, tempdir);
@@ -2143,12 +2142,11 @@ static void test_MoveFileA(void)
     {
         WIN32_FIND_DATAA fd;
         char temppath[MAX_PATH];
-        HANDLE hFind;
 
         lstrcpyA(temppath, tempdir);
         lstrcatA(temppath, "\\*.*");
-        hFind = FindFirstFileA(temppath, &fd);
-        if (INVALID_HANDLE_VALUE != hFind)
+        hfind = FindFirstFileA(temppath, &fd);
+        if (INVALID_HANDLE_VALUE != hfind)
         {
           LPSTR lpName;
           do
@@ -2158,8 +2156,8 @@ static void test_MoveFileA(void)
               lpName = fd.cFileName;
             ok(IsDotDir(lpName), "MoveFileA: wildcards file created!\n");
           }
-          while (FindNextFileA(hFind, &fd));
-          FindClose(hFind);
+          while (FindNextFileA(hfind, &fd));
+          FindClose(hfind);
         }
     }
     ret = DeleteFileA(source);
@@ -2893,7 +2891,7 @@ static void test_FindFirstFileA(void)
     if (handle == INVALID_HANDLE_VALUE)
         ok( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
     else
-        CloseHandle( handle );
+        FindClose( handle );
 
     /* try FindFirstFileA on "c:\foo\nul\bar" */
     SetLastError( 0xdeadbeaf );
