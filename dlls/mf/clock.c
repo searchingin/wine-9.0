@@ -1054,7 +1054,7 @@ static ULONG WINAPI present_clock_sink_callback_Release(IMFAsyncCallback *iface)
     return IMFPresentationClock_Release(&clock->IMFPresentationClock_iface);
 }
 
-static DWORD mf_get_sink_queue_id(void)
+DWORD mf_get_sink_queue_id(void)
 {
     static SRWLOCK mf_sink_queue_srw = SRWLOCK_INIT;
     static DWORD mf_sink_queue_id;
