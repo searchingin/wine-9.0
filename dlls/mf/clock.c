@@ -1054,9 +1054,24 @@ static ULONG WINAPI present_clock_sink_callback_Release(IMFAsyncCallback *iface)
     return IMFPresentationClock_Release(&clock->IMFPresentationClock_iface);
 }
 
+static DWORD mf_get_sink_queue_id(void)
+{
+    static SRWLOCK mf_sink_queue_srw = SRWLOCK_INIT;
+    static DWORD mf_sink_queue_id;
+
+    AcquireSRWLockExclusive(&mf_sink_queue_srw);
+    if (!mf_sink_queue_id)
+        MFAllocateWorkQueue(&mf_sink_queue_id);
+    ReleaseSRWLockExclusive(&mf_sink_queue_srw);
+
+    return mf_sink_queue_id ? mf_sink_queue_id : MFASYNC_CALLBACK_QUEUE_STANDARD;
+}
+
 static HRESULT WINAPI present_clock_callback_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue)
 {
-    return E_NOTIMPL;
+    *flags = 0;
+    *queue = mf_get_sink_queue_id();
+    return S_OK;
 }
 
 static HRESULT WINAPI present_clock_sink_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
