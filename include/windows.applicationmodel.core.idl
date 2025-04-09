@@ -61,6 +61,11 @@ namespace Windows.Foundation {
     interface IGetActivationFactory;
 }
 
+namespace Windows.System {
+    runtimeclass DispatcherQueue;
+    runtimeclass User;
+}
+
 namespace Windows.UI.Core {
     runtimeclass CoreDispatcher;
     runtimeclass CoreWindow;

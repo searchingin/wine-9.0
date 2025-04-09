@@ -35,6 +35,12 @@ import "windows.ui.input.idl";
 /* import "windows.ui.popups.idl"; */
 #endif
 
+namespace Windows.System {
+    runtimeclass DispatcherQueue;
+    typedef enum VirtualKey VirtualKey;
+    typedef enum VirtualKeyModifiers VirtualKeyModifiers;
+}
+
 namespace Windows.UI.Input {
     runtimeclass PointerPoint;
 

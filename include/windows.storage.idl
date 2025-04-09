@@ -31,6 +31,10 @@ import "windows.storage.search.idl";
 import "windows.storage.streams.idl";
 import "windows.system.idl";
 
+namespace Windows.System {
+    runtimeclass User;
+}
+
 namespace Windows.Storage {
     typedef enum ApplicationDataCreateDisposition ApplicationDataCreateDisposition;
     typedef enum ApplicationDataLocality ApplicationDataLocality;
@@ -84,6 +88,7 @@ namespace Windows.Storage {
         interface Windows.Foundation.Collections.IVectorView<Windows.Storage.IStorageItem *>;
         interface Windows.Foundation.Collections.IVectorView<Windows.Storage.StorageFile *>;
         interface Windows.Foundation.Collections.IVectorView<Windows.Storage.StorageFolder *>;
+        interface Windows.Foundation.Collections.IVector<Windows.Storage.IStorageItem *>;
         interface Windows.Foundation.AsyncOperationCompletedHandler<Windows.Foundation.Collections.IVectorView<Windows.Storage.IStorageItem *> *>;
         interface Windows.Foundation.AsyncOperationCompletedHandler<Windows.Foundation.Collections.IVectorView<Windows.Storage.StorageFile *> *>;
         interface Windows.Foundation.AsyncOperationCompletedHandler<Windows.Foundation.Collections.IVectorView<Windows.Storage.StorageFolder *> *>;
