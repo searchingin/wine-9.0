@@ -826,6 +826,13 @@ unsigned int set_thread_base_priority( struct thread *thread, int base_priority 
     return set_thread_priority( thread, priority );
 }
 
+unsigned int set_thread_disable_boost( struct thread *thread, int disable_boost )
+{
+    thread->disable_boost = disable_boost;
+    set_thread_priority( thread, thread->priority );
+    return STATUS_SUCCESS;
+}
+
 /* set all information about a thread */
 static void set_thread_info( struct thread *thread,
                              const struct set_thread_info_request *req )
@@ -838,6 +845,11 @@ static void set_thread_info( struct thread *thread,
     if (req->mask & SET_THREAD_INFO_BASE_PRIORITY)
     {
         unsigned int status = set_thread_base_priority( thread, req->base_priority );
+        if (status) set_error( status );
+    }
+    if (req->mask & SET_THREAD_INFO_DISABLE_BOOST)
+    {
+        unsigned int status = set_thread_disable_boost( thread, req->disable_boost );
         if (status) set_error( status );
     }
     if (req->mask & SET_THREAD_INFO_AFFINITY)
