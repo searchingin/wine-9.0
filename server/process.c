@@ -664,6 +664,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->running_threads = 0;
     process->priority        = PROCESS_PRIOCLASS_NORMAL;
     process->base_priority   = 8;
+    process->disable_boost   = 0;
     process->suspend         = 0;
     process->is_system       = 0;
     process->debug_children  = 1;
@@ -1515,6 +1516,7 @@ DECL_HANDLER(get_process_info)
         reply->exit_code        = process->exit_code;
         reply->priority         = process->priority;
         reply->base_priority    = process->base_priority;
+        reply->disable_boost    = process->disable_boost;
         reply->affinity         = process->affinity;
         reply->peb              = process->peb;
         reply->start_time       = process->start_time;
