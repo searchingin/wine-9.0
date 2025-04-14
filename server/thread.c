@@ -409,6 +409,7 @@ static inline void init_thread_structure( struct thread *thread )
     thread->exit_code       = 0;
     thread->priority        = 0;
     thread->base_priority   = 0;
+    thread->disable_boost   = 0;
     thread->suspend         = 0;
     thread->dbg_hidden      = 0;
     thread->desktop_users   = 0;
@@ -1731,6 +1732,8 @@ DECL_HANDLER(get_thread_info)
             reply->flags |= GET_THREAD_INFO_FLAG_TERMINATED;
         if (thread->process->running_threads == 1)
             reply->flags |= GET_THREAD_INFO_FLAG_LAST;
+        if (thread->disable_boost)
+            reply->flags |= GET_THREAD_INFO_FLAG_DISABLE_BOOST;
 
         if (thread->desc && get_reply_max_size())
         {
