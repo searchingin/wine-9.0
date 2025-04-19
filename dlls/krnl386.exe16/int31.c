@@ -405,7 +405,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
         FIXME( "Get Processor Exception Handler Vector (0x%02x) - not supported\n",
                BL_reg(context) );
         SET_CX( context, 0 );
-        SET_DX( context, 0 );
+        context->Edx = 0;
         SET_CFLAG( context );
         break;
 
