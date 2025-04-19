@@ -2629,8 +2629,22 @@ typedef struct
     WORD  ne_cres;              /* 34 # of resource segments */
     BYTE  ne_exetyp;            /* 36 Flags indicating target OS */
     BYTE  ne_flagsothers;       /* 37 Additional information flags */
-    WORD  ne_pretthunks;        /* 38 Offset to return thunks */
-    WORD  ne_psegrefbytes;      /* 3a Offset to segment ref. bytes */
+    union {
+      /* ne_pretthunks is the incorrect name specified in Windows NT SDK.
+         Offset to return thunks was used only for the in-memory structure
+         of loaded NE modules on Windows 1.x and 2.x. On-disk structure always
+         contains offset to gangload area (if gangload area is present). */
+      WORD  ne_pretthunks;
+      WORD  ne_gangstart;       /* 38 Offset to gangload area */
+    };
+    union {
+      /* ne_psegrefbytes is the incorrect name specified in Windows NT SDK.
+         Offset to segment ref. bytes was used only for the in-memory structure
+         of loaded NE modules on Windows 1.x and 2.x. On-disk structure always
+         contains length of gangload area (if gangload area is present). */
+      WORD  ne_psegrefbytes;
+      WORD  ne_ganglength;      /* 3a Length of gangload area */
+    };
     WORD  ne_swaparea;          /* 3c Reserved by Microsoft */
     WORD  ne_expver;            /* 3e Expected Windows version number */
 } IMAGE_OS2_HEADER, *PIMAGE_OS2_HEADER;
