@@ -2645,7 +2645,7 @@ typedef struct
       WORD  ne_psegrefbytes;
       WORD  ne_ganglength;      /* 3a Length of gangload area */
     };
-    WORD  ne_swaparea;          /* 3c Reserved by Microsoft */
+    WORD  ne_swaparea;          /* 3c Minimum code swap area size */
     WORD  ne_expver;            /* 3e Expected Windows version number */
 } IMAGE_OS2_HEADER, *PIMAGE_OS2_HEADER;
 #include <poppack.h>
