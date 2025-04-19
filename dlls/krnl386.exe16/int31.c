@@ -59,16 +59,17 @@ typedef struct
 
 static void *real_mode_ptr( WORD seg, WORD off ) { return (void *)((int)seg * 16 + off); }
 
-static void simulate_real_mode_interrupt( REALMODECALL *ctx, int num )
+static BOOL simulate_real_mode_interrupt( REALMODECALL *ctx, int num )
 {
     if (num == 0x21 && AX_reg(ctx) == 0x440d && CX_reg(ctx) == 0x0866)
     {
         /* int 21/440d block ioctl, used by Myst */
         memset( real_mode_ptr( ctx->ds, DX_reg(ctx) ), 0, 25 );
-        return;
+        return TRUE;
     }
     WARN( "%02x ax %04x bx %04x cx %04x dx %04x si %04x di %04x ds %04x es %04x - unsupported\n", num,
           AX_reg(ctx), BX_reg(ctx), CX_reg(ctx), DX_reg(ctx), SI_reg(ctx), DI_reg(ctx), ctx->ds, ctx->es );
+    return FALSE;
 }
 
 /**********************************************************************
@@ -344,10 +345,12 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
 
     case 0x000e:  /* Get Multiple Descriptors (1.0) */
         FIXME( "get multiple descriptors - unimplemented\n" );
+        SET_CFLAG( context );
         break;
 
     case 0x000f:  /* Set Multiple Descriptors (1.0) */
         FIXME( "set multiple descriptors - unimplemented\n" );
+        SET_CFLAG( context );
         break;
 
     case 0x0100:  /* Allocate DOS memory block */
@@ -379,6 +382,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
     case 0x0102: /* Resize DOS Memory Block */
         FIXME( "resize DOS memory block (0x%04x, 0x%x paragraphs) - unimplemented\n", 
                DX_reg(context), BX_reg(context) );
+        SET_CFLAG( context );
         break;
 
     case 0x0200: /* get real mode interrupt vector */
@@ -386,11 +390,13 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
                BL_reg(context) );
         SET_CX( context, 0 );
         SET_DX( context, 0 );
+        SET_CFLAG( context );
         break;
 
     case 0x0201: /* set real mode interrupt vector */
         TRACE( "set realmode interrupt vector (0x%02x, 0x%04x:0x%04x) - not supported\n",
                BL_reg(context), CX_reg(context), DX_reg(context) );
+        SET_CFLAG( context );
         break;
 
     case 0x0202:  /* Get Processor Exception Handler Vector */
@@ -398,11 +404,13 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
                BL_reg(context) );
         SET_CX( context, 0 );
         SET_DX( context, 0 );
+        SET_CFLAG( context );
         break;
 
     case 0x0203:  /* Set Processor Exception Handler Vector */
          FIXME( "Set Processor Exception Handler Vector (0x%02x) - not supported\n",
                 BL_reg(context) );
+         SET_CFLAG( context );
          break;
 
     case 0x0204:  /* Get protected mode interrupt vector */
@@ -427,23 +435,30 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
 
     case 0x0300:  /* Simulate real mode interrupt */
         TRACE( "Simulate real mode interrupt %02x\n", BL_reg(context) );
-        simulate_real_mode_interrupt( ldt_get_ptr( context->SegEs, context->Edi ), BL_reg(context) );
+        if (!simulate_real_mode_interrupt( ldt_get_ptr( context->SegEs, context->Edi ), BL_reg(context) ))
+        {
+            SET_CFLAG( context );
+        }
         break;
 
     case 0x0301:  /* Call real mode procedure with far return */
         TRACE( "Call real mode procedure with far return - not supported\n" );
+        SET_CFLAG( context );
         break;
 
     case 0x0302:  /* Call real mode procedure with interrupt return */
         TRACE( "Call real mode procedure with interrupt return - not supported\n" );
+        SET_CFLAG( context );
         break;
 
     case 0x0303:  /* Allocate Real Mode Callback Address */
         TRACE( "Allocate real mode callback address - not supported\n" );
+        SET_CFLAG( context );
         break;
 
     case 0x0304:  /* Free Real Mode Callback Address */
         TRACE( "Free real mode callback address - not supported\n" );
+        SET_CFLAG( context );
         break;
 
     case 0x0305:  /* Get State Save/Restore Addresses */
@@ -456,6 +471,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
         /* protected mode */
         SET_SI( context, 0 );
         context->Edi = 0;
+        SET_CFLAG( context );
         break;
 
     case 0x0306:  /* Get Raw Mode Switch Addresses */
@@ -466,6 +482,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
         /* protected mode */
         SET_SI( context, 0 );
         context->Edi = 0;
+        SET_CFLAG( context );
         break;
 
     case 0x0400:  /* Get DPMI version */
@@ -483,6 +500,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
 
     case 0x0401:  /* Get DPMI Capabilities (1.0) */
         FIXME( "get dpmi capabilities - unimplemented\n");
+        SET_CFLAG( context );
         break;
 
     case 0x0500:  /* Get free memory information */
@@ -579,6 +597,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
 
     case 0x0507:  /* Set page attributes (1.0) */
         FIXME( "set page attributes - unimplemented\n" );
+        SET_CFLAG( context );
         break;  /* Just ignore it */
 
     case 0x0600:  /* Lock linear region */
@@ -625,6 +644,7 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
     case 0x0800:  /* Physical address mapping */
         FIXME( "physical address mapping (0x%08lx) - unimplemented\n",
                MAKELONG(CX_reg(context),BX_reg(context)) );
+        SET_CFLAG( context );
         break;
 
     case 0x0900:  /* Get and Disable Virtual Interrupt State */
@@ -674,11 +694,12 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
          * BX bit B0 is new value for MPv.
          * BX bit B1 is new value for EMv.
          */
+        TRACE( "Set Coprocessor Emulation to %d\n", BX_reg(context) );
         if (BX_reg(context) != 1)
-            FIXME( "Set Coprocessor Emulation to %d - unimplemented\n", 
-                   BX_reg(context) );
-        else
-            TRACE( "Set Coprocessor Emulation - ignored\n" );
+        {
+            TRACE( "invalid request\n" );
+            SET_CFLAG( context );
+        }
         break;
 
     default:
