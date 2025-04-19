@@ -135,8 +135,20 @@ BOOL WINAPI VWIN32_DeviceIoControl(DWORD dwIoControlCode,
 
             switch (dwIoControlCode)
             {
-            case VWIN32_DIOC_DOS_IOCTL: /* Call int 21h */
+            case VWIN32_DIOC_DOS_IOCTL: /* Call int 21h 4400h - 4411h */
+                if ((pIn->reg_EAX & 0xff00) != 0x4400)
+                {
+                    TRACE( "Invalid VWIN32_DIOC_DOS_IOCTL function 0x%lx\n", (pIn->reg_EAX & 0xffff) );
+                    return FALSE;
+                }
+                intnum = 0x21;
+                break;
             case VWIN32_DIOC_DOS_DRIVEINFO:        /* Call int 21h 730x */
+                if ((pIn->reg_EAX & 0xff00) != 0x7300)
+                {
+                    TRACE( "Invalid VWIN32_DIOC_DOS_DRIVEINFO function 0x%lx\n", (pIn->reg_EAX & 0xffff) );
+                    return FALSE;
+                }
                 intnum = 0x21;
                 break;
             case VWIN32_DIOC_DOS_INT13:
