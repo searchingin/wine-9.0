@@ -2624,8 +2624,14 @@ typedef struct
     WORD  ne_modtab;            /* 28 Offset to module reference table */
     WORD  ne_imptab;            /* 2a Offset to imported name table */
     DWORD ne_nrestab;           /* 2c Offset to nonresident-name table */
+
+    /* end of the ne_ver < 4 structure */
+
     WORD  ne_cmovent;           /* 30 # of movable entry points */
     WORD  ne_align;             /* 32 Logical sector alignment shift count */
+
+    /* end of the ne_ver < 5 structure */
+
     WORD  ne_cres;              /* 34 # of resource segments */
     BYTE  ne_exetyp;            /* 36 Flags indicating target OS */
     BYTE  ne_flagsothers;       /* 37 Additional information flags */
@@ -2645,6 +2651,9 @@ typedef struct
       WORD  ne_psegrefbytes;
       WORD  ne_ganglength;      /* 3a Length of gangload area */
     };
+
+    /* end of the ne_ver >= 5 structure for non-Windows modules */
+
     WORD  ne_swaparea;          /* 3c Minimum code swap area size */
     WORD  ne_expver;            /* 3e Expected Windows version number */
 } IMAGE_OS2_HEADER, *PIMAGE_OS2_HEADER;
