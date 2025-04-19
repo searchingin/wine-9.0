@@ -382,6 +382,8 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
     case 0x0102: /* Resize DOS Memory Block */
         FIXME( "resize DOS memory block (0x%04x, 0x%x paragraphs) - unimplemented\n", 
                DX_reg(context), BX_reg(context) );
+        SET_AX( context, 0x0008 );  /* insufficient memory */
+        SET_BX( context, 0 ); /* maximum possible block size */
         SET_CFLAG( context );
         break;
 
