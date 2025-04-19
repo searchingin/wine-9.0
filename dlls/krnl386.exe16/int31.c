@@ -394,14 +394,14 @@ void WINAPI DOSVM_Int31Handler( CONTEXT *context )
         break;
 
     case 0x0202:  /* Get Processor Exception Handler Vector */
-        FIXME( "Get Processor Exception Handler Vector (0x%02x)\n",
+        FIXME( "Get Processor Exception Handler Vector (0x%02x) - not supported\n",
                BL_reg(context) );
         SET_CX( context, 0 );
         SET_DX( context, 0 );
         break;
 
     case 0x0203:  /* Set Processor Exception Handler Vector */
-         FIXME( "Set Processor Exception Handler Vector (0x%02x)\n",
+         FIXME( "Set Processor Exception Handler Vector (0x%02x) - not supported\n",
                 BL_reg(context) );
          break;
 
