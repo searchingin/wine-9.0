@@ -836,7 +836,7 @@ static void test_CoGetClassObject(void)
                 pUnk = NULL;
 
                 hr = (*pDllCanUnloadNow)();
-                todo_wine ok(S_OK == hr, "Unexpected hr %#lx.\n", hr);
+                ok(S_OK == hr, "Unexpected hr %#lx.\n", hr);
                 CloseHandle(htestlib);
             }
         }
