@@ -35,11 +35,31 @@
 #include "psapi.h"
 #include "wine/exception.h"
 #include "wine/debug.h"
+#include "wine/asan_interface.h"
 
 #include "kernel_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(seh);
 
+/* Stubs for ASan interface functions, used to check for poisoned memory if ASan is
+ * enabled. We do this to avoid tripping ASan when we try to access invalid memory. */
+static FORCEINLINE BOOL is_addr_poisoned(void const volatile*addr)
+{
+#if WINE_ASAN
+    return __asan_address_is_poisoned(addr);
+#else
+    return FALSE;
+#endif
+}
+
+static FORCEINLINE void *is_region_poisoned(const void *addr, size_t size)
+{
+#if WINE_ASAN
+    return __asan_region_is_poisoned((void *)addr, size);
+#else
+    return NULL;
+#endif
+}
 
 static LONG WINAPI badptr_handler( EXCEPTION_POINTERS *eptr )
 {
@@ -74,6 +94,11 @@ BOOL WINAPI IsBadReadPtr( LPCVOID ptr, UINT_PTR size )
 {
     if (!size) return FALSE;  /* handle 0 size case w/o reference */
     if (!ptr) return TRUE;
+    if (is_region_poisoned(ptr, size))
+    {
+        TRACE("%p is poisoned\n", ptr);
+        return TRUE;
+    }
     __TRY
     {
         volatile const char *p = ptr;
@@ -116,6 +141,11 @@ BOOL WINAPI IsBadWritePtr( LPVOID ptr, UINT_PTR size )
 {
     if (!size) return FALSE;  /* handle 0 size case w/o reference */
     if (!ptr) return TRUE;
+    if (is_region_poisoned(ptr, size))
+    {
+        TRACE("%p is poisoned\n", ptr);
+        return TRUE;
+    }
     __TRY
     {
         volatile char *p = ptr;
@@ -211,12 +241,21 @@ BOOL WINAPI IsBadCodePtr( FARPROC ptr )
  */
 BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
 {
+    BOOL poisoned = FALSE;
     if (!str) return TRUE;
 
     __TRY
     {
         volatile const char *p = str;
-        while (p != str + max) if (!*p++) break;
+        while (p != str + max) {
+            if (is_addr_poisoned(p))
+            {
+                TRACE("%p is poisoned\n", p);
+                poisoned = TRUE;
+                break;
+            }
+            if (!*p++) break;
+        }
     }
     __EXCEPT( badptr_handler )
     {
@@ -224,7 +263,7 @@ BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
         return TRUE;
     }
     __ENDTRY
-    return FALSE;
+    return poisoned;
 }
 
 
@@ -235,12 +274,21 @@ BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
  */
 BOOL WINAPI IsBadStringPtrW( LPCWSTR str, UINT_PTR max )
 {
+    BOOL poisoned = FALSE;
     if (!str) return TRUE;
 
     __TRY
     {
         volatile const WCHAR *p = str;
-        while (p != str + max) if (!*p++) break;
+        while (p != str + max) {
+            if (is_region_poisoned((void *)p, sizeof(WCHAR)))
+            {
+                TRACE("%p is poisoned\n", p);
+                poisoned = TRUE;
+                break;
+            }
+            if (!*p++) break;
+        }
     }
     __EXCEPT( badptr_handler )
     {
@@ -248,7 +296,7 @@ BOOL WINAPI IsBadStringPtrW( LPCWSTR str, UINT_PTR max )
         return TRUE;
     }
     __ENDTRY
-    return FALSE;
+    return poisoned;
 }
 /***********************************************************************
  *           lstrcatA   (KERNEL32.@)
