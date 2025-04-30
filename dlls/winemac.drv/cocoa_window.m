@@ -360,8 +360,8 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
 @interface WineContentView : WineBaseView <NSTextInputClient, NSViewLayerContentScaleDelegate>
 {
     CGRect surfaceRect;
-    CGImageRef colorImage;
-    CGImageRef shapeImage;
+    IOSurfaceRef _IOSurface;
+    BOOL _hasShape;
 
     NSMutableArray* glContexts;
     NSMutableArray* pendingGlContexts;
@@ -495,8 +495,6 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
         [markedText release];
         [glContexts release];
         [pendingGlContexts release];
-        CGImageRelease(colorImage);
-        CGImageRelease(shapeImage);
         [super dealloc];
     }
 
@@ -529,26 +527,17 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
         imageRect.size.width *= layer.contentsScale;
         imageRect.size.height *= layer.contentsScale;
 
-        maskedImage = shapeImage ? CGImageCreateWithMask(colorImage, shapeImage)
-                                 : CGImageRetain(colorImage);
-        image = CGImageCreateWithImageInRect(maskedImage, imageRect);
-        CGImageRelease(maskedImage);
+        layer.position = surfaceRect.origin;
+        layer.contents = (id)_IOSurface;
+        [window windowDidDrawContent];
 
-        if (image)
+        // If the window may be transparent, then we have to invalidate the
+        // shadow every time we draw.  Also, if this is the first time we've
+        // drawn since changing from transparent to opaque.
+        if (_hasShape || window.usePerPixelAlpha || window.shapeChangedSinceLastDraw)
         {
-            layer.position = surfaceRect.origin;
-            layer.contents = (id)image;
-            CFRelease(image);
-            [window windowDidDrawContent];
-
-            // If the window may be transparent, then we have to invalidate the
-            // shadow every time we draw.  Also, if this is the first time we've
-            // drawn since changing from transparent to opaque.
-            if (shapeImage || window.usePerPixelAlpha || window.shapeChangedSinceLastDraw)
-            {
-                window.shapeChangedSinceLastDraw = FALSE;
-                [window invalidateShadow];
-            }
+            window.shapeChangedSinceLastDraw = FALSE;
+            [window invalidateShadow];
         }
     }
 
@@ -557,21 +546,19 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
         surfaceRect = rect;
     }
 
-    - (void) setColorImage:(CGImageRef)image
+    - (void) setIOSurface:(IOSurfaceRef)image
     {
-        CGImageRelease(colorImage);
-        colorImage = CGImageRetain(image);
+        _IOSurface = image;
     }
 
-    - (void) setShapeImage:(CGImageRef)image
+    - (void) setHasShape:(int)has_shape
     {
-        CGImageRelease(shapeImage);
-        shapeImage = CGImageRetain(image);
+        _hasShape = !!has_shape;
     }
 
-    - (BOOL) hasShapeImage
+    - (BOOL) hasShape
     {
-        return !!shapeImage;
+        return _hasShape;
     }
 
     - (void) viewWillDraw
@@ -2066,7 +2053,7 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
     - (BOOL) needsTransparency
     {
         WineContentView *view = self.contentView;
-        return self.contentView.layer.mask || [view hasShapeImage] || self.usePerPixelAlpha ||
+        return self.contentView.layer.mask || [view hasShape] || self.usePerPixelAlpha ||
                 (gl_surface_mode == GL_SURFACE_BEHIND && [view hasGLDescendant]);
     }
 
@@ -3519,51 +3506,47 @@ void macdrv_set_cocoa_parent_window(macdrv_window w, macdrv_window parent)
 
 
 /***********************************************************************
- *              macdrv_window_set_color_image
+ *              macdrv_window_set_io_surface
  *
  * Push a window surface color pixel update in a specified rect (in non-client
  * area coordinates).
  */
-void macdrv_window_set_color_image(macdrv_window w, CGImageRef image, CGRect rect, CGRect dirty)
+void macdrv_window_set_io_surface(macdrv_window w, IOSurfaceRef image, CGRect rect, CGRect dirty)
 {
 @autoreleasepool
 {
     WineWindow* window = (WineWindow*)w;
 
-    CGImageRetain(image);
+    IOSurfaceIncrementUseCount(image);
 
     OnMainThreadAsync(^{
         WineContentView *view = [window contentView];
 
-        [view setColorImage:image];
+        [view setIOSurface:image];
         [view setSurfaceRect:cgrect_mac_from_win(rect)];
         [view setNeedsDisplayInRect:NSRectFromCGRect(cgrect_mac_from_win(dirty))];
 
-        CGImageRelease(image);
+        IOSurfaceDecrementUseCount(image);
     });
 }
 }
 
 
 /***********************************************************************
- *              macdrv_window_set_shape_image
+ *              macdrv_window_shape_changed
  */
-void macdrv_window_set_shape_image(macdrv_window w, CGImageRef image)
+void macdrv_window_shape_changed(macdrv_window w, int has_shape)
 {
 @autoreleasepool
 {
     WineWindow* window = (WineWindow*)w;
 
-    CGImageRetain(image);
-
     OnMainThreadAsync(^{
         WineContentView *view = [window contentView];
 
-        [view setShapeImage:image];
+        [view setHasShape:has_shape];
         [view setNeedsDisplay:true];
         [window checkTransparency];
-
-        CGImageRelease(image);
     });
 }
 }
