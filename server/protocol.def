@@ -1157,8 +1157,9 @@ struct obj_locator
     timeout_t    end_time;         /* process end time */
     unsigned int session_id;       /* process session id */
     int          exit_code;        /* process exit code */
-    int          priority;         /* priority class */
+    unsigned short priority;       /* priority class */
     unsigned short base_priority;  /* process base priority */
+    unsigned short disable_boost;  /* disable process priority boost */
     unsigned short machine;        /* process architecture */
     VARARG(image,pe_image_info);   /* image info for main exe */
 @END
@@ -1203,12 +1204,16 @@ struct obj_locator
     obj_handle_t handle;       /* process handle */
     int          mask;         /* setting mask (see below) */
     int          priority;     /* priority class */
+    int          base_priority; /* process base priority */
+    int          disable_boost; /* disable process priority boost */
     affinity_t   affinity;     /* affinity mask */
     obj_handle_t token;        /* primary token */
 @END
-#define SET_PROCESS_INFO_PRIORITY 0x01
-#define SET_PROCESS_INFO_AFFINITY 0x02
-#define SET_PROCESS_INFO_TOKEN    0x04
+#define SET_PROCESS_INFO_PRIORITY      0x01
+#define SET_PROCESS_INFO_BASE_PRIORITY 0x02
+#define SET_PROCESS_INFO_DISABLE_BOOST 0x04
+#define SET_PROCESS_INFO_AFFINITY      0x08
+#define SET_PROCESS_INFO_TOKEN         0x10
 
 
 /* Retrieve information about a thread */
@@ -1229,9 +1234,10 @@ struct obj_locator
     data_size_t  desc_len;      /* description length in bytes */
     VARARG(desc,unicode_str);   /* description string */
 @END
-#define GET_THREAD_INFO_FLAG_DBG_HIDDEN 0x01
-#define GET_THREAD_INFO_FLAG_TERMINATED 0x02
-#define GET_THREAD_INFO_FLAG_LAST       0x04
+#define GET_THREAD_INFO_FLAG_DBG_HIDDEN    0x01
+#define GET_THREAD_INFO_FLAG_TERMINATED    0x02
+#define GET_THREAD_INFO_FLAG_LAST          0x04
+#define GET_THREAD_INFO_FLAG_DISABLE_BOOST 0x08
 
 
 /* Retrieve information about thread times */
@@ -1250,6 +1256,7 @@ struct obj_locator
     obj_handle_t handle;       /* thread handle */
     int          priority;     /* current thread priority */
     int          base_priority;/* base priority level (relative to process base priority class) */
+    int          disable_boost;/* disable thread priority boost */
     affinity_t   affinity;     /* affinity mask */
     client_ptr_t entry_point;  /* thread entry point */
     obj_handle_t token;        /* impersonation token */
@@ -1258,12 +1265,12 @@ struct obj_locator
 @END
 #define SET_THREAD_INFO_PRIORITY        0x01
 #define SET_THREAD_INFO_BASE_PRIORITY   0x02
-#define SET_THREAD_INFO_AFFINITY        0x04
-#define SET_THREAD_INFO_TOKEN           0x08
-#define SET_THREAD_INFO_ENTRYPOINT      0x10
-#define SET_THREAD_INFO_DESCRIPTION     0x20
-#define SET_THREAD_INFO_DBG_HIDDEN      0x40
-
+#define SET_THREAD_INFO_DISABLE_BOOST   0x04
+#define SET_THREAD_INFO_AFFINITY        0x08
+#define SET_THREAD_INFO_TOKEN           0x10
+#define SET_THREAD_INFO_ENTRYPOINT      0x20
+#define SET_THREAD_INFO_DESCRIPTION     0x40
+#define SET_THREAD_INFO_DBG_HIDDEN      0x80
 
 /* Suspend a thread */
 @REQ(suspend_thread)
