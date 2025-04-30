@@ -3047,6 +3047,7 @@ struct send_hardware_message_reply
     char __pad_28[4];
 };
 #define SEND_HWMSG_INJECTED    0x01
+#define SEND_HWMSG_NO_VSCREEN_CLIP    0x02
 
 
 
@@ -6798,6 +6799,6 @@ union generic_reply
     struct set_keyboard_repeat_reply set_keyboard_repeat_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 863
+#define SERVER_PROTOCOL_VERSION 864
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */
