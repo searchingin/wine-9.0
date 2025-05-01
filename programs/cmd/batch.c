@@ -223,17 +223,32 @@ static WCHAR *WCMD_fgets_helper(WCHAR *buf, DWORD noChars, HANDLE h, UINT code_p
   DWORD charsRead;
   BOOL status;
   DWORD i;
+  DWORD conmode, oldconmode;
+  CONSOLE_READCONSOLE_CONTROL control;
+
+  GetConsoleMode(h, &oldconmode);
+  conmode = oldconmode & ~ENABLE_PROCESSED_INPUT;
+  SetConsoleMode(h, conmode);
+  control.nLength = sizeof(CONSOLE_READCONSOLE_CONTROL);
+  control.nInitialChars = 0;
+  control.dwCtrlWakeupMask = 0x0008;
+  control.dwConsoleKeyState = 0;
 
   /* We can't use the native f* functions because of the filename syntax differences
      between DOS and Unix. Also need to lose the LF (or CRLF) from the line. */
 
-  if (VerifyConsoleIoHandle(h) && ReadConsoleW(h, buf, noChars, &charsRead, NULL) && charsRead) {
+  if (VerifyConsoleIoHandle(h) && ReadConsoleW(h, buf, noChars, &charsRead, &control) && charsRead) {
+      SetConsoleMode(h, oldconmode);
       if (!charsRead) return NULL;
 
       /* Find first EOL */
       for (i = 0; i < charsRead; i++) {
           if (buf[i] == '\n' || buf[i] == '\r')
               break;
+          if (buf[i] == 0x03) {
+             WCMD_output(L"^C\n");
+             i = 0;
+             break;}
       }
   }
   else {
@@ -241,6 +256,7 @@ static WCHAR *WCMD_fgets_helper(WCHAR *buf, DWORD noChars, HANDLE h, UINT code_p
       char *bufA;
       const char *p;
 
+      SetConsoleMode(h, oldconmode);
       bufA = xalloc(noChars);
 
       /* Save current file position */
