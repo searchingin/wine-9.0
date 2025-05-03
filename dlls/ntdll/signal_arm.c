@@ -208,7 +208,7 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_context )
     unwind_done:
         if (!dispatch.EstablisherFrame) break;
 
-        if (!is_valid_frame( dispatch.EstablisherFrame ))
+        if (!is_valid_frame( dispatch.EstablisherFrame, NULL ))
         {
             ERR( "invalid frame %lx (%p-%p)\n", dispatch.EstablisherFrame,
                  NtCurrentTeb()->Tib.StackLimit, NtCurrentTeb()->Tib.StackBase );
@@ -246,7 +246,7 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_context )
             }
         }
         /* hack: call wine handlers registered in the tib list */
-        else while (is_valid_frame( (ULONG_PTR)teb_frame ) && (DWORD)teb_frame < context.Sp)
+        else while (is_valid_frame( (ULONG_PTR)teb_frame, NULL ) && (DWORD)teb_frame < context.Sp)
         {
             TRACE( "calling TEB handler %p (rec=%p frame=%p context=%p dispatch=%p) sp=%lx\n",
                    teb_frame->Handler, rec, teb_frame, orig_context, &dispatch, context.Sp );
@@ -405,7 +405,7 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
     }
 
     /* hack: remove no longer accessible TEB frames */
-    while (is_valid_frame( (ULONG_PTR)teb_frame ) && (DWORD)teb_frame < context->Sp)
+    while (is_valid_frame( (ULONG_PTR)teb_frame, NULL ) && (DWORD)teb_frame < context->Sp)
     {
         TRACE( "removing TEB frame: %p\n", teb_frame );
         teb_frame = __wine_pop_frame( teb_frame );
@@ -466,7 +466,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
     unwind_done:
         if (!dispatch.EstablisherFrame) break;
 
-        if (!is_valid_frame( dispatch.EstablisherFrame ))
+        if (!is_valid_frame( dispatch.EstablisherFrame, NULL ))
         {
             ERR( "invalid frame %lx (%p-%p)\n", dispatch.EstablisherFrame,
                  NtCurrentTeb()->Tib.StackLimit, NtCurrentTeb()->Tib.StackBase );
@@ -510,7 +510,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
         }
         else  /* hack: call builtin handlers registered in the tib list */
         {
-            while (is_valid_frame( (ULONG_PTR)teb_frame ) &&
+            while (is_valid_frame( (ULONG_PTR)teb_frame, NULL ) &&
                    (DWORD)teb_frame < new_context.Sp &&
                    (DWORD)teb_frame < (DWORD)end_frame)
             {
@@ -599,7 +599,7 @@ ULONG WINAPI RtlWalkFrameChain( void **buffer, ULONG count, ULONG flags )
                                &data, &frame, NULL, NULL, NULL, &handler, 0 ))
             break;
         if (!context.Pc) break;
-        if (!frame || !is_valid_frame( frame )) break;
+        if (!frame || !is_valid_frame( frame, NULL )) break;
         if (context.Sp == (ULONG_PTR)NtCurrentTeb()->Tib.StackBase) break;
         if (i >= skip) buffer[num_entries++] = (void *)context.Pc;
     }

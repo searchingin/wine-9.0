@@ -152,7 +152,7 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
     while (frame != (EXCEPTION_REGISTRATION_RECORD*)~0UL)
     {
         /* Check frame address */
-        if (!is_valid_frame( (ULONG_PTR)frame ))
+        if (!is_valid_frame( (ULONG_PTR)frame, NULL ))
         {
             rec->ExceptionFlags |= EXCEPTION_STACK_INVALID;
             break;
@@ -354,7 +354,7 @@ void WINAPI __regs_RtlUnwind( EXCEPTION_REGISTRATION_RECORD* pEndFrame, PVOID ta
         if (pEndFrame && (frame > pEndFrame))
             raise_status( STATUS_INVALID_UNWIND_TARGET, pRecord );
 
-        if (!is_valid_frame( (ULONG_PTR)frame )) raise_status( STATUS_BAD_STACK, pRecord );
+        if (!is_valid_frame( (ULONG_PTR)frame, NULL )) raise_status( STATUS_BAD_STACK, pRecord );
 
         /* Call handler */
         TRACE( "calling handler at %p code=%lx flags=%lx\n",
@@ -483,7 +483,7 @@ ULONG WINAPI RtlWalkFrameChain( void **buffer, ULONG count, ULONG flags )
 
     for (i = 0; i < count; i++)
     {
-        if (!is_valid_frame( context.Ebp )) break;
+        if (!is_valid_frame( context.Ebp, NULL )) break;
         if (i >= skip) buffer[pos++] = (void *)context.Eip;
         frame = (ULONG *)context.Ebp;
         context.Ebp = frame[0];

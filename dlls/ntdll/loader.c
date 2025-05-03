@@ -37,7 +37,6 @@
 #include "ntdll_misc.h"
 #include "ddk/ntddk.h"
 #include "ddk/wdm.h"
-#include "asan_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 WINE_DECLARE_DEBUG_CHANNEL(relay);

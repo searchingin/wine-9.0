@@ -29,6 +29,7 @@
 #include "winternl.h"
 #include "rtlsupportapi.h"
 #include "unixlib.h"
+#include "asan_private.h"
 #include "wine/asm.h"
 
 #define MAX_NT_PATH_LENGTH 277
@@ -61,11 +62,19 @@ extern void DECLSPEC_NORETURN raise_status( NTSTATUS status, EXCEPTION_RECORD *r
 extern LONG WINAPI call_unhandled_exception_filter( PEXCEPTION_POINTERS eptr );
 extern void WINAPI process_breakpoint(void);
 
-static inline BOOL is_valid_frame( ULONG_PTR frame )
+static inline BOOL is_valid_frame( ULONG_PTR frame, ULONG_PTR *frame_out )
 {
     if (frame & (sizeof(void*) - 1)) return FALSE;
-    return ((void *)frame >= NtCurrentTeb()->Tib.StackLimit &&
-            (void *)frame <= NtCurrentTeb()->Tib.StackBase);
+#if WINE_ASAN
+    if (__wine_asan_is_inside_fake_stack_frame( frame, NULL, NULL, frame_out )) return TRUE;
+#endif
+    if ((void *)frame >= NtCurrentTeb()->Tib.StackLimit &&
+        (void *)frame <= NtCurrentTeb()->Tib.StackBase)
+    {
+        if (frame_out) *frame_out = frame;
+        return TRUE;
+    }
+    return FALSE;
 }
 
 extern void WINAPI LdrInitializeThunk(CONTEXT*,ULONG_PTR,ULONG_PTR,ULONG_PTR);
