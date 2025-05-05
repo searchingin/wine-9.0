@@ -534,8 +534,11 @@ static int update_desktop_cursor_pos( struct desktop *desktop, user_handle_t win
     int updated;
     unsigned int time = get_tick_count();
 
-    x = max( min( x, desktop_shm->cursor.clip.right - 1 ), desktop_shm->cursor.clip.left );
-    y = max( min( y, desktop_shm->cursor.clip.bottom - 1 ), desktop_shm->cursor.clip.top );
+    if (!(desktop->cursor_flags & SEND_HWMSG_NO_VSCREEN_CLIP) || is_cursor_clipped( desktop ))
+    {
+        x = max( min( x, desktop_shm->cursor.clip.right - 1 ), desktop_shm->cursor.clip.left );
+        y = max( min( y, desktop_shm->cursor.clip.bottom - 1 ), desktop_shm->cursor.clip.top );
+    }
 
     SHARED_WRITE_BEGIN( desktop_shm, desktop_shm_t )
     {
@@ -635,9 +638,12 @@ void set_clip_rectangle( struct desktop *desktop, const struct rectangle *rect, 
     desktop->clip_flags = flags;
 
     /* warp the mouse to be inside the clip rect */
-    x = max( min( desktop_shm->cursor.x, new_rect.right - 1 ), new_rect.left );
-    y = max( min( desktop_shm->cursor.y, new_rect.bottom - 1 ), new_rect.top );
-    if (x != desktop_shm->cursor.x || y != desktop_shm->cursor.y) set_cursor_pos( desktop, x, y );
+    if (!(desktop->cursor_flags & SEND_HWMSG_NO_VSCREEN_CLIP) || is_cursor_clipped( desktop ))
+    {
+        x = max( min( desktop_shm->cursor.x, new_rect.right - 1 ), new_rect.left );
+        y = max( min( desktop_shm->cursor.y, new_rect.bottom - 1 ), new_rect.top );
+        if (x != desktop_shm->cursor.x || y != desktop_shm->cursor.y) set_cursor_pos( desktop, x, y );
+    }
 
     /* request clip cursor rectangle reset to the desktop thread */
     if (reset) post_desktop_message( desktop, WM_WINE_CLIPCURSOR, flags, FALSE );
@@ -3296,6 +3302,7 @@ DECL_HANDLER(send_hardware_message)
     switch (req->input.type)
     {
     case INPUT_MOUSE:
+        desktop->cursor_flags = req->flags;
         wait = queue_mouse_message( desktop, req->win, &req->input, origin, sender );
         break;
     case INPUT_KEYBOARD:

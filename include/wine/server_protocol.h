@@ -3048,6 +3048,7 @@ struct send_hardware_message_reply
     char __pad_28[4];
 };
 #define SEND_HWMSG_INJECTED    0x01
+#define SEND_HWMSG_NO_VSCREEN_CLIP    0x02
 
 
 
