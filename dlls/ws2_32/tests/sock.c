@@ -14553,7 +14553,7 @@ static void test_afunix(void)
     ret = bind(listener, (SOCKADDR *)&addr, 0);
     ok(ret && GetLastError() == WSAEFAULT, "Incorrect error: %lu\n", GetLastError());
     ret = bind(listener, (SOCKADDR *)&addr, 2);
-    ok(!ret, "Could not bind Unix socket: %lu\n", GetLastError());
+    ok(!ret, "Could not bind Unix socket to path '%s': %lu\n", addr.sun_path, GetLastError());
     ret = listen(listener, 1);
     ok(!ret, "Could not listen on Unix socket: %lu\n", GetLastError());
     closesocket(listener);
@@ -14562,7 +14562,7 @@ static void test_afunix(void)
     ok(listener != INVALID_SOCKET, "Could not create Unix socket: %lu\n",
         GetLastError());
     ret = bind(listener, (SOCKADDR *)&addr, 3);
-    ok(!ret, "Could not bind Unix socket: %lu\n", GetLastError());
+    ok(!ret, "Could not bind Unix socket to path '%s': %lu\n", addr.sun_path, GetLastError());
 
     memcpy(&truncatedAddr, &addr, 3);
     ret = getsockname(listener, (SOCKADDR *)&outAddr, &outAddrSize);
@@ -14577,7 +14577,7 @@ static void test_afunix(void)
         truncatedAddr.sun_path);
     closesocket(listener);
     ret = DeleteFileA(truncatedAddr.sun_path);
-    ok(ret, "DeleteFileA on socket file failed: %lu\n", GetLastError());
+    ok(ret, "DeleteFileA on socket file '%s' failed: %lu\n", truncatedAddr.sun_path, GetLastError());
     ok(GetFileAttributesA(truncatedAddr.sun_path) == INVALID_FILE_ATTRIBUTES &&
         GetLastError() == ERROR_FILE_NOT_FOUND,
         "Failed to delete socket file at path '%s'\n",
@@ -14588,7 +14588,7 @@ static void test_afunix(void)
         GetLastError());
 
     ret = bind(listener, (SOCKADDR *)&addr, sizeof(SOCKADDR_UN));
-    ok(!ret, "Could not bind Unix socket: %lu\n", GetLastError());
+    ok(!ret, "Could not bind Unix socket to path '%s': %lu\n", addr.sun_path, GetLastError());
 
     ret = listen(listener, 1);
     ok(!ret, "Could not listen on Unix socket: %lu\n", GetLastError());
