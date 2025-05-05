@@ -63,6 +63,7 @@ struct async
     unsigned int         comp_flags;      /* completion flags */
     async_completion_callback completion_callback; /* callback to be called on completion */
     void                *completion_callback_private; /* argument to completion_callback */
+    struct list         canceled_entry;
 };
 
 static void async_dump( struct object *obj, int verbose );
@@ -118,8 +119,8 @@ static void async_satisfied( struct object *obj, struct wait_queue_entry *entry 
     struct async *async = (struct async *)obj;
     assert( obj->ops == &async_ops );
 
-    /* we only return an async handle for asyncs created via create_request_async() */
-    assert( async->iosb );
+    if (!async->iosb)
+        return;
 
     if (async->direct_result)
     {
@@ -574,7 +575,27 @@ int async_waiting( struct async_queue *queue )
     return !async->terminated;
 }
 
-static int cancel_async( struct process *process, struct object *obj, struct thread *thread, client_ptr_t iosb )
+static int cancel_count_async( struct process *process, struct object *obj, struct thread *thread,
+                               client_ptr_t iosb )
+{
+    struct async *async;
+    int count = 0;
+
+    LIST_FOR_EACH_ENTRY( async, &process->asyncs, struct async, process_entry )
+    {
+        if (async->terminated || async->canceled || async->is_system) continue;
+        if ((!obj || (get_fd_user( async->fd ) == obj)) &&
+            (!thread || async->thread == thread) &&
+            (!iosb || async->data.iosb == iosb))
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+static int cancel_async( struct process *process, struct object *obj, struct thread *thread,
+                         client_ptr_t iosb, struct list *canceled_list )
 {
     struct async *async;
     int woken = 0;
@@ -592,7 +613,9 @@ restart:
             (!iosb || async->data.iosb == iosb))
         {
             async->canceled = 1;
+            async->signaled = 0;
             fd_cancel_async( async->fd, async );
+            list_add_tail( canceled_list, &async->canceled_entry );
             woken++;
             goto restart;
         }
@@ -815,12 +838,44 @@ DECL_HANDLER(cancel_async)
 {
     struct object *obj = get_handle_obj( current->process, req->handle, 0, NULL );
     struct thread *thread = req->only_thread ? current : NULL;
+    struct list canceled_list = LIST_INIT(canceled_list);
+    unsigned int count = 0, capacity, i;
+    struct async *async, *next_async;
+    obj_handle_t *ptr;
 
-    if (obj)
+    if (!obj)
+        return;
+
+    count = cancel_count_async( current->process, obj, thread, req->iosb );
+    if (!count && !thread) set_error( STATUS_NOT_FOUND );
+    release_object( obj );
+    capacity = get_reply_max_size() / sizeof(*ptr);
+
+    if (count)
     {
-        int count = cancel_async( current->process, obj, thread, req->iosb );
-        if (!count && !thread) set_error( STATUS_NOT_FOUND );
-        release_object( obj );
+        if (count > capacity)
+        {
+            set_error( STATUS_BUFFER_OVERFLOW );
+            reply->handles_size = count * sizeof(*ptr);
+            return;
+        }
+        count = cancel_async( current->process, obj, thread, req->iosb, &canceled_list );
+        count = min( count, capacity );
+        i = 0;
+        if ((ptr = set_reply_data_size( count * sizeof(*ptr) )))
+        {
+            LIST_FOR_EACH_ENTRY_SAFE( async, next_async, &canceled_list, struct async, canceled_entry )
+            {
+                if (i++ < capacity)
+                {
+                    if (!async->wait_handle)
+                        async->wait_handle = alloc_handle( current->process, async, SYNCHRONIZE, 0 );
+                    *ptr++ = async->wait_handle;
+                }
+                list_remove( &async->canceled_entry );
+            }
+            reply->handles_size = count * sizeof(*ptr);
+        }
     }
 }
 

@@ -3239,6 +3239,9 @@ struct cancel_async_request
 struct cancel_async_reply
 {
     struct reply_header __header;
+    data_size_t  handles_size;
+    /* VARARG(handles,uints,handles_size); */
+    char __pad_12[4];
 };
 
 
