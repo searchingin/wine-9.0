@@ -14539,6 +14539,11 @@ static void test_afunix(void)
     ULONG one = 1;
     int ret;
 
+    char currentDir[MAX_PATH+1];
+    ret = GetCurrentDirectoryA(sizeof(currentDir)-1, currentDir);
+    ok(ret, "Could not get current directory: %lu\n", GetLastError());
+    winetest_printf("current directory: '%s'\n", currentDir);
+
     /* Test connection and send/recv */
     listener = socket(AF_UNIX, SOCK_STREAM, 0);
     if (listener == INVALID_SOCKET && GetLastError() == WSAEAFNOSUPPORT)
