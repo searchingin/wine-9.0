@@ -66,6 +66,22 @@ static BOOL NOBUILTIN asan_report(const void *addr, SIZE_T size, BOOL is_write, 
                 (unsigned long)((ULONG_PTR)addr - ASAN_SHADOW_TO_MEM(probe)),
                 *shadow == ASAN_STACK_MID_REDZONE_MAGIC ? "another stack variable" : "the end of stack");
         break;
+    case ASAN_HEAP_REDZONE_MAGIC:
+        if (shadow[-1] > 127 && shadow[1] > 127) ERR("\theap-buffer-overflow, addr %p\n", addr);
+        else if (shadow[1] < 128)
+        {
+            probe++;
+            while (*probe >= 0) probe++;
+            ERR("\theap-buffer-overflow, addr is 8 bytes to the left of %lu bytes allocated\n",
+                    (unsigned long)((probe - (INT8 *)shadow - 1) * ASAN_GRANULE_SIZE));
+        }
+        else
+        {
+            probe--;
+            while (*probe >= 0) probe--;
+            ERR("\theap-buffer-overflow, addr is 8 bytes to the right of %lu bytes allocated\n",
+                    (unsigned long)(((INT8 *)shadow - probe - 1) * ASAN_GRANULE_SIZE));
+        }
     default: ERR("\tshadow: %02x\n", *shadow); break;
     }
 
