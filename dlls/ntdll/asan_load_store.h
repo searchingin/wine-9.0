@@ -10,8 +10,23 @@ static BOOL NOBUILTIN asan_report(const void *addr, SIZE_T size, BOOL is_write, 
 {
     UINT8 *shadow = (UINT8 *)ASAN_MEM_TO_SHADOW(addr), *stack_start, *stack_end;
     INT8 *probe = (INT8 *)shadow;
+    USHORT frames, i;
+    void *stack[32];
     ERR("ASan: %s of %llu bytes at %p, caller %p\n", is_write ? "write" : "read",
             (unsigned long long)size, addr, ip);
+#ifndef WINE_UNIX_LIB
+    frames = RtlCaptureStackBackTrace(2, 32, stack, NULL);
+    if (frames)
+    {
+        ERR("stacktrace:\n");
+        for (i = 0; i < frames; i++) ERR("\t%p\n", stack[i]);
+    }
+#else
+    (void)frames;
+    (void)i;
+    (void)stack;
+#endif
+    ERR("info:\n");
     if (!*shadow)
     {
         SIZE_T offset = 0;
