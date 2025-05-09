@@ -313,6 +313,9 @@ struct heap
     RTL_CRITICAL_SECTION cs;
     struct entry     free_lists[FREE_LIST_COUNT];
     struct bin      *bins;
+    void            *quarantine; /* Quarantined blocks list */
+    void           **quarantine_tail;
+    SIZE_T           quarantine_size;
     SUBHEAP          subheap;
 };
 
@@ -510,7 +513,7 @@ static inline void sanitizer_poison_heap( void *ptr, SIZE_T left, SIZE_T user, S
     UINT8 *end = (UINT8 *)ptr + left + aligned_user;
     /* poison left and right redzones */
     __wine_asan_poison_aligned_memory( ptr, left, ASAN_HEAP_REDZONE_MAGIC );
-    __wine_asan_poison_aligned_memory( end, total - aligned_user - left, ASAN_HEAP_REDZONE_MAGIC );
+    __wine_asan_poison_aligned_memory( end, total - left - aligned_user, ASAN_HEAP_REDZONE_MAGIC );
     if ( aligned_user != user )
     {
         /* poison the last partial granule */
@@ -684,6 +687,84 @@ static void heap_set_status( const struct heap *heap, ULONG flags, NTSTATUS stat
 {
     if (status == STATUS_NO_MEMORY && (flags & HEAP_GENERATE_EXCEPTIONS)) RtlRaiseStatus( status );
     if (status) RtlSetLastWin32ErrorAndNtStatusFromNtStatus( status );
+}
+
+static NTSTATUS heap_free_internal( struct heap *heap, struct block *block, ULONG heap_flags );
+
+/* return quarantined blocks back into the free heap. */
+static void sanitizer_quarantine_recycle( struct heap *heap, SIZE_T limit, ULONG heap_flags )
+{
+    void *free_head;
+    void **free_end = NULL;
+
+    /* take out a chunk of blocks out of the quarantine list, after they are out, they belong to
+     * this thread and we can unlock the heap. */
+    heap_lock( heap, heap_flags );
+    free_head = heap->quarantine;
+    while (heap->quarantine && heap->quarantine_size > limit)
+    {
+        struct block *block = (struct block *)((void **)heap->quarantine - 1);
+        SIZE_T total_size = block_get_size( block );
+
+        if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
+            total_size = CONTAINING_RECORD( block, ARENA_LARGE, block )->block_size +
+                         offsetof( ARENA_LARGE, block );
+
+        free_end = heap->quarantine;
+        heap->quarantine = *free_end;
+        heap->quarantine_size -= total_size;
+    }
+
+    if (!heap->quarantine) heap->quarantine_tail = &heap->quarantine;
+    heap_unlock( heap, heap_flags );
+    if (!free_end) return;
+
+    *free_end = NULL;
+    while (free_head)
+    {
+        struct block *block = (struct block *)((void **)free_head - 1);
+        void *next = *(void **)free_head;
+        NTSTATUS status;
+
+        if ((status = heap_free_internal( heap, block, heap_flags )))
+            WARN( "failed to release block from quarantine %#lx\n", status );
+        free_head = next;
+    }
+}
+
+static inline BOOL sanitizer_quarantine_block( struct heap *heap, ULONG heap_flags, struct block *block, void *ptr )
+{
+#if WINE_ASAN
+    SIZE_T user_size, total_size = block_get_size( block ), limit = __wine_asan_max_quarantine_size(),
+           quarantine_size;
+    ULONG_PTR user_offset = (ULONG_PTR)ptr - (ULONG_PTR)(block + 1);
+    void **next = (void **)(block + 1); /* block is 8 bytes and our min redzone is 16 bytes, so
+                                           there's at least 8 bytes free after the block. */
+    if (block_get_flags ( block ) & BLOCK_FLAG_LARGE)
+    {
+        ARENA_LARGE *arena = CONTAINING_RECORD( block, ARENA_LARGE, block );
+        total_size = arena->block_size + offsetof( ARENA_LARGE, block ); /* see heap_allocate_large */
+        user_size = arena->data_size;
+    }
+    else user_size = total_size - block->tail_size - sizeof(*block) - user_offset;
+
+    memset( ptr, SANITIZER_FREE_FILL_BYTE, user_size ); /* we haven't poisoned it yet, memset should
+                                                           be fine even though it's instrumented. */
+    __wine_asan_poison_aligned_memory( ptr, user_size, ASAN_HEAP_FREE_MAGIC );
+    *next = NULL;
+
+    heap_lock( heap, heap_flags );
+    *heap->quarantine_tail = (void *)next;
+    heap->quarantine_tail = next;
+    heap->quarantine_size += total_size;
+    quarantine_size = heap->quarantine_size;
+    heap_unlock( heap, heap_flags );
+
+    if (quarantine_size > limit) sanitizer_quarantine_recycle( heap, limit, heap_flags );
+    return TRUE;
+#else
+    return FALSE;
+#endif
 }
 
 static SIZE_T get_free_list_block_size( unsigned int index )
@@ -1636,6 +1717,9 @@ HANDLE WINAPI RtlCreateHeap( ULONG flags, void *addr, SIZE_T total_size, SIZE_T 
     heap->magic         = HEAP_MAGIC;
     heap->grow_size     = HEAP_INITIAL_GROW_SIZE;
     heap->min_size      = commit_size;
+#if WINE_ASAN
+    heap->quarantine_tail = &heap->quarantine;
+#endif
     list_init( &heap->subheap_list );
     list_init( &heap->large_list );
 
@@ -1739,6 +1823,10 @@ HANDLE WINAPI RtlDestroyHeap( HANDLE handle )
         DbgBreakPoint();
     }
     if (!heap) return handle;
+
+    /* release everything from the quarantine. since we are decommitting the pages, use-after-free
+     * after this will crash the program. (we will miss the nicer diagnostics though). */
+    if (heap != process_heap) sanitizer_quarantine_recycle( heap, 0, heap_flags );
 
     if ((pending = heap->pending_free))
     {
@@ -2212,6 +2300,46 @@ void *WINAPI DECLSPEC_HOTPATCH RtlAllocateHeap( HANDLE handle, ULONG flags, SIZE
     return ptr;
 }
 
+
+static NTSTATUS heap_free_internal( struct heap *heap, struct block *block, ULONG heap_flags )
+{
+    NTSTATUS status;
+
+#if WINE_ASAN
+    {
+        void *begin = block;
+        SIZE_T total_size = block_get_size( block );
+        if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
+        {
+            ARENA_LARGE *arena = CONTAINING_RECORD( begin, ARENA_LARGE, block );
+            total_size = arena->block_size + offsetof( ARENA_LARGE, block );
+            begin = arena;
+        }
+        __wine_asan_poison_aligned_memory( begin, total_size, 0 );
+    }
+#endif
+
+    if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
+        status = heap_free_large( heap, heap_flags, block );
+    else if (!(block = heap_delay_free( heap, heap_flags, block )))
+        status = STATUS_SUCCESS;
+    else if (!heap_free_block_lfh( heap, heap_flags, block ))
+        status = STATUS_SUCCESS;
+    else
+    {
+        SIZE_T block_size = block_get_size( block ), bin = BLOCK_SIZE_BIN( block_size );
+
+        heap_lock( heap, heap_flags );
+        status = heap_free_block( heap, heap_flags, block );
+        heap_unlock( heap, heap_flags );
+
+        if (!status && heap->bins) InterlockedIncrement( &heap->bins[bin].count_freed );
+    }
+
+    return status;
+}
+
+
 /***********************************************************************
  *           RtlFreeHeap   (NTDLL.@)
  */
@@ -2224,42 +2352,16 @@ BOOLEAN WINAPI DECLSPEC_HOTPATCH RtlFreeHeap( HANDLE handle, ULONG flags, void *
 
     if (!ptr) return TRUE;
 
-    valgrind_notify_free( ptr );
-
     if (!(heap = unsafe_heap_from_handle( handle, flags, &heap_flags )))
         status = STATUS_INVALID_PARAMETER;
     else if (!(block = unsafe_block_from_ptr( heap, heap_flags, ptr )))
         status = STATUS_INVALID_PARAMETER;
+    else if (sanitizer_quarantine_block( heap, heap_flags, block, ptr ))
+        status = STATUS_SUCCESS;
     else
     {
-#if WINE_ASAN
-        void *begin = block;
-        SIZE_T total_size = block_get_size( block );
-        if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
-        {
-            ARENA_LARGE *arena = CONTAINING_RECORD( begin, ARENA_LARGE, block );
-            total_size = arena->block_size + offsetof( ARENA_LARGE, block );
-            begin = arena;
-        }
-        __wine_asan_poison_aligned_memory( begin, total_size, 0 );
-#endif
-
-        if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
-            status = heap_free_large( heap, heap_flags, block );
-        else if (!(block = heap_delay_free( heap, heap_flags, block )))
-            status = STATUS_SUCCESS;
-        else if (!heap_free_block_lfh( heap, heap_flags, block ))
-            status = STATUS_SUCCESS;
-        else
-        {
-            SIZE_T block_size = block_get_size( block ), bin = BLOCK_SIZE_BIN( block_size );
-
-            heap_lock( heap, heap_flags );
-            status = heap_free_block( heap, heap_flags, block );
-            heap_unlock( heap, heap_flags );
-
-            if (!status && heap->bins) InterlockedIncrement( &heap->bins[bin].count_freed );
-        }
+        valgrind_notify_free( ptr );
+        status = heap_free_internal( heap, block, heap_flags );
     }
 
     TRACE( "handle %p, flags %#lx, ptr %p, return %u, status %#lx.\n", handle, flags, ptr, !status, status );

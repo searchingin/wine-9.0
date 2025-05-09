@@ -532,3 +532,9 @@ void *__asan_region_is_poisoned(void *beg, SIZE_T size)
     }
     return 0;
 }
+
+UINT32 __wine_asan_max_quarantine_size(void)
+{
+    struct asan_thread_state *state = asan_get_thread_state();
+    return state->max_quarantine_size;
+}

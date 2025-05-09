@@ -256,6 +256,8 @@ NTSTATUS wine_asan_alloc_thread(TEB *teb, SIZE_T user_stack_size)
     }
 
     TRACE("state: %p\n", state);
+    /* TODO: parse max_quarantine_size from options */
+    state->max_quarantine_size = 1024 * 1024 * 256;
 
     /* Only start setting pointers to fake stacks after we have allocated everything. Since after
      * this point we are not calling any other functions, we can be sure __asan_stack_malloc* won't
