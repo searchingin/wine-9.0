@@ -38,6 +38,7 @@
 #include "ntdll_misc.h"
 #include "wine/debug.h"
 #include "ntsyscalls.h"
+#include "wine/asan_interface.h"
 
 
 /*******************************************************************
@@ -658,6 +659,9 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
     }
 
     TRACE( "returning to %p stack %p\n", (void *)context->Rip, (void *)context->Rsp );
+#if WINE_ASAN
+    __asan_handle_no_return();
+#endif
     NtContinue( context, FALSE );
 }
 
