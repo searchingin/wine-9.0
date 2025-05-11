@@ -282,6 +282,7 @@ struct wayland_surface
             struct xdg_toplevel_icon_v1 *xdg_toplevel_icon;
             struct wayland_shm_buffer *small_icon_buffer;
             struct wayland_shm_buffer *big_icon_buffer;
+            BOOL configured;
         };
         struct
         {

@@ -347,6 +347,7 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
             surface->big_icon_buffer = NULL;
             surface->small_icon_buffer = NULL;
             surface->xdg_toplevel_icon = NULL;
+            surface->configured = FALSE;
         }
 
         if (surface->xdg_toplevel)
@@ -637,6 +638,7 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface,
         surface->current = surface->processing;
         surface->processing_processed = FALSE;
         xdg_surface_ack_configure(surface->xdg_surface, surface->current.serial);
+        surface->configured = TRUE;
     }
     /* If this is the initial configure, and we have a compatible requested
      * config, use that, in order to draw windows that don't go through the
@@ -650,18 +652,19 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface,
         wayland_surface_config_apply_delta(&surface->processing, &surface->requested, NULL);
         surface->current = surface->processing;
         xdg_surface_ack_configure(surface->xdg_surface, surface->current.serial);
+        surface->configured = TRUE;
     }
-    else if (!surface->current.serial ||
-             !wayland_surface_config_is_compatible(&surface->current,
+    else if (!wayland_surface_config_is_compatible(&surface->current,
                                                    width, height,
                                                    window->state))
     {
         return FALSE;
     }
 
-    wayland_surface_reconfigure_geometry(surface, width, height);
+    if (surface->configured)
+        wayland_surface_reconfigure_geometry(surface, width, height);
 
-    return TRUE;
+    return surface->configured;
 }
 
 /**********************************************************************
