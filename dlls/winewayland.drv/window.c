@@ -242,7 +242,7 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *dat
 static void wayland_surface_update_state_toplevel(struct wayland_surface *surface)
 {
     BOOL processing_config = surface->processing.serial &&
-                             !surface->processing.processed;
+                             !surface->processing_processed;
 
     TRACE("hwnd=%p window_state=%#x %s->state=%#x\n",
           surface->hwnd, surface->window.state,
@@ -279,7 +279,7 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
     }
     else
     {
-        surface->processing.processed = TRUE;
+        surface->processing_processed = TRUE;
     }
 }
 
@@ -300,7 +300,7 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
         /* Although subsurfaces don't have a dedicated surface config mechanism,
          * we use the config fields to mark them as updated. */
         surface->processing.serial = 1;
-        surface->processing.processed = TRUE;
+        surface->processing_processed = TRUE;
         break;
     }
 
@@ -543,15 +543,15 @@ static void wayland_configure_window(HWND hwnd)
         return;
     }
 
-    if (!surface->requested.serial)
+    if (!(surface->requested.mask & WAYLAND_SURFACE_CONFIG_DELTA_SERIAL))
     {
         TRACE("requested configure event already handled, returning\n");
         wayland_win_data_release(data);
         return;
     }
 
-    surface->processing = surface->requested;
-    memset(&surface->requested, 0, sizeof(surface->requested));
+    wayland_surface_config_apply_delta(&surface->processing, &surface->requested, NULL);
+    surface->processing_processed = FALSE;
 
     state = surface->processing.state;
     /* Ignore size hints if we don't have a state that requires strict
@@ -873,7 +873,7 @@ void ensure_window_surface_contents(HWND hwnd)
         /* Handle any processed configure request, to ensure the related
          * surface state is applied by the compositor. */
         if (wayland_surface->processing.serial &&
-            wayland_surface->processing.processed &&
+            wayland_surface->processing_processed &&
             wayland_surface_reconfigure(wayland_surface))
         {
             wl_surface_commit(wayland_surface->wl_surface);

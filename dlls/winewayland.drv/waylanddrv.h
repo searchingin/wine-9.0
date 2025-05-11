@@ -217,7 +217,19 @@ struct wayland_surface_config
     int32_t width, height;
     enum wayland_surface_config_state state;
     uint32_t serial;
-    BOOL processed;
+};
+
+enum wayland_surface_config_delta_mask
+{
+    WAYLAND_SURFACE_CONFIG_DELTA_SERIAL = (1 << 0),
+    WAYLAND_SURFACE_CONFIG_DELTA_SIZE = (1 << 1),
+    WAYLAND_SURFACE_CONFIG_DELTA_STATE = (1 << 2),
+};
+
+struct wayland_surface_config_delta
+{
+    enum wayland_surface_config_delta_mask mask;
+    struct wayland_surface_config config;
 };
 
 struct wayland_window_config
@@ -278,7 +290,9 @@ struct wayland_surface
         };
     };
 
-    struct wayland_surface_config pending, requested, processing, current;
+    struct wayland_surface_config_delta pending, requested;
+    struct wayland_surface_config processing, current;
+    BOOL processing_processed;
     BOOL resizing;
     struct wayland_window_config window;
     int content_width, content_height;
@@ -329,6 +343,9 @@ void wayland_client_surface_detach(struct wayland_client_surface *client);
 void wayland_surface_ensure_contents(struct wayland_surface *surface);
 void wayland_surface_set_title(struct wayland_surface *surface, LPCWSTR title);
 void wayland_surface_set_icon(struct wayland_surface *surface, UINT type, ICONINFO *ii);
+void wayland_surface_config_apply_delta(struct wayland_surface_config *target,
+                                        struct wayland_surface_config_delta *delta,
+                                        enum wayland_surface_config_delta_mask *target_mask);
 
 static inline BOOL wayland_surface_is_toplevel(struct wayland_surface *surface)
 {
