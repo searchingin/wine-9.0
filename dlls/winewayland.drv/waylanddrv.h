@@ -37,6 +37,7 @@
 #include "xdg-shell-client-protocol.h"
 #include "wlr-data-control-unstable-v1-client-protocol.h"
 #include "xdg-toplevel-icon-v1-client-protocol.h"
+#include "xdg-decoration-unstable-v1-client-protocol.h"
 
 #include "windef.h"
 #include "winbase.h"
@@ -172,6 +173,7 @@ struct wayland
     struct zwlr_data_control_manager_v1 *zwlr_data_control_manager_v1;
     struct wl_data_device_manager *wl_data_device_manager;
     struct xdg_toplevel_icon_manager_v1 *xdg_toplevel_icon_manager_v1;
+    struct zxdg_decoration_manager_v1 *zxdg_decoration_manager_v1;
     struct wayland_seat seat;
     struct wayland_keyboard keyboard;
     struct wayland_pointer pointer;
@@ -217,6 +219,7 @@ struct wayland_surface_config
     int32_t width, height;
     enum wayland_surface_config_state state;
     uint32_t serial;
+    enum zxdg_toplevel_decoration_v1_mode decoration_mode;
 };
 
 enum wayland_surface_config_delta_mask
@@ -224,6 +227,7 @@ enum wayland_surface_config_delta_mask
     WAYLAND_SURFACE_CONFIG_DELTA_SERIAL = (1 << 0),
     WAYLAND_SURFACE_CONFIG_DELTA_SIZE = (1 << 1),
     WAYLAND_SURFACE_CONFIG_DELTA_STATE = (1 << 2),
+    WAYLAND_SURFACE_CONFIG_DELTA_DECORATION = (1 << 3),
 };
 
 struct wayland_surface_config_delta
@@ -241,6 +245,7 @@ struct wayland_window_config
     double scale;
     BOOL visible;
     BOOL managed;
+    BOOL no_decoration;
 };
 
 struct wayland_client_surface
@@ -280,6 +285,7 @@ struct wayland_surface
             struct xdg_surface *xdg_surface;
             struct xdg_toplevel *xdg_toplevel;
             struct xdg_toplevel_icon_v1 *xdg_toplevel_icon;
+            struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration;
             struct wayland_shm_buffer *small_icon_buffer;
             struct wayland_shm_buffer *big_icon_buffer;
             BOOL configured;
@@ -330,7 +336,8 @@ void wayland_surface_attach_shm(struct wayland_surface *surface,
 BOOL wayland_surface_reconfigure(struct wayland_surface *surface);
 BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
                                           int width, int height,
-                                          enum wayland_surface_config_state state);
+                                          enum wayland_surface_config_state state,
+                                          BOOL no_decoration);
 void wayland_surface_coords_from_window(struct wayland_surface *surface,
                                         int window_x, int window_y,
                                         int *surface_x, int *surface_y);

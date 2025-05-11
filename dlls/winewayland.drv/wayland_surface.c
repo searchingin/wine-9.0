@@ -142,6 +142,30 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener =
     xdg_toplevel_handle_close
 };
 
+static void xdg_decoration_handle_configure(void *private,
+                                            struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1,
+                                            uint32_t mode)
+{
+    struct wayland_surface *surface;
+    HWND hwnd = private;
+    struct wayland_win_data *data;
+
+    if (!(data = wayland_win_data_get(hwnd))) return;
+
+    if ((surface = data->wayland_surface) && wayland_surface_is_toplevel(surface))
+    {
+        surface->pending.mask |= WAYLAND_SURFACE_CONFIG_DELTA_DECORATION;
+        surface->pending.config.decoration_mode = mode;
+    }
+
+    wayland_win_data_release(data);
+}
+
+static const struct zxdg_toplevel_decoration_v1_listener zxdg_decoration_listener =
+{
+    xdg_decoration_handle_configure
+};
+
 /**********************************************************************
  *          wayland_surface_create
  *
@@ -259,6 +283,16 @@ void wayland_surface_make_toplevel(struct wayland_surface *surface)
     if (!surface->xdg_toplevel) goto err;
     xdg_toplevel_add_listener(surface->xdg_toplevel, &xdg_toplevel_listener, surface->hwnd);
 
+    if (process_wayland.zxdg_decoration_manager_v1) {
+        surface->zxdg_toplevel_decoration =
+            zxdg_decoration_manager_v1_get_toplevel_decoration(process_wayland.zxdg_decoration_manager_v1,
+                                                               surface->xdg_toplevel);
+        if (surface->zxdg_toplevel_decoration)
+            zxdg_toplevel_decoration_v1_add_listener(surface->zxdg_toplevel_decoration,
+                                                     &zxdg_decoration_listener,
+                                                     surface->hwnd);
+    }
+
     if (process_name)
         xdg_toplevel_set_app_id(surface->xdg_toplevel, process_name);
 
@@ -348,6 +382,12 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
             surface->small_icon_buffer = NULL;
             surface->xdg_toplevel_icon = NULL;
             surface->configured = FALSE;
+        }
+
+        if (surface->zxdg_toplevel_decoration)
+        {
+            zxdg_toplevel_decoration_v1_destroy(surface->zxdg_toplevel_decoration);
+            surface->zxdg_toplevel_decoration = NULL;
         }
 
         if (surface->xdg_toplevel)
@@ -459,7 +499,8 @@ void wayland_surface_attach_shm(struct wayland_surface *surface,
  */
 BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
                                           int width, int height,
-                                          enum wayland_surface_config_state state)
+                                          enum wayland_surface_config_state state,
+                                          BOOL no_decoration)
 {
     static enum wayland_surface_config_state mask =
         WAYLAND_SURFACE_CONFIG_STATE_MAXIMIZED;
@@ -474,6 +515,12 @@ BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
         (width < conf->width || height < conf->height))
     {
         return FALSE;
+    }
+
+    if (conf->decoration_mode) {
+        BOOL ssd = conf->decoration_mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
+        if (ssd != no_decoration)
+            return FALSE;
     }
 
     /* The fullscreen state requires a size smaller or equal to the configured
@@ -633,7 +680,7 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface,
     if (surface->processing.serial && surface->processing_processed &&
         wayland_surface_config_is_compatible(&surface->processing,
                                              width, height,
-                                             window->state))
+                                             window->state, window->no_decoration))
     {
         surface->current = surface->processing;
         surface->processing_processed = FALSE;
@@ -647,7 +694,7 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface,
              (surface->requested.mask & WAYLAND_SURFACE_CONFIG_DELTA_SERIAL) &&
              wayland_surface_config_is_compatible(&surface->requested.config,
                                                   width, height,
-                                                  window->state))
+                                                  window->state, window->no_decoration))
     {
         wayland_surface_config_apply_delta(&surface->processing, &surface->requested, NULL);
         surface->current = surface->processing;
@@ -656,7 +703,7 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface,
     }
     else if (!wayland_surface_config_is_compatible(&surface->current,
                                                    width, height,
-                                                   window->state))
+                                                   window->state, window->no_decoration))
     {
         return FALSE;
     }
@@ -764,6 +811,8 @@ void wayland_surface_config_apply_delta(struct wayland_surface_config *target,
     }
     if (mask & WAYLAND_SURFACE_CONFIG_DELTA_STATE)
         target->state = delta->config.state;
+    if (delta->mask & WAYLAND_SURFACE_CONFIG_DELTA_DECORATION)
+        target->decoration_mode = delta->config.decoration_mode;
     delta->mask = 0;
 
     if (target_mask)

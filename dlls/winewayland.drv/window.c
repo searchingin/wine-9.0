@@ -177,6 +177,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
     conf->scale = NtUserGetSystemDpiForProcess(0) / 96.0;
     conf->visible = (style & WS_VISIBLE) == WS_VISIBLE;
     conf->managed = data->managed;
+    conf->no_decoration = (style & WS_CAPTION) == 0;
 }
 
 static void reapply_cursor_clipping(void)
@@ -523,7 +524,7 @@ static void wayland_configure_window(HWND hwnd)
     INT window_surf_width, window_surf_height;
     UINT flags = 0;
     uint32_t state;
-    DWORD style;
+    DWORD style, flip_style = 0;
     BOOL needs_enter_size_move = FALSE;
     BOOL needs_exit_size_move = FALSE;
     struct wayland_win_data *data;
@@ -600,7 +601,8 @@ static void wayland_configure_window(HWND hwnd)
     if ((surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) &&
         wayland_surface_config_is_compatible(&surface->processing,
                                              window_surf_width, window_surf_height,
-                                             surface->window.state))
+                                             surface->window.state,
+                                             surface->window.no_decoration))
     {
         flags |= SWP_NOSIZE;
     }
@@ -620,7 +622,17 @@ static void wayland_configure_window(HWND hwnd)
 
     style = NtUserGetWindowLongW(hwnd, GWL_STYLE);
     if (!(state & WAYLAND_SURFACE_CONFIG_STATE_MAXIMIZED) != !(style & WS_MAXIMIZE))
-        NtUserSetWindowLong(hwnd, GWL_STYLE, style ^ WS_MAXIMIZE, FALSE);
+        flip_style |= WS_MAXIMIZE;
+    if (surface->processing.decoration_mode) {
+        if (surface->processing.decoration_mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
+            flip_style |= style & WS_CAPTION;
+        else
+            flip_style |= ~style & WS_CAPTION;
+    }
+    if (flip_style & WS_CAPTION)
+        flags |= SWP_FRAMECHANGED;
+    if (flip_style)
+        NtUserSetWindowLong(hwnd, GWL_STYLE, style ^ flip_style, FALSE);
 
     /* The Wayland maximized and fullscreen states are very strict about
      * surface size, so don't let the application override it. The tiled state
