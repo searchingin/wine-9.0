@@ -3629,7 +3629,7 @@ static void *alloc_virtual_heap( SIZE_T size )
 /***********************************************************************
  *           virtual_init
  */
-void virtual_init(void)
+static void real_virtual_init(void)
 {
     const struct preload_info **preload_info = dlsym( RTLD_DEFAULT, "wine_main_preload_info" );
     const char *preload;
@@ -3701,6 +3701,72 @@ void virtual_init(void)
     if (size && mmap_is_in_reserved_area( (void*)0x10000, size ) == 1)
         anon_mmap_fixed( (void *)0x10000, size, PROT_READ | PROT_WRITE, 0 );
 }
+
+#if WINE_ASAN
+static void create_view_no_check( void *base, size_t size, unsigned int vprot )
+{
+    struct file_view *view = alloc_view();
+    if (!view)
+    {
+        fprintf(stderr, "ASan: alloc_view failed: %s\n", strerror(errno));
+        abort();
+    }
+    view->base = base;
+    view->size = size;
+    view->protect = vprot;
+    register_view( view );
+}
+
+void __attribute__((no_sanitize("address"))) virtual_init(void)
+{
+    ULONG_PTR low_shadow_end, low_shadow_start, high_shadow_end, high_shadow_start;
+    ULONG_PTR page_size = host_page_size;
+    if (!page_size)
+        page_size = sysconf( _SC_PAGESIZE );
+
+    /* Mapping of the ASan shadow must be done before any instrumented code can be run. Otherwise
+     * they will try to access the shadow memory and crash */
+
+    low_shadow_end = (ULONG_PTR)ROUND_ADDR( ASAN_LOW_SHADOW_END + page_mask, page_mask );
+    low_shadow_start = ASAN_SHADOW_OFFSET - page_size;
+    if (mmap( (void *)low_shadow_start, low_shadow_end - low_shadow_start, PROT_READ | PROT_WRITE,
+              MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0 ) == MAP_FAILED)
+    {
+        fprintf(stderr, "ASan: failed to map low shadow: %s\n", strerror(errno));
+        abort();
+    }
+    high_shadow_end = (ULONG_PTR)ROUND_ADDR( ASAN_HIGH_SHADOW_END + page_mask, page_mask );
+    high_shadow_start = (ULONG_PTR)ROUND_ADDR( ASAN_HIGH_SHADOW_START, page_mask ) - page_size;
+    if (mmap((void *)high_shadow_start, high_shadow_end - high_shadow_start, PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0) == MAP_FAILED)
+    {
+        fprintf(stderr, "ASan: failed to map high shadow: %s\n", strerror(errno));
+        abort();
+    }
+
+    if (mmap((void *)low_shadow_end, high_shadow_start - low_shadow_end, PROT_NONE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0) == MAP_FAILED)
+    {
+        fprintf(stderr, "ASan: failed to protect shadow gap: %s\n", strerror(errno));
+        abort();
+    }
+
+    real_virtual_init();
+
+    /* Create views for the shadow memory */
+    create_view_no_check((void *)low_shadow_start, low_shadow_end - low_shadow_start,
+        VPROT_COMMITTED | VPROT_READ | VPROT_WRITE);
+    create_view_no_check((void *)high_shadow_start, high_shadow_end - high_shadow_start,
+        VPROT_COMMITTED | VPROT_READ | VPROT_WRITE);
+    create_view_no_check((void *)low_shadow_end, high_shadow_start - low_shadow_end, 0);
+}
+#else
+void virtual_init(void)
+{
+    real_virtual_init();
+}
+#endif
+
 
 
 /***********************************************************************

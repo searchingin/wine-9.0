@@ -162,7 +162,7 @@ static void fatal_error( const char *err, ... )
     exit(1);
 }
 
-static void set_max_limit( int limit )
+static void __attribute__((no_sanitize("address"))) set_max_limit( int limit )
 {
     struct rlimit rlimit;
 
@@ -2244,13 +2244,10 @@ static void check_command_line( int argc, char *argv[] )
  *
  * Main entry point called by the wine loader.
  */
-DECLSPEC_EXPORT void __wine_main( int argc, char *argv[] )
+DECLSPEC_EXPORT void __attribute__((no_sanitize("address"))) __wine_main( int argc, char *argv[] )
 {
     main_argc = argc;
     main_argv = argv;
-
-    init_paths();
-    if (!getenv( "WINELOADERNOEXEC" ) || argc <= 1) check_command_line( argc, argv );
 
 #ifdef RLIMIT_NOFILE
     set_max_limit( RLIMIT_NOFILE );
@@ -2262,7 +2259,15 @@ DECLSPEC_EXPORT void __wine_main( int argc, char *argv[] )
     set_max_limit( RLIMIT_NICE );
 #endif
 
+#if WINE_ASAN
+    wine_asan_init();
+#endif
+
     virtual_init();
+    init_paths();
+
+    if (!getenv( "WINELOADERNOEXEC" ) || argc <= 1) check_command_line( argc, argv );
+
     init_environment();
 
 #ifdef __APPLE__

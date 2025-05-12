@@ -37,6 +37,7 @@
 #include "ntdll_misc.h"
 #include "ddk/ntddk.h"
 #include "ddk/wdm.h"
+#include "asan_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
@@ -4391,6 +4392,10 @@ void loader_init( CONTEXT *context, void **entry )
     WINE_MODREF *wm;
 
     if (process_detaching) NtTerminateThread( GetCurrentThread(), 0 );
+
+#if WINE_ASAN
+    wine_asan_init();
+#endif
 
     RtlEnterCriticalSection( &loader_section );
 

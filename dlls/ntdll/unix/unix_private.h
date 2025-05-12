@@ -24,6 +24,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include "unixlib.h"
+#include "asan_private.h"
 #include "wine/unixlib.h"
 #include "wine/server.h"
 #include "wine/list.h"
