@@ -15,7 +15,9 @@ preloader_EXTRADEFS = -fno-builtin
 wine_OBJS = main.o
 wine_DEPS = $(WINELOADER_DEPENDS)
 wine_LDFLAGS = $(WINELOADER_LDFLAGS) $(LDEXECFLAGS) $(PTHREAD_LIBS)
+wine_SANITIZE = 0
 
 wine_preloader_OBJS = preloader.o preloader_mac.o
 wine_preloader_DEPS = $(WINELOADER_DEPENDS)
 wine_preloader_LDFLAGS = $(WINEPRELOADER_LDFLAGS)
+wine_preloader_SANITIZE = 0
