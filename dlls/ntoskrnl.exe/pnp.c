@@ -320,15 +320,26 @@ static void enumerate_new_device( DEVICE_OBJECT *device, HDEVINFO set )
     static const WCHAR infpathW[] = {'I','n','f','P','a','t','h',0};
 
     SP_DEVINFO_DATA sp_device = {sizeof(sp_device)};
-    WCHAR device_instance_id[MAX_DEVICE_ID_LEN];
+    WCHAR *device_instance_id, *id;
     DEVICE_CAPABILITIES caps;
     BOOL need_driver = TRUE;
     NTSTATUS status;
     HKEY key;
-    WCHAR *id;
+
+    device_instance_id = HeapAlloc( GetProcessHeap(), 0, MAX_DEVICE_ID_LEN * sizeof(WCHAR) );
+    if (!device_instance_id)
+    {
+        ERR("Failed to allocate memory for device instance ID\n");
+        return;
+    }
 
     if (get_device_instance_id( device, device_instance_id ))
+    {
+        HeapFree( GetProcessHeap(), 0, device_instance_id );
         return;
+    }
+
+    CONTAINING_RECORD(device, struct wine_device, device_obj)->instance_id = device_instance_id;
 
     if (!SetupDiCreateDeviceInfoW( set, device_instance_id, &GUID_NULL, NULL, NULL, 0, &sp_device )
             && !SetupDiOpenDeviceInfoW( set, device_instance_id, NULL, 0, &sp_device ))
@@ -1125,10 +1136,14 @@ static DRIVER_OBJECT *pnp_manager;
 
 struct root_pnp_device
 {
-    WCHAR id[MAX_DEVICE_ID_LEN];
     struct list entry;
     DEVICE_OBJECT *device;
 };
+
+static WCHAR *get_root_pnp_device_id( const struct root_pnp_device *device )
+{
+    return CONTAINING_RECORD(device->device, struct wine_device, device_obj)->instance_id;
+}
 
 static struct root_pnp_device *find_root_pnp_device( struct wine_driver *driver, const WCHAR *id )
 {
@@ -1136,7 +1151,7 @@ static struct root_pnp_device *find_root_pnp_device( struct wine_driver *driver,
 
     LIST_FOR_EACH_ENTRY( device, &driver->root_pnp_devices, struct root_pnp_device, entry )
     {
-        if (!wcsicmp( id, device->id ))
+        if (!wcsicmp( id, get_root_pnp_device_id( device ) ))
             return device;
     }
 
@@ -1171,6 +1186,7 @@ static NTSTATUS WINAPI pnp_manager_device_pnp( DEVICE_OBJECT *device, IRP *irp )
     case IRP_MN_QUERY_ID:
     {
         BUS_QUERY_ID_TYPE type = stack->Parameters.QueryId.IdType;
+        WCHAR *root_device_id = get_root_pnp_device_id( root_device );
         WCHAR *id, *p;
 
         TRACE("Received IRP_MN_QUERY_ID, type %#x.\n", type);
@@ -1178,11 +1194,11 @@ static NTSTATUS WINAPI pnp_manager_device_pnp( DEVICE_OBJECT *device, IRP *irp )
         switch (type)
         {
         case BusQueryDeviceID:
-            p = wcsrchr( root_device->id, '\\' );
-            if ((id = ExAllocatePool( NonPagedPool, (p - root_device->id + 1) * sizeof(WCHAR) )))
+            p = wcsrchr( root_device_id, '\\' );
+            if ((id = ExAllocatePool( NonPagedPool, (p - root_device_id + 1) * sizeof(WCHAR) )))
             {
-                memcpy( id, root_device->id, (p - root_device->id) * sizeof(WCHAR) );
-                id[p - root_device->id] = 0;
+                memcpy( id, root_device_id, (p - root_device_id) * sizeof(WCHAR) );
+                id[p - root_device_id] = 0;
                 irp->IoStatus.Information = (ULONG_PTR)id;
                 irp->IoStatus.Status = STATUS_SUCCESS;
             }
@@ -1193,7 +1209,7 @@ static NTSTATUS WINAPI pnp_manager_device_pnp( DEVICE_OBJECT *device, IRP *irp )
             }
             break;
         case BusQueryInstanceID:
-            p = wcsrchr( root_device->id, '\\' );
+            p = wcsrchr( root_device_id, '\\' );
             if ((id = ExAllocatePool( NonPagedPool, (wcslen( p + 1 ) + 1) * sizeof(WCHAR) )))
             {
                 wcscpy( id, p + 1 );
@@ -1294,7 +1310,8 @@ void CDECL wine_enumerate_root_devices( const WCHAR *driver_name )
 {
     static const WCHAR driverW[] = {'\\','D','r','i','v','e','r','\\',0};
     static const WCHAR rootW[] = {'R','O','O','T',0};
-    WCHAR buffer[MAX_SERVICE_NAME + ARRAY_SIZE(driverW)], id[MAX_DEVICE_ID_LEN];
+    static const SIZE_T id_size = MAX_DEVICE_ID_LEN * sizeof(WCHAR);
+    WCHAR buffer[MAX_SERVICE_NAME + ARRAY_SIZE(driverW)];
     SP_DEVINFO_DATA sp_device = {sizeof(sp_device)};
     struct list new_list = LIST_INIT(new_list);
     struct root_pnp_device *pnp_device, *next;
@@ -1303,6 +1320,7 @@ void CDECL wine_enumerate_root_devices( const WCHAR *driver_name )
     NTSTATUS status;
     unsigned int i;
     HDEVINFO set;
+    WCHAR *id = NULL;
 
     TRACE("Searching for new root-enumerated devices for driver %s.\n", debugstr_w(driver_name));
 
@@ -1324,7 +1342,17 @@ void CDECL wine_enumerate_root_devices( const WCHAR *driver_name )
             continue;
         }
 
-        SetupDiGetDeviceInstanceIdW( set, &sp_device, id, ARRAY_SIZE(id), NULL );
+        if (!id)
+        {
+            id = HeapAlloc( GetProcessHeap(), 0, id_size );
+            if (!id)
+            {
+                ERR("Failed to allocate memory for device instance ID\n");
+                break;
+            }
+        }
+
+        SetupDiGetDeviceInstanceIdW( set, &sp_device, id, id_size, NULL );
 
         if ((pnp_device = find_root_pnp_device( driver, id )))
         {
@@ -1343,17 +1371,21 @@ void CDECL wine_enumerate_root_devices( const WCHAR *driver_name )
             continue;
         }
 
+        CONTAINING_RECORD(device, struct wine_device, device_obj)->instance_id = id;
+        id = NULL;
+
         pnp_device = device->DeviceExtension;
-        wcscpy( pnp_device->id, id );
         pnp_device->device = device;
         list_add_tail( &new_list, &pnp_device->entry );
 
         start_device( device, set, &sp_device );
     }
 
+    HeapFree( GetProcessHeap(), 0, id );
+
     LIST_FOR_EACH_ENTRY_SAFE( pnp_device, next, &driver->root_pnp_devices, struct root_pnp_device, entry )
     {
-        TRACE("Removing device %s.\n", debugstr_w(pnp_device->id));
+        TRACE("Removing device %s.\n", debugstr_w( get_root_pnp_device_id( pnp_device ) ));
         remove_device( pnp_device->device );
     }
 
