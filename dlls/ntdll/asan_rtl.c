@@ -20,6 +20,46 @@ static FORCEINLINE NORET void asan_abort(void)
     RtlExitUserProcess(2);
 }
 
+static inline struct asan_thread_state *asan_get_thread_state(void)
+{
+    void **base = (void **)(&NtCurrentTeb()->GdiTebBatch + 1);
+    return base[-1];
+}
+
+static inline ULONG_PTR *asan_get_sp(void)
+{
+    ULONG_PTR *base = (ULONG_PTR *)(&NtCurrentTeb()->GdiTebBatch + 1);
+    return &base[-5];
+}
+
+static inline ULONG_PTR asan_get_stack_base(void)
+{
+    return (ULONG_PTR)NtCurrentTeb()->Tib.StackBase;
+}
+
+static inline BOOL asan_state_check_and_reset_unpoison_stack(void)
+{
+    struct asan_thread_state *state = asan_get_thread_state();
+    if (!state) return FALSE;
+#ifdef _WIN64
+    if (NtCurrentTeb()->WowTebOffset)
+    {
+        if (state->unpoison_stack_wow64)
+        {
+            state->unpoison_stack_wow64 = 0;
+            return TRUE;
+        }
+        return FALSE;
+    }
+#endif
+    if (state->unpoison_stack)
+    {
+        state->unpoison_stack = 0;
+        return TRUE;
+    }
+    return FALSE;
+}
+
 #define REAL(func) __wine_asan_real_##func
 #include "asan_load_store.h"
 #include "asan_fake_stack.h"
@@ -82,6 +122,24 @@ void __asan_version_mismatch_check_v8(void)
 
 void __asan_handle_no_return(void)
 {
+    struct asan_thread_state *state = asan_get_thread_state();
+    TEB *teb = NtCurrentTeb();
+    void *rsp = __builtin_frame_address(0);
+
+    if ((ULONG_PTR)rsp <= (ULONG_PTR)teb->Tib.StackBase && (ULONG_PTR)rsp > (ULONG_PTR)teb->Tib.StackLimit)
+        __asan_unpoison_stack_memory(rsp, (ULONG_PTR)teb->Tib.StackBase - (ULONG_PTR)rsp);
+
+    if (!state) return;
+
+    state->unpoison_stack_unix = 1;
+    if (NtCurrentTeb()->WowTebOffset)
+    {
+#ifdef _WIN64
+        state->unpoison_stack = 1;
+#else
+        state->unpoison_stack_wow64 = 1;
+#endif
+    }
 }
 
 void __asan_init(void)

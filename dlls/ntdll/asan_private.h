@@ -50,6 +50,13 @@ enum asan_magics
 };
 /* clang-format on */
 
+struct asan_thread_state
+{
+    UINT8 unpoison_stack : 1;
+    UINT8 unpoison_stack_unix : 1;
+    UINT8 unpoison_stack_wow64 : 1;
+};
+
 /* Test if `addr` is inside a valid fake stack frame, also returns the fake stack frame bounds via
  * `beg` and `end`, and the corresponding real stack address for `addr`.
  * (If the out pointers are not NULL)

@@ -21,14 +21,28 @@
  * function is called, and thus know which part of the stack to unpoison.
  */
 
+static FORCEINLINE void *asan_fake_stack_on_malloc(SIZE_T size_class, SIZE_T size)
+{
+    ULONG_PTR *saved_sp_ptr = asan_get_sp();
+    ULONG_PTR sp = (ULONG_PTR)__builtin_frame_address(0), saved_sp = saved_sp_ptr ? *saved_sp_ptr : 0;
+
+    if (saved_sp_ptr) *saved_sp_ptr = sp;
+    if (asan_state_check_and_reset_unpoison_stack() && saved_sp)
+        __asan_unpoison_stack_memory((void *)saved_sp, asan_get_stack_base() - saved_sp);
+
+    (void)size_class;
+    (void)size;
+    return NULL;
+}
+
 #define DEFINE_ASAN_STACK_MALLOC_FREE(size_class)                                                  \
     ASANAPI void *__asan_stack_malloc_##size_class(SIZE_T size)                                    \
     {                                                                                              \
-        return 0;                                                                                  \
+        return asan_fake_stack_on_malloc(size_class, size);                                        \
     }                                                                                              \
     ASANAPI void *__asan_stack_malloc_always_##size_class(SIZE_T size)                             \
     {                                                                                              \
-        return 0;                                                                                  \
+        return asan_fake_stack_on_malloc(size_class, size);                                        \
     }                                                                                              \
     ASANAPI void __asan_stack_free_##size_class(void *ptr, SIZE_T size)                            \
     {                                                                                              \

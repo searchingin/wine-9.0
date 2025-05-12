@@ -113,9 +113,18 @@ struct ntdll_thread_data
     PRTL_THREAD_START_ROUTINE start;  /* thread entry point */
     void              *param;         /* thread entry point parameter */
     void              *jmp_buf;       /* setjmp buffer for exception handling */
+
+    /* if ASan is enabled, the last few bytes of `GdiTebBatch` are used to store ASan thread data. */
+    /*   [0] = latest native sp
+     *   [1] = latest kernel sp
+     *   [2] = native fake stacks
+     *   [3] = kernel fake stacks
+     *   [4] = shared asan states
+     */
+    /* void *asan_data[5]; */
 };
 
-C_ASSERT( sizeof(struct ntdll_thread_data) <= sizeof(((TEB *)0)->GdiTebBatch) );
+C_ASSERT( sizeof(struct ntdll_thread_data) + sizeof(void *) * 5 <= sizeof(((TEB *)0)->GdiTebBatch) );
 
 static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
 {
