@@ -9,15 +9,29 @@
 #include "wine/asan_interface.h"
 
 #define NORET __attribute__((noreturn))
+#ifdef __clang__
+#define NOBUILTIN __attribute__((no_builtin))
+#else
+#define NOBUILTIN __attribute__((optimize("inline-stringops")))
+#endif
 #define ASANAPI
 
 ULONG_PTR __asan_shadow_memory_dynamic_address = ASAN_SHADOW_OFFSET;
 int __asan_option_detect_stack_use_after_return = 1;
 static const ULONG_PTR page_mask = 0xfff;
 
+#define ALIGNUP(s, a) (((s) + (a) - 1) & ~((a) - 1))
+
 static FORCEINLINE NORET void asan_abort(void)
 {
     RtlExitUserProcess(2);
+}
+
+static inline void *NOBUILTIN __wine_asan_real_memset(void *s, int c, ULONG_PTR n)
+{
+    char *p = (char *)s;
+    for (ULONG_PTR i = 0; i < n; ++i) p[i] = (char)c;
+    return s;
 }
 
 static inline struct asan_thread_state *asan_get_thread_state(void)

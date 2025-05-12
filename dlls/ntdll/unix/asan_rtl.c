@@ -5,6 +5,7 @@
 
 #if WINE_ASAN
 #include <stdlib.h>
+#include <dlfcn.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -14,8 +15,22 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(asan_unix);
 
+#define PROCS_NOASAN                                                                               \
+    X(memset, void *, void *s, int c, size_t n)
+
 #define NORET __attribute__((noreturn))
 #define ASANAPI __attribute__((visibility("default")))
+#ifdef __clang__
+#define NOBUILTIN __attribute__((no_builtin))
+#else
+#define NOBUILTIN __attribute__((optimize("inline-stringops")))
+#endif
+
+#define X(func, r, ...) r (*__wine_asan_real_##func)(__VA_ARGS__) = NULL;
+PROCS_NOASAN
+#undef X
+
+#define ALIGNUP(s, a) (((s) + (a) - 1) & ~((a) - 1))
 
 static FORCEINLINE NORET void asan_abort(void)
 {
@@ -56,6 +71,7 @@ static inline BOOL asan_state_check_and_reset_unpoison_stack(void)
     return FALSE;
 }
 
+#define REAL(func) __wine_asan_real_##func
 #include "../asan_load_store.h"
 #include "../asan_fake_stack.h"
 
@@ -155,6 +171,9 @@ void ASANAPI __asan_handle_no_return(void)
 /* Initialize process-wide ASan states */
 void wine_asan_init(void)
 {
+#define X(func, ...) __wine_asan_real_##func = (void *)dlsym(RTLD_NEXT, #func);
+    PROCS_NOASAN
+#undef X
     /* TODO: parse ASAN_OPTIONS */
 }
 

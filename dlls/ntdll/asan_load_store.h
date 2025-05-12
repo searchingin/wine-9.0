@@ -157,6 +157,62 @@ ASANAPI void DECLSPEC_NORETURN __asan_report_exp_store_n(void *addr, SIZE_T size
 }
 
 /* Functions concerning the poisoning of memory */
+
+/* Mark [addr, addr + size) as poisoned. Assuming addr is aligned to
+ * ASAN_GRANULE_SIZE. */
+void __wine_asan_poison_aligned_memory(void const volatile *addr, SIZE_T size, BYTE poison)
+{
+    INT8 end_offset = (INT8)(size & ASAN_GRANULE_MASK);
+    INT8 *shadow_end = (INT8 *)ASAN_MEM_TO_SHADOW(addr) + (size >> ASAN_SHADOW_SCALE_SHIFT);
+    INT8 end_value;
+    REAL(memset)((void *)ASAN_MEM_TO_SHADOW(addr), poison, size >> ASAN_SHADOW_SCALE_SHIFT);
+    if (!end_offset) return;
+    end_value = *shadow_end;
+    if (poison)
+    {
+        if (end_value > 0 && end_value <= end_offset) *shadow_end = poison;
+    }
+    else
+    {
+        if (end_value != 0 && end_value < end_offset) *shadow_end = end_offset;
+    }
+}
+
+/* Mark [addr, addr + size) as poisoned. Either or both ends may be unaligned. */
+static inline void asan_poison_memory(void const volatile *addr, SIZE_T size, BYTE poison)
+{
+    INT8 start_offset = (INT8)((ULONG_PTR)addr & ASAN_GRANULE_MASK);
+    INT8 *shadow = (INT8 *)ASAN_MEM_TO_SHADOW(addr);
+
+    if (start_offset == 0)
+    {
+        __wine_asan_poison_aligned_memory(addr, size, poison);
+        return;
+    }
+    if (size < ASAN_GRANULE_SIZE - start_offset)
+    {
+        /* [addr, addr + size) is contained within a single shadow byte */
+        if (poison)
+        {
+            if (*shadow > 0 && *shadow <= start_offset + size && start_offset < *shadow)
+                *shadow = start_offset;
+        }
+        else
+        {
+            if (*shadow > 0 && *shadow < start_offset + size) *shadow = start_offset + size;
+        }
+        return;
+    }
+    addr = (void const volatile *)(((ULONG_PTR)addr & ~ASAN_GRANULE_MASK) + ASAN_GRANULE_SIZE);
+    size = size - (ASAN_GRANULE_SIZE - start_offset);
+    __wine_asan_poison_aligned_memory(addr, size, poison);
+    if (poison)
+    {
+        if (*shadow == 0 || *shadow > start_offset) *shadow = start_offset;
+    }
+    else if (*shadow >= start_offset) *shadow = 0;
+}
+
 ASANAPI void __asan_poison_memory_region(void const volatile *addr, SIZE_T size)
 {
 }
@@ -165,13 +221,32 @@ ASANAPI void __asan_unpoison_memory_region(void const volatile *addr, SIZE_T siz
 {
 }
 
+/* For 64-bit PE, 32/64bit Unix, the stack is aligned to 16 bytes.
+ * For 32-bit PE, the stack is aligned to 4 bytes. */
+#if defined(_WIN64) || defined(WINE_UNIX_LIB)
 ASANAPI void __asan_poison_stack_memory(void const volatile *addr, SIZE_T size)
 {
+    if (size == 0) return;
+    __wine_asan_poison_aligned_memory(addr, size, ASAN_STACK_USE_AFTER_SCOPE_MAGIC);
 }
 
 ASANAPI void __asan_unpoison_stack_memory(void const volatile *addr, SIZE_T size)
 {
+    if (size == 0) return;
+    __wine_asan_poison_aligned_memory(addr, size, 0);
 }
+#else
+ASANAPI void __asan_poison_stack_memory(void const volatile *addr, SIZE_T size)
+{
+    if (size == 0) return;
+    asan_poison_memory(addr, size, ASAN_STACK_USE_AFTER_SCOPE_MAGIC);
+}
+ASANAPI void __asan_unpoison_stack_memory(void const volatile *addr, SIZE_T size)
+{
+    if (size == 0) return;
+    asan_poison_memory(addr, size, 0);
+}
+#endif
 
 /* Functions concerning query about whether memory is poisoned */
 int __asan_address_is_poisoned(void const volatile *addr)
