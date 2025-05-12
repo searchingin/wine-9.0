@@ -999,8 +999,7 @@ static void *allocate_region( struct heap *heap, ULONG flags, SIZE_T *region_siz
 }
 
 
-static NTSTATUS heap_allocate_large( struct heap *heap, ULONG flags, SIZE_T block_size,
-                                     SIZE_T size, void **ret )
+static NTSTATUS heap_allocate_large( struct heap *heap, ULONG flags, SIZE_T size, void **ret )
 {
     ARENA_LARGE *arena;
     SIZE_T total_size = ROUND_SIZE( sizeof(*arena) + size, REGION_ALIGN - 1 );
@@ -1794,7 +1793,7 @@ static struct group *group_allocate( struct heap *heap, ULONG flags, SIZE_T bloc
     heap_lock( heap, flags );
 
     if (group_block_size >= HEAP_MIN_LARGE_BLOCK_SIZE)
-        status = heap_allocate_large( heap, flags & ~HEAP_ZERO_MEMORY, group_block_size, group_size, (void **)&group );
+        status = heap_allocate_large( heap, flags & ~HEAP_ZERO_MEMORY, group_size, (void **)&group );
     else
         status = heap_allocate_block( heap, flags & ~HEAP_ZERO_MEMORY, group_block_size, group_size, (void **)&group );
 
@@ -2044,7 +2043,7 @@ void *WINAPI DECLSPEC_HOTPATCH RtlAllocateHeap( HANDLE handle, ULONG flags, SIZE
     if ((block_size = heap_get_block_size( heap, heap_flags, size )) == ~0U)
         status = STATUS_NO_MEMORY;
     else if (block_size >= HEAP_MIN_LARGE_BLOCK_SIZE)
-        status = heap_allocate_large( heap, heap_flags, block_size, size, &ptr );
+        status = heap_allocate_large( heap, heap_flags, size, &ptr );
     else if (heap->bins && !heap_allocate_block_lfh( heap, heap_flags, block_size, size, &ptr ))
         status = STATUS_SUCCESS;
     else
