@@ -50,6 +50,17 @@ enum asan_magics
 };
 /* clang-format on */
 
+/* Test if `addr` is inside a valid fake stack frame, also returns the fake stack frame bounds via
+ * `beg` and `end`, and the corresponding real stack address for `addr`.
+ * (If the out pointers are not NULL)
+ *
+ * Note `real_stack` might be slightly off, since the real stack frame pointer stored in the fake
+ * frames' metadata will be above the correct value by a little bit, because of the frame pointer
+ * and/or the return address stored on the stack. Since `real_stack` is mostly used to detect
+ * whether a `EXCEPTION_REGISTRATION_RECORD` is on a particular frame or not, this should work as
+ * long as the deviation is less than `sizeof(EXCEPTION_REGISTRATION_RECORD)`
+ */
+BOOL __wine_asan_is_inside_fake_stack_frame(ULONG_PTR addr, ULONG_PTR *beg, ULONG_PTR *end, ULONG_PTR *real_stack);
 void wine_asan_init(void);
 NTSTATUS wine_asan_alloc_thread(TEB *teb, SIZE_T user_stack_size);
 #endif
