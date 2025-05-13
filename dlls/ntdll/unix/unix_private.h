@@ -29,6 +29,7 @@
 #include "wine/server.h"
 #include "wine/list.h"
 #include "wine/debug.h"
+#include "wine/asan_interface.h"
 
 struct msghdr;
 
@@ -582,6 +583,18 @@ static inline NTSTATUS map_section( HANDLE mapping, void **ptr, SIZE_T *size, UL
     *size = 0;
     return NtMapViewOfSection( mapping, NtCurrentProcess(), ptr, user_space_wow_limit,
                                0, NULL, size, ViewShare, 0, protect );
+}
+
+/* Find a valid stack pointer address for a space region of size at least `size`, usually this just
+ * rounds `sp - size` down to `align` alignment. If ASan is enabled, we also unpoison the memory
+ * region before returning. */
+static inline ULONG_PTR find_valid_sp( ULONG_PTR sp, SIZE_T size, ULONG_PTR align )
+{
+    sp = (sp - size) & ~(align - 1);
+#if WINE_ASAN
+    __asan_unpoison_stack_memory( (void *)sp, size );
+#endif
+    return sp;
 }
 
 #endif /* __NTDLL_UNIX_PRIVATE_H */
