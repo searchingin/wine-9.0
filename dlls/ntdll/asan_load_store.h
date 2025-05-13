@@ -441,10 +441,14 @@ static inline void asan_poison_memory(void const volatile *addr, SIZE_T size, BY
 
 ASANAPI void __asan_poison_memory_region(void const volatile *addr, SIZE_T size)
 {
+    if (size == 0) return;
+    asan_poison_memory(addr, size, ASAN_USER_POISONED_MEMORY_MAGIC);
 }
 
 ASANAPI void __asan_unpoison_memory_region(void const volatile *addr, SIZE_T size)
 {
+    if (size == 0) return;
+    asan_poison_memory(addr, size, 0);
 }
 
 /* For 64-bit PE, 32/64bit Unix, the stack is aligned to 16 bytes.
