@@ -6,7 +6,9 @@
 #include <stdarg.h>
 #include "winternl.h"
 #include "asan_private.h"
+#include "wine/debug.h"
 #include "wine/asan_interface.h"
+WINE_DEFAULT_DEBUG_CHANNEL(asan);
 
 #define NORET __attribute__((noreturn))
 #ifdef __clang__

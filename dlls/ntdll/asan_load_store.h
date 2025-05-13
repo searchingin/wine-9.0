@@ -1,6 +1,20 @@
 /* Instead of forwarding calls from PE to unix, it's more efficient to just duplicate these
  * shadow memory accessing functions on both sides, since the shadow memory address would
  * be the same anyways. */
+#define _RET_IP_ __builtin_return_address(0)
+
+static FORCEINLINE BOOL memory_is_poisoned_1(const void *addr)
+{
+    INT8 shadow_value = *(INT8 *)ASAN_MEM_TO_SHADOW(addr);
+
+    if (shadow_value)
+    {
+        INT8 last_accessible_byte = (ULONG_PTR)addr & ASAN_GRANULE_MASK;
+        return last_accessible_byte >= shadow_value;
+    }
+
+    return FALSE;
+}
 
 #define DEFINE_ASAN_LOAD_STORE(size)                                                               \
     ASANAPI void __asan_load##size(void *addr)                                                     \
@@ -156,6 +170,18 @@ ASANAPI void DECLSPEC_NORETURN __asan_report_exp_store_n(void *addr, SIZE_T size
     asan_abort();
 }
 
+/* Check if `addr` has a corresponding shadow address. */
+static inline BOOL addr_in_mem(ULONG_PTR addr, SIZE_T size)
+{
+    ULONG_PTR shadow = ASAN_MEM_TO_SHADOW(addr);
+    SIZE_T shadow_size = ALIGNUP(size, ASAN_GRANULE_SIZE) / ASAN_GRANULE_SIZE;
+    if (shadow >= ASAN_LOW_SHADOW_START && shadow <= ASAN_LOW_SHADOW_END - shadow_size + 1)
+        return TRUE;
+    if (shadow >= ASAN_HIGH_SHADOW_START && shadow <= ASAN_HIGH_SHADOW_END - shadow_size + 1)
+        return TRUE;
+    return FALSE;
+}
+
 /* Functions concerning the poisoning of memory */
 
 /* Mark [addr, addr + size) as poisoned. Assuming addr is aligned to
@@ -251,9 +277,54 @@ ASANAPI void __asan_unpoison_stack_memory(void const volatile *addr, SIZE_T size
 /* Functions concerning query about whether memory is poisoned */
 int __asan_address_is_poisoned(void const volatile *addr)
 {
-    return 0;
+    if (!addr_in_mem((ULONG_PTR)addr, 1))
+    {
+        ERR("addr %p not in shadow\n", addr);
+        return 1;
+    }
+    return memory_is_poisoned_1((const void *)addr);
 }
 void *__asan_region_is_poisoned(void *beg, SIZE_T size)
 {
-    return NULL;
+    ULONG_PTR start = (ULONG_PTR)beg;
+    ULONG_PTR ptr = (start + ASAN_GRANULE_SIZE - 1) & ~ASAN_GRANULE_MASK;
+    INT8 *shadow = (INT8 *)ASAN_MEM_TO_SHADOW(ptr);
+    if (size == 0) return 0;
+    if (start + size < start) return (void *)~((ULONG_PTR)0);
+    if (!addr_in_mem(start, size)) return beg;
+    if (start != ptr)
+    {
+        ULONG_PTR start_aligned = ptr - ASAN_GRANULE_SIZE;
+        INT8 shadow_value = *(INT8 *)ASAN_MEM_TO_SHADOW(beg);
+        if (shadow_value)
+        {
+            if (shadow_value <= start - start_aligned) return beg;
+            /* If [beg, beg+size) are all in the same granule */
+            if (start + size < ptr && shadow_value >= start + size - start_aligned) return 0;
+            return (void *)(start_aligned + shadow_value);
+        }
+    }
+    while (ptr < start + size)
+    {
+        INT8 shadow_value = *shadow;
+        if (!shadow_value)
+        {
+            /* 8 bytes ok */
+            ptr += ASAN_GRANULE_SIZE;
+            shadow++;
+            continue;
+        }
+        if (shadow_value < 0)
+        {
+            /* no bytes ok */
+            return (void *)ptr;
+        }
+        if (shadow_value > start + size - ptr)
+        {
+            /* all bytes left to check are ok */
+            return 0;
+        }
+        return (void *)(ptr + shadow_value);
+    }
+    return 0;
 }
