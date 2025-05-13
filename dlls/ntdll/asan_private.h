@@ -52,10 +52,14 @@ enum asan_magics
 
 struct asan_thread_state
 {
+    UINT8 gc : 1;
+    UINT8 gc_unix : 1;
     UINT8 unpoison_stack : 1;
     UINT8 unpoison_stack_unix : 1;
     UINT8 unpoison_stack_wow64 : 1;
 };
+
+void __wine_asan_poison_aligned_memory(void const volatile *addr, SIZE_T size, BYTE poison);
 
 /* Test if `addr` is inside a valid fake stack frame, also returns the fake stack frame bounds via
  * `beg` and `end`, and the corresponding real stack address for `addr`.

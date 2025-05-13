@@ -36,6 +36,18 @@ static inline void *NOBUILTIN __wine_asan_real_memset(void *s, int c, ULONG_PTR 
     return s;
 }
 
+struct asan_fake_stack;
+static inline struct asan_fake_stack *asan_get_fake_stack(void)
+{
+    void **base = (void **)(&NtCurrentTeb()->GdiTebBatch + 1);
+#if _WIN64
+    /* when running in WoW64 mode, the 64-bit PE stack is only used briefly for initialization and
+     * for the short transition from 32 to 64-bit, disable fake stack to reduce complexity. */
+    if (NtCurrentTeb()->WowTebOffset) return NULL;
+#endif
+    return base[-3];
+}
+
 static inline struct asan_thread_state *asan_get_thread_state(void)
 {
     void **base = (void **)(&NtCurrentTeb()->GdiTebBatch + 1);
@@ -51,6 +63,21 @@ static inline ULONG_PTR *asan_get_sp(void)
 static inline ULONG_PTR asan_get_stack_base(void)
 {
     return (ULONG_PTR)NtCurrentTeb()->Tib.StackBase;
+}
+
+static inline BOOL asan_state_check_and_reset_gc(void)
+{
+    struct asan_thread_state *state = asan_get_thread_state();
+    if (!state) return FALSE;
+#ifdef _WIN64
+    if (NtCurrentTeb()->WowTebOffset) return FALSE; /* WoW64 64-bit PE doesn't use fake stacks */
+#endif
+    if (state->gc)
+    {
+        state->gc = 0;
+        return TRUE;
+    }
+    return FALSE;
 }
 
 static inline BOOL asan_state_check_and_reset_unpoison_stack(void)
@@ -147,6 +174,8 @@ void __asan_handle_no_return(void)
 
     if (!state) return;
 
+    /* schedule garbage collection for fake stacks. */
+    state->gc = state->gc_unix = 1;
     state->unpoison_stack_unix = 1;
     if (NtCurrentTeb()->WowTebOffset)
     {
