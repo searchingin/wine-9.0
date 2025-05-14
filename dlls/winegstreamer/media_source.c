@@ -137,6 +137,7 @@ struct media_stream
     DWORD stream_id;
     BOOL active;
     BOOL eos;
+    BOOL thin;
 };
 
 enum source_async_op
@@ -202,6 +203,7 @@ struct media_source
         SOURCE_SHUTDOWN,
     } state;
     float rate;
+    BOOL thin;
 
     HANDLE read_thread;
     bool read_thread_shutdown;
@@ -795,12 +797,39 @@ static HRESULT wait_on_sample(struct media_stream *stream, IUnknown *token)
 {
     struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
     struct wg_parser_buffer buffer;
+    PROPVARIANT param;
+    HRESULT hr;
 
     TRACE("%p, %p\n", stream, token);
 
     while (wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer))
     {
-        HRESULT hr = media_stream_send_sample(stream, &buffer, token);
+        if (stream->thin != source->thin)
+        {
+            param.vt = VT_INT;
+            param.iVal = source->thin;
+            if (FAILED(hr = IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamThinMode, &GUID_NULL, S_OK, &param)))
+                WARN("Failed to queue MEStreamThinMode event, hr %#lx\n", hr);
+            stream->thin = source->thin;
+
+            if (!source->thin && buffer.has_pts)
+            {
+                wg_parser_stream_seek(stream->wg_stream, 1.0, buffer.pts, 0,
+                        AM_SEEKING_AbsolutePositioning, AM_SEEKING_NoPositioning);
+                /* gstreamer gives us the next buffer twice, once with duration=0, discard */
+                wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer);
+                wg_parser_stream_release_buffer(stream->wg_stream);
+                continue;
+            }
+        }
+
+        if (source->thin && buffer.delta)
+        {
+            wg_parser_stream_release_buffer(stream->wg_stream);
+            continue;
+        }
+
+        hr = media_stream_send_sample(stream, &buffer, token);
         if (hr != S_FALSE)
             return hr;
     }
@@ -1285,15 +1314,15 @@ static HRESULT WINAPI media_source_rate_control_SetRate(IMFRateControl *iface, B
     if (rate < 0.0f)
         return MF_E_REVERSE_UNSUPPORTED;
 
-    if (thin)
-        return MF_E_THINNING_UNSUPPORTED;
-
     if (FAILED(hr = IMFRateSupport_IsRateSupported(&source->IMFRateSupport_iface, thin, rate, NULL)))
         return hr;
 
     EnterCriticalSection(&source->cs);
     source->rate = rate;
+    source->thin = thin;
     LeaveCriticalSection(&source->cs);
+
+    wg_parser_set_thin(source->wg_parser, thin);
 
     return IMFMediaEventQueue_QueueEventParamVar(source->event_queue, MESourceRateChanged, &GUID_NULL, S_OK, NULL);
 }
@@ -1304,11 +1333,10 @@ static HRESULT WINAPI media_source_rate_control_GetRate(IMFRateControl *iface, B
 
     TRACE("%p, %p, %p.\n", iface, thin, rate);
 
-    if (thin)
-        *thin = FALSE;
-
     EnterCriticalSection(&source->cs);
     *rate = source->rate;
+    if (thin)
+        *thin = source->thin;
     LeaveCriticalSection(&source->cs);
 
     return S_OK;
@@ -1734,6 +1762,7 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
     IMFByteStream_AddRef(context->stream);
     object->file_size = context->file_size;
     object->rate = 1.0f;
+    object->thin = FALSE;
     InitializeCriticalSectionEx(&object->cs, 0, RTL_CRITICAL_SECTION_FLAG_FORCE_DEBUG_INFO);
     object->cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": cs");
 
