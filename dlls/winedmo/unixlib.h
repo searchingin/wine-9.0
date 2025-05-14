@@ -121,6 +121,7 @@ struct demuxer_read_params
     struct winedmo_demuxer demuxer;
     UINT32 stream;
     struct sample sample;
+    BOOL thin;
 };
 
 struct demuxer_seek_params

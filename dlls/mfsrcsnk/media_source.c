@@ -588,7 +588,7 @@ static HRESULT demuxer_read_sample(struct winedmo_demuxer demuxer, UINT *index, 
 
         if (FAILED(hr = create_media_buffer_sample(buffer_size, &sample, &output.pBuffer)))
             return hr;
-        if ((status = winedmo_demuxer_read(demuxer, index, &output, &buffer_size)))
+        if ((status = winedmo_demuxer_read(demuxer, index, &output, &buffer_size, FALSE)))
         {
             if (status == STATUS_BUFFER_TOO_SMALL) hr = E_PENDING;
             else if (status == STATUS_END_OF_FILE) hr = MF_E_END_OF_STREAM;

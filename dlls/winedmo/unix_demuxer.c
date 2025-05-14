@@ -221,7 +221,7 @@ NTSTATUS demuxer_destroy( void *arg )
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS demuxer_filter_packet( struct demuxer *demuxer, AVPacket **packet )
+static NTSTATUS demuxer_filter_packet( struct demuxer *demuxer, AVPacket **packet, BOOL thin )
 {
     struct stream *stream;
     int i, ret;
@@ -241,6 +241,14 @@ static NTSTATUS demuxer_filter_packet( struct demuxer *demuxer, AVPacket **packe
                     stream->next_pts = (*packet)->pts + (*packet)->duration;
                 else
                     stream->next_pts = AV_NOPTS_VALUE;
+
+                if ((*packet)->flags & AV_PKT_FLAG_KEY) TRACE("Thinning: Found key frame.\n");
+                else
+                {
+                    TRACE("Thinning: Skipping delta frame.\n");
+                    av_packet_free( packet );
+                    continue;
+                }
 
                 return STATUS_SUCCESS;
             }
@@ -290,7 +298,7 @@ NTSTATUS demuxer_read( void *arg )
 
     TRACE( "demuxer %p, capacity %#x\n", demuxer, capacity );
 
-    if ((status = demuxer_filter_packet( demuxer, &packet ))) return status;
+    if ((status = demuxer_filter_packet( demuxer, &packet, params->thin ))) return status;
 
     params->sample.size = packet->size;
     if ((capacity < packet->size))

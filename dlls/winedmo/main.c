@@ -222,12 +222,12 @@ NTSTATUS CDECL winedmo_demuxer_destroy( struct winedmo_demuxer *demuxer )
     return status;
 }
 
-NTSTATUS CDECL winedmo_demuxer_read( struct winedmo_demuxer demuxer, UINT *stream, DMO_OUTPUT_DATA_BUFFER *buffer, UINT *buffer_size )
+NTSTATUS CDECL winedmo_demuxer_read( struct winedmo_demuxer demuxer, UINT *stream, DMO_OUTPUT_DATA_BUFFER *buffer, UINT *buffer_size, BOOL thin )
 {
-    struct demuxer_read_params params = {.demuxer = demuxer};
+    struct demuxer_read_params params = {.demuxer = demuxer, .thin = thin};
     NTSTATUS status;
 
-    TRACE( "demuxer %#I64x, stream %p, buffer %p, buffer_size %p\n", demuxer.handle, stream, buffer, buffer_size );
+    TRACE( "demuxer %#I64x, stream %p, buffer %p, buffer_size %p, thin %d\n", demuxer.handle, stream, buffer, buffer_size, thin );
 
     buffer_lock( buffer, &params.sample );
     status = UNIX_CALL( demuxer_read, &params );
