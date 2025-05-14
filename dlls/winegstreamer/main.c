@@ -240,6 +240,18 @@ void wg_parser_push_data(wg_parser_t parser, const void *data, uint32_t size)
     WINE_UNIX_CALL(unix_wg_parser_push_data, &params);
 }
 
+void wg_parser_set_thin(wg_parser_t parser, BOOL thin)
+{
+    struct wg_parser_set_thin_params params =
+    {
+        .parser = parser,
+        .thin = thin,
+    };
+    TRACE("parser %#I64x, thin %d.\n", parser, thin);
+
+    WINE_UNIX_CALL(unix_wg_parser_set_thin, &params);
+}
+
 uint32_t wg_parser_get_stream_count(wg_parser_t parser)
 {
     struct wg_parser_get_stream_count_params params =

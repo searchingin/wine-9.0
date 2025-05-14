@@ -81,6 +81,8 @@ void wg_parser_disconnect(wg_parser_t parser);
 bool wg_parser_get_next_read_offset(wg_parser_t parser, uint64_t *offset, uint32_t *size);
 void wg_parser_push_data(wg_parser_t parser, const void *data, uint32_t size);
 
+void wg_parser_set_thin(wg_parser_t parser, BOOL thin);
+
 uint32_t wg_parser_get_stream_count(wg_parser_t parser);
 wg_parser_stream_t wg_parser_get_stream(wg_parser_t parser, uint32_t index);
 
