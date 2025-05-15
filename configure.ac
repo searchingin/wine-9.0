@@ -203,6 +203,8 @@ then
     AS_VAR_SET([SANITIZE],[1])
 fi
 
+enable_asan_dynamic_thunk=${enable_sanitize:-no}
+
 dnl Some special cases for the 64-bit build
 if test "x$enable_win64" = "xyes"
 then
@@ -2501,6 +2503,7 @@ WINE_CONFIG_MAKEFILE(dlls/apphelp)
 WINE_CONFIG_MAKEFILE(dlls/apphelp/tests)
 WINE_CONFIG_MAKEFILE(dlls/appwiz.cpl)
 WINE_CONFIG_MAKEFILE(dlls/appxdeploymentclient)
+WINE_CONFIG_MAKEFILE(dlls/asan_dynamic_thunk)
 WINE_CONFIG_MAKEFILE(dlls/atl)
 WINE_CONFIG_MAKEFILE(dlls/atl/tests)
 WINE_CONFIG_MAKEFILE(dlls/atl100)
