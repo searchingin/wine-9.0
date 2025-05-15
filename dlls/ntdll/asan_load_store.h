@@ -255,6 +255,7 @@ ASANAPI void __asan_storeN_noabort(void *addr, SIZE_T size)
 #define DEFINE_ASAN_SET_SHADOW(byte)                                                               \
     ASANAPI void __asan_set_shadow_##byte(const void *addr, SIZE_T size)                           \
     {                                                                                              \
+        REAL(memset)((void *)addr, 0x##byte, size);                                                \
     }
 
 DEFINE_ASAN_SET_SHADOW(00);
