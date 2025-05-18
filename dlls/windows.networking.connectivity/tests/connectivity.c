@@ -82,9 +82,7 @@ static void test_NetworkInformationStatics(void)
 
     str = (void *)0xdeadbeef;
     hr = IActivationFactory_GetRuntimeClassName( factory, &str );
-    todo_wine
     ok( hr == E_ILLEGAL_METHOD_CALL, "got hr %#lx.\n", hr );
-    todo_wine
     ok( str == NULL, "got str %s.\n", wine_dbgstr_hstring( str ) );
 
     hr = CoCreateInstance( &CLSID_NetworkListManager, NULL, CLSCTX_INPROC_SERVER, &IID_INetworkListManager, (void **)&network_list_manager );
