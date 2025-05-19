@@ -23,6 +23,7 @@ AC_ARG_ENABLE(build-id, AS_HELP_STRING([--enable-build-id],[include .buildid sec
 AC_ARG_ENABLE(maintainer-mode, AS_HELP_STRING([--enable-maintainer-mode],[enable maintainer-specific build rules]))
 AC_ARG_ENABLE(sast,  AS_HELP_STRING([--enable-sast],[enable static application security testing using Clang]))
 AC_ARG_ENABLE(silent-rules, AS_HELP_STRING([--enable-silent-rules],[use silent build rules (override: "make V=1")]))
+AC_ARG_ENABLE(sanitize, AS_HELP_STRING([--enable-sanitize],[enable sanitizer integration (currently only ASan]))
 AC_ARG_ENABLE(werror, AS_HELP_STRING([--enable-werror],[treat compilation warnings as errors]))
 
 AC_ARG_WITH(alsa,      AS_HELP_STRING([--without-alsa],[do not use the Alsa sound support]))
@@ -117,6 +118,9 @@ case $host in
 esac
 
 AC_SUBST(TARGETFLAGS)
+AC_SUBST(ASANFLAGS,"")
+AC_SUBST(SANITIZE,"0")
+AC_SUBST(ASAN_SHADOW_OFFSET,"")
 case $host in
   x86_64*|amd64*)
     if test "x$enable_win64" != "xyes" -a "$cross_compiling" != "yes" -a x"$enable_archs" = x
@@ -131,12 +135,42 @@ case $host in
       TARGETFLAGS="$TARGETFLAGS -m32"
       PKG_CONFIG_LIBDIR=${PKG_CONFIG_LIBDIR:-/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib32/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig}
       export PKG_CONFIG_LIBDIR
+      dnl Non-WoW64 32bit shadow:
+      dnl || `[0x50000000, 0xffffffff]` || HighMem    ||
+      dnl || `[0x3a000000, 0x4fffffff]` || HighShadow ||
+      dnl || `[0x36000000, 0x39ffffff]` || ShadowGap  ||
+      dnl || `[0x30000000, 0x35ffffff]` || LowShadow  ||
+      dnl || `[0x00000000, 0x2fffffff]` || LowMem     ||
+      AS_VAR_SET([ASAN_SHADOW_OFFSET], ["0x30000000"])
     else
       CC="$CC -m64"
       CXX="$CXX -m64"
       host_cpu="x86_64"
       notice_platform="64-bit "
       TARGETFLAGS="$TARGETFLAGS -m64"
+      if test x"$enable_archs" = x
+      then
+        dnl Non-WoW64 64-bit, using the default shadow offset is fine since we don't need unified
+        dnl offsets for 32-bit and 64-bit. It performs slightly better.
+        dnl || `[0x10007fff8000, 0x7fffffffffff]` || HighMem    ||
+        dnl || `[0x02008fff7000, 0x10007fff7fff]` || HighShadow ||
+        dnl || `[0x00008fff7000, 0x02008fff6fff]` || ShadowGap  ||
+        dnl || `[0x00007fff8000, 0x00008fff6fff]` || LowShadow  ||
+        dnl || `[0x000000000000, 0x00007fff7fff]` || LowMem     ||
+        AS_VAR_SET([ASAN_SHADOW_OFFSET], ["0x7fff8000"])
+      else
+        dnl WoW64, unified 64-bit and 32-bit shadow offset
+        dnl || `[0x1000e0000000, 0x7fffffffffff]` || HighMem    ||
+        dnl || `[0x0200fc000000, 0x1000dfffffff]` || HighShadow ||
+        dnl || `[0x0000fc000000, 0x0200fbffffff]` || ShadowGap  ||
+        dnl || `[0x0000e0000000, 0x0000fbffffff]` || LowShadow  ||
+        dnl || `[0x000000000000, 0x0000dfffffff]` || LowMem     ||
+        dnl 32-bit view of the same shadow:
+        dnl || `[0xfc000000, 0xffffffff]` || ShadowGap  ||
+        dnl || `[0xe0000000, 0xfbffffff]` || LowShadow  ||
+        dnl || `[0x00000000, 0xdfffffff]` || LowMem     ||
+        AS_VAR_SET([ASAN_SHADOW_OFFSET], ["0xe0000000"])
+      fi
     fi
     ;;
   arm*)
@@ -154,6 +188,22 @@ case $host in
     test $wine_cv_float_abi != no || AC_MSG_ERROR([The ARM target needs to support floating point instructions.])
     ;;
 esac
+
+if test "x$enable_sanitize" = "xyes"
+then
+    WINE_TRY_CFLAGS(
+        [-fsanitize=address -fsanitize-recover=address -fasan-shadow-offset=$ASAN_SHADOW_OFFSET],
+        [AS_VAR_SET([ASANFLAGS], ["-fsanitize=address -fsanitize-recover=address -fasan-shadow-offset=$ASAN_SHADOW_OFFSET"])],
+        [WINE_TRY_CFLAGS(
+            [-fsanitize=address -fsanitize-recover=address -mllvm -asan-mapping-offset=$ASAN_SHADOW_OFFSET],
+            [AS_VAR_SET([ASANFLAGS], ["-fsanitize=address -fsanitize-recover=address -mllvm -asan-mapping-offset=$ASAN_SHADOW_OFFSET"])],
+            [AC_MSG_ERROR([Your compiler does not support AddressSanitizer, but it is requested.])]
+        )]
+    )
+    AS_VAR_SET([SANITIZE],[1])
+fi
+
+enable_asan_dynamic_thunk=${enable_sanitize:-no}
 
 dnl Some special cases for the 64-bit build
 if test "x$enable_win64" = "xyes"
@@ -614,6 +664,18 @@ This is an error since --enable-archs=$wine_arch was requested.])])
     dnl don't bother testing flags, compilation will fail afterwards
     test "x$enable_build_id" != xyes || AS_VAR_APPEND([${wine_arch}_LDFLAGS],[" -Wl,--build-id"])
 
+    if test "x$enable_sanitize" = xyes
+    then
+        AS_VAR_PUSHDEF([ac_var], ac_cv_${wine_arch}_asanflags)
+        AC_CACHE_CHECK([whether $CC supports $ASANFLAGS], ac_var,
+                       [ac_wine_try_cflags_saved=$CFLAGS
+                        CFLAGS="$CFLAGS -nostdlib -nodefaultlibs $ASANFLAGS"
+                        AC_COMPILE_IFELSE([AC_LANG_SOURCE([[int __cdecl mainCRTStartup(void) { return 0; }]])],
+                        [AS_VAR_SET(ac_var,yes)], [AS_VAR_SET(ac_var,no)])
+                        CFLAGS=$ac_wine_try_cflags_saved])
+        AS_VAR_IF([ac_var],[yes],[],[AC_MSG_ERROR([AddressSanitizer not supported by the compiler])])
+        AS_VAR_POPDEF([ac_var])
+    fi
 done
 
 CC=$saved_CC
@@ -980,7 +1042,7 @@ case $host_os in
     LDDLLFLAGS="-fPIC"
     LDEXECFLAGS="-Wl,-pie"
     enable_wineandroid_drv=${enable_wineandroid_drv:-yes}
-    WINE_TRY_CFLAGS([-Wl,-z,defs],[UNIXLDFLAGS="$UNIXLDFLAGS -Wl,-z,defs"])
+    test "x$enable_sanitize" = xyes || WINE_TRY_CFLAGS([-Wl,-z,defs],[UNIXLDFLAGS="$UNIXLDFLAGS -Wl,-z,defs"])
     WINE_TRY_CFLAGS([-fPIC -Wl,--export-dynamic],[WINELOADER_LDFLAGS="-Wl,--export-dynamic"])
     WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7d400000"
 
@@ -1010,14 +1072,17 @@ case $host_os in
         LDDLLFLAGS="-fPIC"
     fi
 
-    AC_CACHE_CHECK([whether -Wl,-z,defs works correctly], ac_cv_wl_z_defs,
-                   [ac_save_CFLAGS="$CFLAGS"
-                    CFLAGS="$CFLAGS $UNIXDLLFLAGS $UNIXLDFLAGS -Wl,-z,defs"
-                    dnl On FreeBSD, shared libraries using environ fail to link with -Wl,-z,defs
-                    AC_LINK_IFELSE([AC_LANG_SOURCE([[extern char **environ; char **envp; void myfunc(void) { envp = environ; }]])],
-                                                   [ac_cv_wl_z_defs=yes],[ac_cv_wl_z_defs=no])
-                    CFLAGS=$ac_save_CFLAGS])
-    test $ac_cv_wl_z_defs != yes || AS_VAR_APPEND([UNIXLDFLAGS],[" -Wl,-z,defs"])
+    if test "x$enable_sanitize" != xyes
+    then
+        AC_CACHE_CHECK([whether -Wl,-z,defs works correctly], ac_cv_wl_z_defs,
+                       [ac_save_CFLAGS="$CFLAGS"
+                        CFLAGS="$CFLAGS $UNIXDLLFLAGS $UNIXLDFLAGS -Wl,-z,defs"
+                        dnl On FreeBSD, shared libraries using environ fail to link with -Wl,-z,defs
+                        AC_LINK_IFELSE([AC_LANG_SOURCE([[extern char **environ; char **envp; void myfunc(void) { envp = environ; }]])],
+                                                       [ac_cv_wl_z_defs=yes],[ac_cv_wl_z_defs=no])
+                        CFLAGS=$ac_save_CFLAGS])
+        test $ac_cv_wl_z_defs != yes || AS_VAR_APPEND([UNIXLDFLAGS],[" -Wl,-z,defs"])
+    fi
 
     WINE_TRY_CFLAGS([-Wl,--export-dynamic],[WINELOADER_LDFLAGS="-Wl,--export-dynamic"])
     WINEPRELOADER_LDFLAGS="-nostartfiles -nodefaultlibs"
@@ -2438,6 +2503,7 @@ WINE_CONFIG_MAKEFILE(dlls/apphelp)
 WINE_CONFIG_MAKEFILE(dlls/apphelp/tests)
 WINE_CONFIG_MAKEFILE(dlls/appwiz.cpl)
 WINE_CONFIG_MAKEFILE(dlls/appxdeploymentclient)
+WINE_CONFIG_MAKEFILE(dlls/asan_dynamic_thunk)
 WINE_CONFIG_MAKEFILE(dlls/atl)
 WINE_CONFIG_MAKEFILE(dlls/atl/tests)
 WINE_CONFIG_MAKEFILE(dlls/atl100)

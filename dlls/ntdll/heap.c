@@ -19,6 +19,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#if 0
+#pragma makedep do_not_sanitize
+#endif
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -37,6 +41,13 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(heap);
+
+/* redzone size for blocks allocated with `ARENA_LARGE`, must be larger than sizeof(ARENA_LARGE)+4 *
+ * since max redzone for small blocks is 128 + 8 (for alignment), we choose to make the large
+ * blocks' redzone one larger */
+#define SANITIZER_LARGE_BLOCK_REDZONE 256
+/* Byte to fill freed heap memories with */
+#define SANITIZER_FREE_FILL_BYTE 0x55
 
 /* HeapCompatibilityInformation values */
 
@@ -133,6 +144,7 @@ typedef struct
 /* block must be last and aligned */
 C_ASSERT( sizeof(ARENA_LARGE) == offsetof(ARENA_LARGE, block) + sizeof(struct block) );
 C_ASSERT( sizeof(ARENA_LARGE) == 4 * BLOCK_ALIGN );
+C_ASSERT( sizeof(ARENA_LARGE) + sizeof(UINT32) <= SANITIZER_LARGE_BLOCK_REDZONE );
 
 #define BLOCK_TYPE_USED        'u'
 #define BLOCK_TYPE_DEAD        'D'
@@ -151,6 +163,7 @@ C_ASSERT( sizeof(ARENA_LARGE) == 4 * BLOCK_ALIGN );
 #define HEAP_MIN_BLOCK_SIZE   ROUND_SIZE(sizeof(struct entry) + BLOCK_ALIGN, BLOCK_ALIGN - 1)
 
 C_ASSERT( sizeof(struct block) <= HEAP_MIN_BLOCK_SIZE );
+C_ASSERT( sizeof(struct block) + sizeof(UINT32) <= ASAN_MIN_REDZONE_SIZE );
 C_ASSERT( sizeof(struct entry) <= HEAP_MIN_BLOCK_SIZE );
 
 /* used block size is coded into block_size */
@@ -300,6 +313,9 @@ struct heap
     RTL_CRITICAL_SECTION cs;
     struct entry     free_lists[FREE_LIST_COUNT];
     struct bin      *bins;
+    void            *quarantine; /* Quarantined blocks list */
+    void           **quarantine_tail;
+    SIZE_T           quarantine_size;
     SUBHEAP          subheap;
 };
 
@@ -450,6 +466,81 @@ static inline BOOL check_subheap( const SUBHEAP *subheap, const struct heap *hea
 
 static BOOL heap_validate( const struct heap *heap );
 
+/*
+ * The memory blocks allocated from the wine allocator looks like this if sanitizer is enabled:
+ * L L L L L L U U U U U U R R
+ *   L -- left redzone
+ *   U -- user memory
+ *   R -- right redzone
+ *
+ * Each block has a header associated with it, for smaller allocations, it will be a 8 bytes `struct
+ * block`; for larger ones, it will be `ARENA_LARGE`, which is 4 * BLOCK_ALIGN bytes. We want to put
+ * this header into the left redzone, so it can be protected by ASan checks as well.
+ *
+ * In order to find the header from the user memory pointer, we also store the offset from the start
+ * of `struct block` to the start of user memory as a UINT32 just before the user memory:
+ *
+ * H H L L L L S S U U U U U U R R
+ *   H -- header (8 bytes, or 4 * BLOCK_ALIGN bytes for ARENA_LARGE)
+ *   S -- offset
+ */
+static inline SIZE_T sanitizer_heap_redzone_size( SIZE_T user_requested_size )
+{
+#if WINE_ASAN
+    /* calculate redzone size of a given allocation size, taken from upstream ASan runtime. */
+    /* clang-format off */
+    UINT32 shift = user_requested_size <= 64 - 16            ? 0
+                   : user_requested_size <= 128 - 32         ? 1
+                   : user_requested_size <= 512 - 64         ? 2
+                   : user_requested_size <= 4096 - 128       ? 3
+                   : user_requested_size <= (1 << 14) - 256  ? 4
+                   : user_requested_size <= (1 << 15) - 512  ? 5
+                   : user_requested_size <= (1 << 16) - 1024 ? 6
+                                                             : 7;
+    /* clang-format on */
+    if (shift < ASAN_MIN_REDZONE_SIZE_SHIFT) shift = ASAN_MIN_REDZONE_SIZE_SHIFT;
+
+    return 1 << shift;
+#else
+    return 0;
+#endif
+}
+
+static inline void sanitizer_poison_heap( void *ptr, SIZE_T left, SIZE_T user, SIZE_T total )
+{
+#if WINE_ASAN
+    SIZE_T aligned_user = (user + ASAN_GRANULE_SIZE - 1) & ~ASAN_GRANULE_MASK;
+    UINT8 *end = (UINT8 *)ptr + left + aligned_user;
+    /* poison left and right redzones */
+    __wine_asan_poison_aligned_memory( ptr, left, ASAN_HEAP_REDZONE_MAGIC );
+    __wine_asan_poison_aligned_memory( end, total - left - aligned_user, ASAN_HEAP_REDZONE_MAGIC );
+    if ( aligned_user != user )
+    {
+        /* poison the last partial granule */
+        INT8 *shadow = (INT8 *)ASAN_MEM_TO_SHADOW( end - ASAN_GRANULE_SIZE );
+        *shadow = (INT8)(user & ASAN_GRANULE_MASK);
+    }
+#endif
+}
+
+static inline void sanitizer_resize_heap( void *ptr, SIZE_T left, SIZE_T old_size, SIZE_T size,
+                                          SIZE_T old_total, SIZE_T total )
+{
+#if WINE_ASAN
+    SIZE_T aligned_size = size & ~ASAN_GRANULE_MASK;
+    old_size &= ~ASAN_GRANULE_MASK;
+    /* left redzone must not have changed */
+    __wine_asan_poison_aligned_memory( (UINT8 *)ptr + left + aligned_size, total - left - aligned_size,
+                                        ASAN_HEAP_REDZONE_MAGIC);
+    /* unpoison the resized user region */
+    if (size < old_size) old_size = aligned_size; /* shrinking, we need to unpoison the last partial
+                                                     granule. */
+    __wine_asan_poison_aligned_memory( (UINT8 *)ptr + left + old_size, size - old_size, 0 );
+    if (old_total > total)
+        __wine_asan_poison_aligned_memory( (UINT8 *)ptr + total, old_total - total, 0 );
+#endif
+}
+
 /* mark a block of memory as innacessible for debugging purposes */
 static inline void valgrind_make_noaccess( void const *ptr, SIZE_T size )
 {
@@ -500,9 +591,9 @@ static inline void mark_block_tail( struct block *block, DWORD flags )
 }
 
 /* initialize contents of a newly created block of memory */
-static inline void initialize_block( struct block *block, SIZE_T old_size, SIZE_T size, DWORD flags )
+static inline void initialize_block( struct block *block, SIZE_T user_offset, SIZE_T old_size, SIZE_T size, DWORD flags )
 {
-    char *data = (char *)(block + 1);
+    char *data = (char *)(block + 1) + user_offset;
     SIZE_T i;
 
     if (size <= old_size) return;
@@ -596,6 +687,84 @@ static void heap_set_status( const struct heap *heap, ULONG flags, NTSTATUS stat
 {
     if (status == STATUS_NO_MEMORY && (flags & HEAP_GENERATE_EXCEPTIONS)) RtlRaiseStatus( status );
     if (status) RtlSetLastWin32ErrorAndNtStatusFromNtStatus( status );
+}
+
+static NTSTATUS heap_free_internal( struct heap *heap, struct block *block, ULONG heap_flags );
+
+/* return quarantined blocks back into the free heap. */
+static void sanitizer_quarantine_recycle( struct heap *heap, SIZE_T limit, ULONG heap_flags )
+{
+    void *free_head;
+    void **free_end = NULL;
+
+    /* take out a chunk of blocks out of the quarantine list, after they are out, they belong to
+     * this thread and we can unlock the heap. */
+    heap_lock( heap, heap_flags );
+    free_head = heap->quarantine;
+    while (heap->quarantine && heap->quarantine_size > limit)
+    {
+        struct block *block = (struct block *)((void **)heap->quarantine - 1);
+        SIZE_T total_size = block_get_size( block );
+
+        if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
+            total_size = CONTAINING_RECORD( block, ARENA_LARGE, block )->block_size +
+                         offsetof( ARENA_LARGE, block );
+
+        free_end = heap->quarantine;
+        heap->quarantine = *free_end;
+        heap->quarantine_size -= total_size;
+    }
+
+    if (!heap->quarantine) heap->quarantine_tail = &heap->quarantine;
+    heap_unlock( heap, heap_flags );
+    if (!free_end) return;
+
+    *free_end = NULL;
+    while (free_head)
+    {
+        struct block *block = (struct block *)((void **)free_head - 1);
+        void *next = *(void **)free_head;
+        NTSTATUS status;
+
+        if ((status = heap_free_internal( heap, block, heap_flags )))
+            WARN( "failed to release block from quarantine %#lx\n", status );
+        free_head = next;
+    }
+}
+
+static inline BOOL sanitizer_quarantine_block( struct heap *heap, ULONG heap_flags, struct block *block, void *ptr )
+{
+#if WINE_ASAN
+    SIZE_T user_size, total_size = block_get_size( block ), limit = __wine_asan_max_quarantine_size(),
+           quarantine_size;
+    ULONG_PTR user_offset = (ULONG_PTR)ptr - (ULONG_PTR)(block + 1);
+    void **next = (void **)(block + 1); /* block is 8 bytes and our min redzone is 16 bytes, so
+                                           there's at least 8 bytes free after the block. */
+    if (block_get_flags ( block ) & BLOCK_FLAG_LARGE)
+    {
+        ARENA_LARGE *arena = CONTAINING_RECORD( block, ARENA_LARGE, block );
+        total_size = arena->block_size + offsetof( ARENA_LARGE, block ); /* see heap_allocate_large */
+        user_size = arena->data_size;
+    }
+    else user_size = total_size - block->tail_size - sizeof(*block) - user_offset;
+
+    memset( ptr, SANITIZER_FREE_FILL_BYTE, user_size ); /* we haven't poisoned it yet, memset should
+                                                           be fine even though it's instrumented. */
+    __wine_asan_poison_aligned_memory( ptr, user_size, ASAN_HEAP_FREE_MAGIC );
+    *next = NULL;
+
+    heap_lock( heap, heap_flags );
+    *heap->quarantine_tail = (void *)next;
+    heap->quarantine_tail = next;
+    heap->quarantine_size += total_size;
+    quarantine_size = heap->quarantine_size;
+    heap_unlock( heap, heap_flags );
+
+    if (quarantine_size > limit) sanitizer_quarantine_recycle( heap, limit, heap_flags );
+    return TRUE;
+#else
+    return FALSE;
+#endif
 }
 
 static SIZE_T get_free_list_block_size( unsigned int index )
@@ -874,6 +1043,7 @@ static void insert_free_block( struct heap *heap, ULONG flags, SUBHEAP *subheap,
         /* set the next block PREV_FREE flag and back pointer */
         block_set_flags( next, 0, BLOCK_FLAG_PREV_FREE );
         valgrind_make_writable( (struct block **)next - 1, sizeof(struct block *) );
+        /* TODO: poison shadow to protect this pointer? */
         *((struct block **)next - 1) = block;
     }
 
@@ -999,19 +1169,27 @@ static void *allocate_region( struct heap *heap, ULONG flags, SIZE_T *region_siz
 }
 
 
-static NTSTATUS heap_allocate_large( struct heap *heap, ULONG flags, SIZE_T block_size,
-                                     SIZE_T size, void **ret )
+static NTSTATUS heap_allocate_large( struct heap *heap, ULONG flags, SIZE_T size, SIZE_T *total_size,
+                                     void **ret, BOOL internal )
 {
+#if WINE_ASAN
+    const BOOL sanitize = !internal;
+#else
+    const BOOL sanitize = FALSE;
+#endif
+
     ARENA_LARGE *arena;
-    SIZE_T total_size = ROUND_SIZE( sizeof(*arena) + size, REGION_ALIGN - 1 );
+    SIZE_T left_offset = sanitize ? SANITIZER_LARGE_BLOCK_REDZONE : sizeof(*arena);
+    SIZE_T extra_size = sanitize ? 2 * left_offset : left_offset;
     struct block *block;
 
-    if (total_size < size) return STATUS_NO_MEMORY;  /* overflow */
-    if (!(arena = allocate_region( heap, flags, &total_size, &total_size ))) return STATUS_NO_MEMORY;
+    *total_size = ROUND_SIZE( extra_size + size, REGION_ALIGN - 1 );
+    if (*total_size < size) return STATUS_NO_MEMORY;  /* overflow */
+    if (!(arena = allocate_region( heap, flags, total_size, total_size ))) return STATUS_NO_MEMORY;
 
     block = &arena->block;
     arena->data_size = size;
-    arena->block_size = (char *)arena + total_size - (char *)block;
+    arena->block_size = (char *)arena + *total_size - (char *)block;
 
     block_set_type( block, BLOCK_TYPE_LARGE );
     block_set_base( block, arena );
@@ -1025,7 +1203,8 @@ static NTSTATUS heap_allocate_large( struct heap *heap, ULONG flags, SIZE_T bloc
     valgrind_make_noaccess( (char *)block + sizeof(*block) + arena->data_size,
                             arena->block_size - sizeof(*block) - arena->data_size );
 
-    *ret = block + 1;
+    *ret = (INT8 *)arena + left_offset;
+    if (sanitize) *((UINT32 *)*ret - 1) = (UINT32)(left_offset - offsetof(ARENA_LARGE, block));
     return STATUS_SUCCESS;
 }
 
@@ -1292,12 +1471,22 @@ static BOOL validate_used_block( const struct heap *heap, const SUBHEAP *subheap
     return !err;
 }
 
+static inline struct block *unsafe_block_from_ptr_unchecked( const void *ptr )
+{
+#if WINE_ASAN
+    UINT32 offset = *((const UINT32 *)ptr - 1);
+    if (offset > SANITIZER_LARGE_BLOCK_REDZONE) return NULL;
+    return (struct block *)((INT8 *)ptr - offset);
+#else
+    return (struct block *)ptr - 1;
+#endif
+}
 
 static BOOL heap_validate_ptr( const struct heap *heap, const void *ptr )
 {
-    const struct block *block = (struct block *)ptr - 1;
+    const struct block *block = unsafe_block_from_ptr_unchecked( ptr );
 
-    return validate_used_block( heap, find_subheap( heap, block, FALSE ), block, BLOCK_TYPE_USED );
+    return block && validate_used_block( heap, find_subheap( heap, block, FALSE ), block, BLOCK_TYPE_USED );
 }
 
 static BOOL heap_validate( const struct heap *heap )
@@ -1338,7 +1527,7 @@ static BOOL heap_validate( const struct heap *heap )
 
             if (!validate_used_block( heap, find_subheap( heap, block, FALSE ), block, BLOCK_TYPE_DEAD ))
             {
-                ERR( "heap %p: failed to to validate delayed free block %p\n", heap, block );
+                ERR( "heap %p: failed to validate delayed free block %p\n", heap, block );
                 return FALSE;
             }
         }
@@ -1362,9 +1551,11 @@ static BOOL heap_validate( const struct heap *heap )
 
 static inline struct block *unsafe_block_from_ptr( struct heap *heap, ULONG flags, const void *ptr )
 {
-    struct block *block = (struct block *)ptr - 1;
+    struct block *block = unsafe_block_from_ptr_unchecked( ptr );
     const char *err = NULL;
     SUBHEAP *subheap;
+
+    if (!block) return NULL;
 
     if (flags & HEAP_VALIDATE)
     {
@@ -1526,6 +1717,9 @@ HANDLE WINAPI RtlCreateHeap( ULONG flags, void *addr, SIZE_T total_size, SIZE_T 
     heap->magic         = HEAP_MAGIC;
     heap->grow_size     = HEAP_INITIAL_GROW_SIZE;
     heap->min_size      = commit_size;
+#if WINE_ASAN
+    heap->quarantine_tail = &heap->quarantine;
+#endif
     list_init( &heap->subheap_list );
     list_init( &heap->large_list );
 
@@ -1630,6 +1824,10 @@ HANDLE WINAPI RtlDestroyHeap( HANDLE handle )
     }
     if (!heap) return handle;
 
+    /* release everything from the quarantine. since we are decommitting the pages, use-after-free
+     * after this will crash the program. (we will miss the nicer diagnostics though). */
+    if (heap != process_heap) sanitizer_quarantine_recycle( heap, 0, heap_flags );
+
     if ((pending = heap->pending_free))
     {
         heap->pending_free = NULL;
@@ -1679,27 +1877,35 @@ HANDLE WINAPI RtlDestroyHeap( HANDLE handle )
     return 0;
 }
 
-static SIZE_T heap_get_block_size( const struct heap *heap, ULONG flags, SIZE_T size )
+static SIZE_T heap_get_block_size( const struct heap *heap, ULONG flags, SIZE_T size, SIZE_T *redzone )
 {
     static const ULONG padd_flags = HEAP_VALIDATE | HEAP_VALIDATE_ALL | HEAP_VALIDATE_PARAMS | HEAP_ADD_USER_INFO;
     static const ULONG check_flags = HEAP_TAIL_CHECKING_ENABLED | HEAP_FREE_CHECKING_ENABLED | HEAP_CHECKING_ENABLED;
     SIZE_T overhead, block_size;
 
+    if (redzone && !*redzone) redzone = NULL;
     if ((flags & check_flags)) overhead = BLOCK_ALIGN;
     else overhead = sizeof(struct block);
 
     if ((flags & HEAP_TAIL_CHECKING_ENABLED) || RUNNING_ON_VALGRIND) overhead += BLOCK_ALIGN;
     if (flags & padd_flags) overhead += BLOCK_ALIGN;
+    /* if we are using redzone, it must be big enough to cover the metadata */
+    if (redzone && *redzone < overhead) *redzone = overhead;
+    /* left redzone covers `struct block`, and it must end at an address that's BLOCK_ALIGN aligned */
+    if (redzone) *redzone = ROUND_SIZE( *redzone - sizeof(struct block), BLOCK_ALIGN - 1 ) +
+                            sizeof(struct block);
 
     if (size < BLOCK_ALIGN) size = BLOCK_ALIGN;
-    block_size = ROUND_SIZE( size + overhead, BLOCK_ALIGN - 1 );
+    if (redzone) block_size = ROUND_SIZE( size + *redzone * 2, BLOCK_ALIGN - 1 );
+    else block_size = ROUND_SIZE( size + overhead, BLOCK_ALIGN - 1 );
 
     if (block_size < size) return ~0U;  /* overflow */
     if (block_size < HEAP_MIN_BLOCK_SIZE) block_size = HEAP_MIN_BLOCK_SIZE;
     return block_size;
 }
 
-static NTSTATUS heap_allocate_block( struct heap *heap, ULONG flags, SIZE_T block_size, SIZE_T size, void **ret )
+static NTSTATUS heap_allocate_block( struct heap *heap, ULONG flags, SIZE_T block_size, SIZE_T size,
+                                     ULONG_PTR user_offset, void **ret )
 {
     struct block *block, *next;
     SIZE_T old_block_size;
@@ -1720,13 +1926,13 @@ static NTSTATUS heap_allocate_block( struct heap *heap, ULONG flags, SIZE_T bloc
 
     block_set_type( block, BLOCK_TYPE_USED );
     block_set_flags( block, ~0, BLOCK_USER_FLAGS( flags ) );
-    block->tail_size = block_get_size( block ) - sizeof(*block) - size;
-    initialize_block( block, 0, size, flags );
+    block->tail_size = block_get_size( block ) - sizeof(*block) - size - user_offset;
+    initialize_block( block, user_offset, 0, size, flags );
     mark_block_tail( block, flags );
 
     if ((next = next_block( subheap, block ))) block_set_flags( next, BLOCK_FLAG_PREV_FREE, 0 );
 
-    *ret = block + 1;
+    *ret = (char *)(block + 1) + user_offset;
     return STATUS_SUCCESS;
 }
 
@@ -1784,19 +1990,21 @@ static inline struct block *group_find_free_block( struct group *group, SIZE_T b
 /* allocate a new group block using non-LFH allocation, returns a group owned by current thread */
 static struct group *group_allocate( struct heap *heap, ULONG flags, SIZE_T block_size )
 {
-    SIZE_T i, group_size, group_block_size;
+    SIZE_T i, group_size, group_block_size, total_size_large;
     struct group *group;
     NTSTATUS status;
 
     group_size = offsetof( struct group, first_block ) + GROUP_BLOCK_COUNT * block_size;
-    group_block_size = heap_get_block_size( heap, flags, group_size );
+    group_block_size = heap_get_block_size( heap, flags, group_size, NULL );
 
     heap_lock( heap, flags );
 
     if (group_block_size >= HEAP_MIN_LARGE_BLOCK_SIZE)
-        status = heap_allocate_large( heap, flags & ~HEAP_ZERO_MEMORY, group_block_size, group_size, (void **)&group );
+        status = heap_allocate_large( heap, flags & ~HEAP_ZERO_MEMORY, group_size, &total_size_large,
+                                      (void **)&group, TRUE );
     else
-        status = heap_allocate_block( heap, flags & ~HEAP_ZERO_MEMORY, group_block_size, group_size, (void **)&group );
+        status = heap_allocate_block( heap, flags & ~HEAP_ZERO_MEMORY, group_block_size, group_size,
+                                      0, (void **)&group );
 
     heap_unlock( heap, flags );
 
@@ -1916,7 +2124,7 @@ static struct block *find_free_bin_block( struct heap *heap, ULONG flags, SIZE_T
 }
 
 static NTSTATUS heap_allocate_block_lfh( struct heap *heap, ULONG flags, SIZE_T block_size,
-                                         SIZE_T size, void **ret )
+                                         SIZE_T size, SIZE_T user_offset, void **ret )
 {
     struct bin *bin, *last = heap->bins + BLOCK_SIZE_BIN_COUNT - 1;
     struct block *block;
@@ -1933,10 +2141,10 @@ static NTSTATUS heap_allocate_block_lfh( struct heap *heap, ULONG flags, SIZE_T 
     {
         block_set_type( block, BLOCK_TYPE_USED );
         block_set_flags( block, (BYTE)~BLOCK_FLAG_LFH, BLOCK_USER_FLAGS( flags ) );
-        block->tail_size = block_size - sizeof(*block) - size;
-        initialize_block( block, 0, size, flags );
+        block->tail_size = block_size - sizeof(*block) - size - user_offset;
+        initialize_block( block, user_offset, 0, size, flags );
         mark_block_tail( block, flags );
-        *ret = block + 1;
+        *ret = (char *)(block + 1) + user_offset;
     }
 
     return block ? STATUS_SUCCESS : STATUS_NO_MEMORY;
@@ -1959,6 +2167,9 @@ static NTSTATUS heap_free_block_lfh( struct heap *heap, ULONG flags, struct bloc
     block_set_type( block, BLOCK_TYPE_FREE );
     block_set_flags( block, (BYTE)~BLOCK_FLAG_LFH, BLOCK_FLAG_FREE );
     mark_block_free( block + 1, (char *)block + block_size - (char *)(block + 1), flags );
+#if WINE_ASAN
+    __wine_asan_poison_aligned_memory( (void *)block, block_size, 0 );
+#endif
 
     /* if this was the last used block in a group and GROUP_FLAG_FREE was set */
     if (InterlockedOr( &group->free_bits, 1 << i ) == ~(1 << i))
@@ -2035,33 +2246,54 @@ void heap_thread_detach(void)
 void *WINAPI DECLSPEC_HOTPATCH RtlAllocateHeap( HANDLE handle, ULONG flags, SIZE_T size )
 {
     struct heap *heap;
-    SIZE_T block_size;
+    SIZE_T block_size, redzone_size = sanitizer_heap_redzone_size( size );
     void *ptr = NULL;
     ULONG heap_flags;
     NTSTATUS status;
 
     heap = unsafe_heap_from_handle( handle, flags, &heap_flags );
-    if ((block_size = heap_get_block_size( heap, heap_flags, size )) == ~0U)
+    if ((block_size = heap_get_block_size( heap, heap_flags, size, &redzone_size )) == ~0U)
         status = STATUS_NO_MEMORY;
     else if (block_size >= HEAP_MIN_LARGE_BLOCK_SIZE)
-        status = heap_allocate_large( heap, heap_flags, block_size, size, &ptr );
-    else if (heap->bins && !heap_allocate_block_lfh( heap, heap_flags, block_size, size, &ptr ))
-        status = STATUS_SUCCESS;
+        status = heap_allocate_large( heap, heap_flags, size, &block_size, &ptr, FALSE );
     else
     {
-        heap_lock( heap, heap_flags );
-        status = heap_allocate_block( heap, heap_flags, block_size, size, &ptr );
-        heap_unlock( heap, heap_flags );
-
-        if (!status && heap->bins)
+        /* offset from the end of `struct block` to the start of user memory */
+        SIZE_T user_offset = redzone_size ? redzone_size - sizeof(struct block) : 0;
+        if (heap->bins && !heap_allocate_block_lfh( heap, heap_flags, block_size, size, user_offset, &ptr ))
+            status = STATUS_SUCCESS;
+        else
         {
-            SIZE_T bin = BLOCK_SIZE_BIN( block_get_size( (struct block *)ptr - 1 ) );
-            InterlockedIncrement( &heap->bins[bin].count_alloc );
-            if (!ReadNoFence( &heap->bins[bin].enabled )) bin_try_enable( heap, &heap->bins[bin] );
+            heap_lock( heap, heap_flags );
+            status = heap_allocate_block( heap, heap_flags, block_size, size, user_offset, &ptr );
+            heap_unlock( heap, heap_flags );
+
+            if (!status && heap->bins)
+            {
+                struct block *block = (struct block *)((char *)ptr - redzone_size);
+                SIZE_T bin = BLOCK_SIZE_BIN( block_get_size( block ) );
+                InterlockedIncrement( &heap->bins[bin].count_alloc );
+                if (!ReadNoFence( &heap->bins[bin].enabled )) bin_try_enable( heap, &heap->bins[bin] );
+            }
         }
+        if (!status && user_offset > 0) *((UINT32 *)ptr - 1) = (UINT32)redzone_size;
     }
 
-    if (!status) valgrind_notify_alloc( ptr, size, flags & HEAP_ZERO_MEMORY );
+    if (!status)
+    {
+        if (WINE_ASAN)
+        {
+            void *allocated = unsafe_block_from_ptr_unchecked( ptr );
+            SIZE_T left;
+            if (block_get_flags( allocated ) & BLOCK_FLAG_LARGE)
+                allocated = CONTAINING_RECORD( allocated, ARENA_LARGE, block );
+            left = (ULONG_PTR)ptr - (ULONG_PTR)allocated;
+            TRACE("poisoning, start %p, left %llu, mid %llu, right %llu\n", allocated, (ULONG64)left,
+                  (ULONG64)size, (ULONG64)(block_size - size - left));
+            sanitizer_poison_heap( allocated, left, size, block_size );
+        }
+        valgrind_notify_alloc( ptr, size, flags & HEAP_ZERO_MEMORY );
+    }
 
     TRACE( "handle %p, flags %#lx, size %#Ix, return %p, status %#lx.\n", handle, flags, size, ptr, status );
     heap_set_status( heap, flags, status );
@@ -2069,25 +2301,25 @@ void *WINAPI DECLSPEC_HOTPATCH RtlAllocateHeap( HANDLE handle, ULONG flags, SIZE
 }
 
 
-/***********************************************************************
- *           RtlFreeHeap   (NTDLL.@)
- */
-BOOLEAN WINAPI DECLSPEC_HOTPATCH RtlFreeHeap( HANDLE handle, ULONG flags, void *ptr )
+static NTSTATUS heap_free_internal( struct heap *heap, struct block *block, ULONG heap_flags )
 {
-    struct block *block;
-    struct heap *heap;
-    ULONG heap_flags;
     NTSTATUS status;
 
-    if (!ptr) return TRUE;
+#if WINE_ASAN
+    {
+        void *begin = block;
+        SIZE_T total_size = block_get_size( block );
+        if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
+        {
+            ARENA_LARGE *arena = CONTAINING_RECORD( begin, ARENA_LARGE, block );
+            total_size = arena->block_size + offsetof( ARENA_LARGE, block );
+            begin = arena;
+        }
+        __wine_asan_poison_aligned_memory( begin, total_size, 0 );
+    }
+#endif
 
-    valgrind_notify_free( ptr );
-
-    if (!(heap = unsafe_heap_from_handle( handle, flags, &heap_flags )))
-        status = STATUS_INVALID_PARAMETER;
-    else if (!(block = unsafe_block_from_ptr( heap, heap_flags, ptr )))
-        status = STATUS_INVALID_PARAMETER;
-    else if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
+    if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
         status = heap_free_large( heap, heap_flags, block );
     else if (!(block = heap_delay_free( heap, heap_flags, block )))
         status = STATUS_SUCCESS;
@@ -2104,6 +2336,34 @@ BOOLEAN WINAPI DECLSPEC_HOTPATCH RtlFreeHeap( HANDLE handle, ULONG flags, void *
         if (!status && heap->bins) InterlockedIncrement( &heap->bins[bin].count_freed );
     }
 
+    return status;
+}
+
+
+/***********************************************************************
+ *           RtlFreeHeap   (NTDLL.@)
+ */
+BOOLEAN WINAPI DECLSPEC_HOTPATCH RtlFreeHeap( HANDLE handle, ULONG flags, void *ptr )
+{
+    struct block *block;
+    struct heap *heap;
+    ULONG heap_flags;
+    NTSTATUS status;
+
+    if (!ptr) return TRUE;
+
+    if (!(heap = unsafe_heap_from_handle( handle, flags, &heap_flags )))
+        status = STATUS_INVALID_PARAMETER;
+    else if (!(block = unsafe_block_from_ptr( heap, heap_flags, ptr )))
+        status = STATUS_INVALID_PARAMETER;
+    else if (sanitizer_quarantine_block( heap, heap_flags, block, ptr ))
+        status = STATUS_SUCCESS;
+    else
+    {
+        valgrind_notify_free( ptr );
+        status = heap_free_internal( heap, block, heap_flags );
+    }
+
     TRACE( "handle %p, flags %#lx, ptr %p, return %u, status %#lx.\n", handle, flags, ptr, !status, status );
     heap_set_status( heap, flags, status );
     return !status;
@@ -2113,27 +2373,45 @@ static NTSTATUS heap_resize_large( struct heap *heap, ULONG flags, struct block 
                                    SIZE_T size, SIZE_T *old_size, void **ret )
 {
     ARENA_LARGE *large = CONTAINING_RECORD( block, ARENA_LARGE, block );
-    SIZE_T old_block_size = large->block_size;
+    SIZE_T old_total_size = large->block_size + offsetof( ARENA_LARGE, block );
+    SIZE_T redzone_size = WINE_ASAN ? SANITIZER_LARGE_BLOCK_REDZONE : sizeof(*large);
+    SIZE_T extra_size = WINE_ASAN ? redzone_size * 2 : redzone_size;
+    void *user_ptr = (INT8 *)large + redzone_size;
     *old_size = large->data_size;
 
-    if (old_block_size < block_size) return STATUS_NO_MEMORY;
+    if (old_total_size - extra_size < block_size) return STATUS_NO_MEMORY;
 
     /* FIXME: we could remap zero-pages instead */
-    valgrind_notify_resize( block + 1, *old_size, size );
-    initialize_block( block, *old_size, size, flags );
+    valgrind_notify_resize( user_ptr, *old_size, size );
+#if WINE_ASAN
+    {
+        ULONG_PTR old_end = (ULONG_PTR)user_ptr + *old_size,
+                  aligned_old_end = (old_end + ASAN_GRANULE_MASK) & ~ASAN_GRANULE_MASK;
+        SIZE_T extented = size - *old_size;
+        if (aligned_old_end != old_end)
+        {
+            *(INT8 *)ASAN_MEM_TO_SHADOW(old_end) = 0;
+            extented -= aligned_old_end - old_end;
+        }
+        __wine_asan_poison_aligned_memory( (void *)aligned_old_end, extented, 0 );
+    }
+#endif
+    initialize_block( block, redzone_size - sizeof(*large), *old_size, size, flags );
 
     large->data_size = size;
-    valgrind_make_noaccess( (char *)block + sizeof(*block) + large->data_size,
-                            old_block_size - sizeof(*block) - large->data_size );
+    valgrind_make_noaccess( (char *)large + redzone_size + large->data_size,
+                            old_total_size - redzone_size - large->data_size );
 
-    *ret = block + 1;
+    *ret = (char *)large + redzone_size;
     return STATUS_SUCCESS;
 }
 
 static NTSTATUS heap_resize_block( struct heap *heap, ULONG flags, struct block *block, SIZE_T block_size,
-                                   SIZE_T size, SIZE_T old_block_size, SIZE_T *old_size, void **ret )
+                                   SIZE_T size, SIZE_T old_block_size, SIZE_T user_offset, SIZE_T *old_size,
+                                   void **ret )
 {
     SUBHEAP *subheap = block_get_subheap( heap, block );
+    SIZE_T old_total_size = old_block_size;
     struct block *next;
 
     if (block_size > old_block_size)
@@ -2159,53 +2437,66 @@ static NTSTATUS heap_resize_block( struct heap *heap, ULONG flags, struct block 
         insert_free_block( heap, flags, subheap, next );
     }
 
-    valgrind_notify_resize( block + 1, *old_size, size );
+    valgrind_notify_resize( (char *)(block + 1) + user_offset, *old_size, size );
+    sanitizer_resize_heap( block, user_offset + sizeof(*block), *old_size, size, old_total_size, block_size );
     block_set_flags( block, BLOCK_FLAG_USER_MASK & ~BLOCK_FLAG_USER_INFO, BLOCK_USER_FLAGS( flags ) );
-    block->tail_size = block_get_size( block ) - sizeof(*block) - size;
-    initialize_block( block, *old_size, size, flags );
+    block->tail_size = block_get_size( block ) - sizeof(*block) - size - user_offset;
+    initialize_block( block, user_offset, *old_size, size, flags );
     mark_block_tail( block, flags );
 
     if ((next = next_block( subheap, block ))) block_set_flags( next, BLOCK_FLAG_PREV_FREE, 0 );
 
-    *ret = block + 1;
+    *ret = (char *)(block + 1) + user_offset;
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS heap_resize_block_lfh( struct block *block, ULONG flags, SIZE_T block_size, SIZE_T size, SIZE_T *old_size, void **ret )
+static NTSTATUS heap_resize_block_lfh( struct block *block, ULONG flags, SIZE_T block_size, SIZE_T size,
+                                       SIZE_T user_offset, SIZE_T *old_size, void **ret )
 {
     /* as native LFH does it with different block size: refuse to resize even though we could */
     if (ROUND_SIZE( *old_size, BLOCK_ALIGN - 1) != ROUND_SIZE( size, BLOCK_ALIGN - 1)) return STATUS_NO_MEMORY;
     if (size >= *old_size) return STATUS_NO_MEMORY;
 
+    sanitizer_resize_heap( block, user_offset + sizeof(*block), *old_size, size, block_size, block_size );
     block_set_flags( block, BLOCK_FLAG_USER_MASK & ~BLOCK_FLAG_USER_INFO, BLOCK_USER_FLAGS( flags ) );
-    block->tail_size = block_size - sizeof(*block) - size;
-    initialize_block( block, *old_size, size, flags );
+    block->tail_size = block_size - sizeof(*block) - size - user_offset;
+    initialize_block( block, user_offset, *old_size, size, flags );
     mark_block_tail( block, flags );
 
-    *ret = block + 1;
+    *ret = (char *)(block + 1) + user_offset;
     return STATUS_SUCCESS;
 }
 
 static NTSTATUS heap_resize_in_place( struct heap *heap, ULONG flags, struct block *block, SIZE_T block_size,
-                                      SIZE_T size, SIZE_T *old_size, void **ret )
+                                      SIZE_T size, SIZE_T redzone_size, SIZE_T old_redzone_size,
+                                      SIZE_T *old_size, void **ret )
 {
-    SIZE_T old_bin, old_block_size;
+    SIZE_T old_bin, old_block_size, user_offset = old_redzone_size - sizeof(*block);
     NTSTATUS status;
 
     if (block_get_flags( block ) & BLOCK_FLAG_LARGE)
         return heap_resize_large( heap, flags, block, block_size, size, old_size, ret );
 
     old_block_size = block_get_size( block );
-    *old_size = old_block_size - block_get_overhead( block );
+    *old_size = old_block_size - block_get_overhead( block ) - user_offset;
     old_bin = BLOCK_SIZE_BIN( old_block_size );
 
     if (block_size >= HEAP_MIN_LARGE_BLOCK_SIZE) return STATUS_NO_MEMORY;  /* growing small block to large block */
+    if (redzone_size != old_redzone_size)
+    {
+        /* redzone size must not change, though it's fine if we are going to have excessive redzone.
+         * (we try not to fail for in place shrinking the allocating, since some code expects that
+         * to never fail).
+         * redzone size is monotonically increasing w.r.t. user data size. */
+        if (*old_size < size) return STATUS_NO_MEMORY;
+        block_size = ROUND_SIZE( size + 2 * old_redzone_size, BLOCK_ALIGN - 1 );
+    }
 
     if (block_get_flags( block ) & BLOCK_FLAG_LFH)
-        return heap_resize_block_lfh( block, flags, block_size, size, old_size, ret );
+        return heap_resize_block_lfh( block, flags, block_size, size, user_offset, old_size, ret );
 
     heap_lock( heap, flags );
-    status = heap_resize_block( heap, flags, block, block_size, size, old_block_size, old_size, ret );
+    status = heap_resize_block( heap, flags, block, block_size, size, old_block_size, user_offset, old_size, ret );
     heap_unlock( heap, flags );
 
     if (!status && heap->bins)
@@ -2224,7 +2515,7 @@ static NTSTATUS heap_resize_in_place( struct heap *heap, ULONG flags, struct blo
  */
 void *WINAPI RtlReAllocateHeap( HANDLE handle, ULONG flags, void *ptr, SIZE_T size )
 {
-    SIZE_T block_size, old_size;
+    SIZE_T block_size, old_size, redzone_size = sanitizer_heap_redzone_size( size );
     struct block *block;
     struct heap *heap;
     ULONG heap_flags;
@@ -2235,12 +2526,13 @@ void *WINAPI RtlReAllocateHeap( HANDLE handle, ULONG flags, void *ptr, SIZE_T si
 
     if (!(heap = unsafe_heap_from_handle( handle, flags, &heap_flags )))
         status = STATUS_INVALID_HANDLE;
-    else if ((block_size = heap_get_block_size( heap, heap_flags, size )) == ~0U)
+    else if ((block_size = heap_get_block_size( heap, heap_flags, size, &redzone_size )) == ~0U)
         status = STATUS_NO_MEMORY;
     else if (!(block = unsafe_block_from_ptr( heap, heap_flags, ptr )))
         status = STATUS_INVALID_PARAMETER;
     else if ((status = heap_resize_in_place( heap, heap_flags, block, block_size, size,
-                                        &old_size, &ret )))
+                                             redzone_size, (ULONG_PTR)ptr - (ULONG_PTR)block,
+                                             &old_size, &ret )))
     {
         if (flags & HEAP_REALLOC_IN_PLACE_ONLY)
             status = STATUS_NO_MEMORY;
@@ -2356,9 +2648,11 @@ SIZE_T WINAPI RtlSizeHeap( HANDLE handle, ULONG flags, const void *ptr )
         status = STATUS_INVALID_PARAMETER;
     else
     {
+        SIZE_T user_offset = (ULONG_PTR)ptr - (ULONG_PTR)(block + 1);
         heap_lock( heap, heap_flags );
         status = heap_size( heap, block, &size );
         heap_unlock( heap, heap_flags );
+        size -= user_offset;
     }
 
     TRACE( "handle %p, flags %#lx, ptr %p, return %#Ix, status %#lx.\n", handle, flags, ptr, size, status );

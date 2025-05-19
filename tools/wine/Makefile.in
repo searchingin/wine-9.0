@@ -8,5 +8,6 @@ SOURCES = \
 	wine.pl.UTF-8.man.in
 
 wine_EXTRADEFS = -DBINDIR="\"${bindir}\"" -DLIBDIR="\"${libdir}\""
+wine_SANITIZE = 0
 
 INSTALL_LIB = $(PROGRAMS)

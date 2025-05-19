@@ -38,6 +38,7 @@
 #include "ntdll_misc.h"
 #include "wine/debug.h"
 #include "ntsyscalls.h"
+#include "wine/asan_interface.h"
 
 
 /*******************************************************************
@@ -229,7 +230,7 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_context )
     unwind_done:
         if (!dispatch.EstablisherFrame) break;
 
-        if (!is_valid_frame( dispatch.EstablisherFrame ))
+        if (!is_valid_frame( dispatch.EstablisherFrame, NULL ))
         {
             ERR( "invalid frame %p (%p-%p)\n", (void *)dispatch.EstablisherFrame,
                  NtCurrentTeb()->Tib.StackLimit, NtCurrentTeb()->Tib.StackBase );
@@ -266,8 +267,12 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_context )
             }
         }
         /* hack: call wine handlers registered in the tib list */
-        else while (is_valid_frame( (ULONG_PTR)teb_frame ) && (ULONG64)teb_frame < context.Rsp)
+        else while (TRUE)
         {
+            ULONG_PTR real_teb_frame;
+            if (!is_valid_frame( (ULONG_PTR)teb_frame, &real_teb_frame )) break;
+            if ((ULONG64)real_teb_frame >= context.Rsp) break;
+
             TRACE( "calling TEB handler %p (rec=%p frame=%p context=%p dispatch=%p) sp=%I64x\n",
                    teb_frame->Handler, rec, teb_frame, orig_context, &dispatch, context.Rsp );
             res = call_seh_handler( rec, (ULONG_PTR)teb_frame, orig_context,
@@ -651,13 +656,20 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
     }
 
     /* hack: remove no longer accessible TEB frames */
-    while (is_valid_frame( (ULONG_PTR)teb_frame ) && (ULONG64)teb_frame < context->Rsp)
+    while (1)
     {
+        ULONG_PTR real_teb_frame;
+        if (!is_valid_frame( (ULONG_PTR)teb_frame, &real_teb_frame )) break;
+        if ((ULONG64)real_teb_frame >= context->Rsp) break;
+
         TRACE( "removing TEB frame: %p\n", teb_frame );
         teb_frame = __wine_pop_frame( teb_frame );
     }
 
     TRACE( "returning to %p stack %p\n", (void *)context->Rip, (void *)context->Rsp );
+#if WINE_ASAN
+    __asan_handle_no_return();
+#endif
     NtContinue( context, FALSE );
 }
 
@@ -669,6 +681,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
                          PVOID retval, CONTEXT *context, UNWIND_HISTORY_TABLE *table )
 {
     EXCEPTION_REGISTRATION_RECORD *teb_frame = NtCurrentTeb()->Tib.ExceptionList;
+    ULONG_PTR real_end_frame;
     EXCEPTION_RECORD record;
     DISPATCHER_CONTEXT dispatch;
     CONTEXT new_context;
@@ -678,6 +691,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
 
     RtlCaptureContext( context );
     new_context = *context;
+    is_valid_frame( (ULONG_PTR)end_frame, &real_end_frame );
 
     /* build an exception record, if we do not have one */
     if (!rec)
@@ -692,8 +706,8 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
 
     rec->ExceptionFlags |= EXCEPTION_UNWINDING | (end_frame ? 0 : EXCEPTION_EXIT_UNWIND);
 
-    TRACE( "code=%lx flags=%lx end_frame=%p target_ip=%p\n",
-           rec->ExceptionCode, rec->ExceptionFlags, end_frame, target_ip );
+    TRACE( "code=%lx flags=%lx end_frame=%p/%p target_ip=%p\n",
+           rec->ExceptionCode, rec->ExceptionFlags, end_frame, (void *)real_end_frame, target_ip );
     for (i = 0; i < min( EXCEPTION_MAXIMUM_PARAMETERS, rec->NumberParameters ); i++)
         TRACE( " info[%ld]=%016I64x\n", i, rec->ExceptionInformation[i] );
     TRACE_CONTEXT( context );
@@ -711,7 +725,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
     unwind_done:
         if (!dispatch.EstablisherFrame) break;
 
-        if (!is_valid_frame( dispatch.EstablisherFrame ))
+        if (!is_valid_frame( dispatch.EstablisherFrame, NULL ))
         {
             ERR( "invalid frame %p (%p-%p)\n", (void *)dispatch.EstablisherFrame,
                  NtCurrentTeb()->Tib.StackLimit, NtCurrentTeb()->Tib.StackBase );
@@ -721,12 +735,12 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
 
         if (dispatch.LanguageHandler)
         {
-            if (end_frame && (dispatch.EstablisherFrame > (ULONG64)end_frame))
+            if (real_end_frame && (dispatch.EstablisherFrame > (ULONG64)real_end_frame))
             {
-                ERR( "invalid end frame %p/%p\n", (void *)dispatch.EstablisherFrame, end_frame );
+                ERR( "invalid end frame %p/%p\n", (void *)dispatch.EstablisherFrame, (void *)real_end_frame );
                 raise_status( STATUS_INVALID_UNWIND_TARGET, rec );
             }
-            if (dispatch.EstablisherFrame == (ULONG64)end_frame) rec->ExceptionFlags |= EXCEPTION_TARGET_UNWIND;
+            if (dispatch.EstablisherFrame == (ULONG64)real_end_frame) rec->ExceptionFlags |= EXCEPTION_TARGET_UNWIND;
             TRACE( "calling handler %p (rec=%p, frame=%I64x context=%p, dispatch=%p)\n",
                    dispatch.LanguageHandler, rec, dispatch.EstablisherFrame,
                    dispatch.ContextRecord, &dispatch );
@@ -754,10 +768,14 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
         }
         else  /* hack: call builtin handlers registered in the tib list */
         {
-            while (is_valid_frame( (ULONG_PTR)teb_frame ) &&
-                   (ULONG64)teb_frame < new_context.Rsp &&
-                   (ULONG64)teb_frame < (ULONG64)end_frame)
+            ULONG_PTR real_teb_frame;
+            while (TRUE)
             {
+                if (!is_valid_frame( (ULONG_PTR)teb_frame, &real_teb_frame )) break;
+                if ((ULONG64)real_teb_frame >= new_context.Rsp ||
+                    (ULONG64)real_teb_frame >= (ULONG64)real_end_frame)
+                    break;
+
                 TRACE( "calling TEB handler %p (rec=%p, frame=%p context=%p, dispatch=%p)\n",
                        teb_frame->Handler, rec, teb_frame, dispatch.ContextRecord, &dispatch );
                 res = call_unwind_handler( rec, (ULONG_PTR)teb_frame, dispatch.ContextRecord, &dispatch,
@@ -784,10 +802,10 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
                     break;
                 }
             }
-            if ((ULONG64)teb_frame == (ULONG64)end_frame && (ULONG64)end_frame < new_context.Rsp) break;
+            if ((ULONG64)real_teb_frame == (ULONG64)real_end_frame && (ULONG64)real_end_frame < new_context.Rsp) break;
         }
 
-        if (dispatch.EstablisherFrame == (ULONG64)end_frame) break;
+        if (dispatch.EstablisherFrame == (ULONG64)real_end_frame) break;
         *context = new_context;
     }
 
@@ -867,7 +885,7 @@ ULONG WINAPI RtlWalkFrameChain( void **buffer, ULONG count, ULONG flags )
                                &data, &frame, NULL, NULL, NULL, &handler, 0 ))
             break;
         if (!context.Rip) break;
-        if (!frame || !is_valid_frame( frame )) break;
+        if (!frame || !is_valid_frame( frame, NULL )) break;
         if (context.Rsp == (ULONG_PTR)NtCurrentTeb()->Tib.StackBase) break;
         if (i >= skip) buffer[num_entries++] = (void *)context.Rip;
     }

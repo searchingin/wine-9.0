@@ -1222,6 +1222,10 @@ NTSTATUS init_thread_stack( TEB *teb, ULONG_PTR limit, SIZE_T reserve_size, SIZE
         wow_teb->Tib.StackBase = PtrToUlong( stack.StackBase );
         wow_teb->Tib.StackLimit = PtrToUlong( stack.StackLimit );
         wow_teb->DeallocationStack = PtrToUlong( stack.DeallocationStack );
+#if WINE_ASAN
+        if ((status = wine_asan_alloc_thread(teb, (ULONG_PTR)stack.StackBase - (ULONG_PTR)stack.StackLimit)))
+            return status;
+#endif
         return STATUS_SUCCESS;
 #else
         wow_teb->Tib.StackBase = wow_teb->TlsSlots[WOW64_TLS_CPURESERVED] = PtrToUlong( cpu );
@@ -1254,6 +1258,10 @@ NTSTATUS init_thread_stack( TEB *teb, ULONG_PTR limit, SIZE_T reserve_size, SIZE
     teb->Tib.StackBase = stack.StackBase;
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;
+#if WINE_ASAN
+    if ((status = wine_asan_alloc_thread(teb, (ULONG_PTR)stack.StackBase - (ULONG_PTR)stack.StackLimit)))
+        return status;
+#endif
     return STATUS_SUCCESS;
 }
 

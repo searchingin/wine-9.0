@@ -1,0 +1,3 @@
+STATICLIB = libasan_dynamic_thunk.a
+SOURCES = \
+	thunk.c

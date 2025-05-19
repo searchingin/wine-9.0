@@ -36,6 +36,7 @@
 #include "kernelbase.h"
 #include "wine/exception.h"
 #include "wine/debug.h"
+#include "wine/asan_interface.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(heap);
 WINE_DECLARE_DEBUG_CHANNEL(virtual);
@@ -1092,6 +1093,13 @@ LPVOID WINAPI DECLSPEC_HOTPATCH LocalLock( HLOCAL handle )
     if (!handle) return NULL;
     if ((ret = unsafe_ptr_from_HLOCAL( handle )))
     {
+#if WINE_ASAN
+        if (__asan_address_is_poisoned( ret ))
+        {
+            ERR("handle %p is invalid because %p is poisoned\n", handle, ret );
+            return NULL;
+        }
+#endif
         __TRY
         {
             volatile char *p = ret;

@@ -1750,10 +1750,10 @@ __ASM_GLOBAL_FUNC( user_mode_abort_thread,
 NTSTATUS KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len )
 {
     struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
-    ULONG64 rsp = (frame->rsp - offsetof( struct callback_stack_layout, args_data[len] )) & ~15;
+    ULONG64 rsp = find_valid_sp(frame->rsp, offsetof( struct callback_stack_layout, args_data[len] ), 16);
     struct callback_stack_layout *stack = (struct callback_stack_layout *)rsp;
 
-    if ((char *)ntdll_get_thread_data()->kernel_stack + min_kernel_stack > (char *)&frame)
+    if ((char *)ntdll_get_thread_data()->kernel_stack + min_kernel_stack > (char *)__builtin_frame_address(0))
         return STATUS_STACK_OVERFLOW;
 
     stack->args              = stack->args_data;

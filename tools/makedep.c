@@ -102,6 +102,7 @@ struct incl_file
 #define FLAG_C_UNIX         0x080000  /* file is part of a Unix library */
 #define FLAG_SFD_FONTS      0x100000  /* sfd file generated bitmap fonts */
 #define FLAG_ARM64EC_X64    0x200000  /* use x86_64 object on ARM64EC */
+#define FLAG_NO_SANITIZE    0x400000  /* disable sanitizers for this file */
 
 static const struct
 {
@@ -143,6 +144,7 @@ static struct strarray cmdline_vars;
 static struct strarray subdirs;
 static struct strarray delay_import_libs;
 static struct strarray top_install[NB_INSTALL_RULES];
+static struct strarray asanflags;
 static const char *root_src_dir;
 static const char *tools_dir;
 static const char *tools_ext;
@@ -160,6 +162,7 @@ static const char *sed_cmd;
 static const char *wayland_scanner;
 static const char *sarif_converter;
 static const char *compiler_rt;
+static const char *sanitize;
 static int so_dll_supported;
 static int unix_lib_supported;
 /* per-architecture global variables */
@@ -1020,6 +1023,7 @@ static void parse_pragma_directive( struct file *source, char *str )
             if (!strcmp( flag, "implib" )) source->flags |= FLAG_C_IMPLIB;
             if (!strcmp( flag, "unix" )) source->flags |= FLAG_C_UNIX;
             if (!strcmp( flag, "arm64ec_x64" )) source->flags |= FLAG_ARM64EC_X64;
+            if (!strcmp( flag, "do_not_sanitize" )) source->flags |= FLAG_NO_SANITIZE;
         }
     }
 }
@@ -1795,6 +1799,19 @@ static struct strarray get_expanded_file_local_var( const struct makefile *make,
 
 
 /*******************************************************************
+ *         get_expanded_file_local_var
+ */
+static const char *get_file_local_var( const struct makefile *make, const char *file,
+                                       const char *name )
+{
+    char *p, *var = strmake( "%s_%s", file, name );
+
+    for (p = var; *p; p++) if (!isalnum( *p )) *p = '_';
+    return get_make_variable( make, var );
+}
+
+
+/*******************************************************************
  *         get_expanded_arch_var
  */
 static char *get_expanded_arch_var( const struct makefile *make, const char *name, int arch )
@@ -2292,13 +2309,20 @@ static struct strarray get_default_imports( const struct makefile *make, struct 
     struct strarray ret = empty_strarray;
     const char *crt_dll = get_default_crt( make );
     unsigned int i;
+    bool should_add_asan = sanitize && !strcmp( sanitize, "1" ) &&
+                           (!make->module || strcmp( make->module, "ntdll.dll" ));
 
     if (nodefaultlibs)
     {
         for (i = 0; i < imports.count; i++)
-            if (!strcmp( imports.str[i], "winecrt0" )) return ret;
+            if (!strcmp( imports.str[i], "winecrt0" ))
+            {
+                if (should_add_asan) strarray_add( &ret, "asan_dynamic_thunk" );
+                return ret;
+            }
         strarray_add( &ret, "winecrt0" );
         if (compiler_rt) strarray_add( &ret, compiler_rt );
+        if (should_add_asan) strarray_add( &ret, "asan_dynamic_thunk" );
         return ret;
     }
 
@@ -2314,6 +2338,7 @@ static struct strarray get_default_imports( const struct makefile *make, struct 
         strarray_add( &ret, "kernel" );
 
     strarray_add( &ret, "kernel32" );
+    if (should_add_asan) strarray_add( &ret, "asan_dynamic_thunk" );
     strarray_add( &ret, "ntdll" );
     return ret;
 }
@@ -3275,6 +3300,17 @@ static void output_source_one_arch( struct makefile *make, struct incl_file *sou
         strarray_addall( &cflags, make->extlib ? extra_cflags_extlib[arch] : extra_cflags[arch] );
     }
 
+    if (!(source->file->flags & FLAG_NO_SANITIZE) && sanitize && !strcmp( sanitize, "1" ))
+    {
+        /* For programs that runs on Unix host, we just pass -fsanitize=address
+         * but for unixlibs and PE objects, we pass flags that specifies where the shadow will be
+         * mapped */
+        if (make->programs.count)
+            strarray_add( &cflags, "-fsanitize=address" );
+        else
+            strarray_addall( &cflags, asanflags );
+    }
+
     if (!arch)
     {
         if (source->file->flags & FLAG_C_UNIX)
@@ -3747,17 +3783,21 @@ static void output_programs( struct makefile *make )
     {
         const char *install_dir;
         char *program = strmake( "%s%s", make->programs.str[i], exe_ext );
+        const char *program_sanitize = get_file_local_var( make, make->programs.str[i], "SANITIZE" );
         struct strarray deps = get_local_dependencies( make, make->programs.str[i], make->in_files );
         struct strarray all_libs = get_expanded_file_local_var( make, make->programs.str[i], "LDFLAGS" );
         struct strarray objs     = get_expanded_file_local_var( make, make->programs.str[i], "OBJS" );
         struct strarray symlinks = get_expanded_file_local_var( make, make->programs.str[i], "SYMLINKS" );
 
+        if (!program_sanitize) program_sanitize = sanitize;
         if (!objs.count) objs = make->object_files[arch];
         if (!strarray_exists( all_libs, "-nodefaultlibs" ))
         {
             strarray_addall( &all_libs, get_expanded_make_var_array( make, "UNIX_LIBS" ));
             strarray_addall( &all_libs, libs );
         }
+        if (program_sanitize && !strcmp( program_sanitize, "1" ))
+            strarray_add( &all_libs, "-fsanitize=address" );
 
         output( "%s:", obj_dir_path( make, program ) );
         output_filenames_obj_dir( make, objs );
@@ -4659,6 +4699,7 @@ int main( int argc, char *argv[] )
     top_makefile = parse_makefile( NULL );
 
     target_flags[0]    = get_expanded_make_var_array( top_makefile, "TARGETFLAGS" );
+    asanflags          = get_expanded_make_var_array( top_makefile, "ASANFLAGS" );
     msvcrt_flags       = get_expanded_make_var_array( top_makefile, "MSVCRTFLAGS" );
     dll_flags          = get_expanded_make_var_array( top_makefile, "DLLFLAGS" );
     unix_dllflags      = get_expanded_make_var_array( top_makefile, "UNIXDLLFLAGS" );
@@ -4687,6 +4728,7 @@ int main( int argc, char *argv[] )
     wayland_scanner    = get_expanded_make_variable( top_makefile, "WAYLAND_SCANNER" );
     sarif_converter    = get_expanded_make_variable( top_makefile, "SARIF_CONVERTER" );
     compiler_rt        = get_expanded_make_variable( top_makefile, "COMPILER_RT_PE_LIBS" );
+    sanitize           = get_make_variable( top_makefile, "SANITIZE" );
 
     if (root_src_dir && !strcmp( root_src_dir, "." )) root_src_dir = NULL;
     if (tools_dir && !strcmp( tools_dir, "." )) tools_dir = NULL;

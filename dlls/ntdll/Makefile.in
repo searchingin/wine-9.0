@@ -1,4 +1,9 @@
-EXTRADEFS = -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI=
+EXTRADEFS = \
+	-D_NTSYSTEM_ \
+	-D_ACRTIMP= \
+	-DWINBASEAPI= \
+	-DWINE_ASAN=$(SANITIZE) \
+	-DASAN_SHADOW_OFFSET=$(ASAN_SHADOW_OFFSET)
 MODULE    = ntdll.dll
 UNIXLIB   = ntdll.so
 IMPORTLIB = ntdll
@@ -13,6 +18,7 @@ x86_64_EXTRADLLFLAGS = -Wl,--image-base,0x170000000
 
 SOURCES = \
 	actctx.c \
+	asan_rtl.c \
 	atom.c \
 	crypt.c \
 	debugbuffer.c \
@@ -46,6 +52,7 @@ SOURCES = \
 	thread.c \
 	threadpool.c \
 	time.c \
+	unix/asan_rtl.c \
 	unix/cdrom.c \
 	unix/debug.c \
 	unix/env.c \

@@ -70,7 +70,7 @@ static inline CHPE_V2_CPU_AREA_INFO *get_arm64ec_cpu_area(void)
 static inline BOOL is_valid_arm64ec_frame( ULONG_PTR frame )
 {
     if (frame & (sizeof(void*) - 1)) return FALSE;
-    if (is_valid_frame( frame )) return TRUE;
+    if (is_valid_frame( frame, NULL )) return TRUE;
     return (frame >= get_arm64ec_cpu_area()->EmulatorStackLimit &&
             frame <= get_arm64ec_cpu_area()->EmulatorStackBase);
 }
@@ -1179,7 +1179,7 @@ NTSTATUS call_seh_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_context )
             }
         }
         /* hack: call wine handlers registered in the tib list */
-        else while (is_valid_frame( (ULONG_PTR)teb_frame ) && (ULONG64)teb_frame < context.Sp)
+        else while (is_valid_frame( (ULONG_PTR)teb_frame, NULL ) && (ULONG64)teb_frame < context.Sp)
         {
             TRACE( "calling TEB handler %p (rec=%p frame=%p context=%p dispatch=%p) sp=%I64x\n",
                    teb_frame->Handler, rec, teb_frame, orig_context, &dispatch, context.Sp );
@@ -1574,7 +1574,7 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
     }
 
     /* hack: remove no longer accessible TEB frames */
-    while (is_valid_frame( (ULONG_PTR)teb_frame ) && (ULONG64)teb_frame < context->Rsp)
+    while (is_valid_frame( (ULONG_PTR)teb_frame, NULL ) && (ULONG64)teb_frame < context->Rsp)
     {
         TRACE( "removing TEB frame: %p\n", teb_frame );
         teb_frame = __wine_pop_frame( teb_frame );
@@ -1794,7 +1794,7 @@ ULONG WINAPI RtlWalkFrameChain( void **buffer, ULONG count, ULONG flags )
                                &data, &frame, NULL, NULL, NULL, &handler, 0 ))
             break;
         if (!context.Rip) break;
-        if (!frame || !is_valid_frame( frame )) break;
+        if (!frame || !is_valid_frame( frame, NULL )) break;
         if (context.Rsp == (ULONG_PTR)NtCurrentTeb()->Tib.StackBase) break;
         if (i >= skip) buffer[num_entries++] = (void *)context.Rip;
     }

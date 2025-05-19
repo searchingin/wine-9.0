@@ -24,10 +24,12 @@
 #include <pthread.h>
 #include <signal.h>
 #include "unixlib.h"
+#include "asan_private.h"
 #include "wine/unixlib.h"
 #include "wine/server.h"
 #include "wine/list.h"
 #include "wine/debug.h"
+#include "wine/asan_interface.h"
 
 struct msghdr;
 
@@ -112,9 +114,18 @@ struct ntdll_thread_data
     PRTL_THREAD_START_ROUTINE start;  /* thread entry point */
     void              *param;         /* thread entry point parameter */
     void              *jmp_buf;       /* setjmp buffer for exception handling */
+
+    /* if ASan is enabled, the last few bytes of `GdiTebBatch` are used to store ASan thread data. */
+    /*   [0] = latest native sp
+     *   [1] = latest kernel sp
+     *   [2] = native fake stacks
+     *   [3] = kernel fake stacks
+     *   [4] = shared asan states
+     */
+    /* void *asan_data[5]; */
 };
 
-C_ASSERT( sizeof(struct ntdll_thread_data) <= sizeof(((TEB *)0)->GdiTebBatch) );
+C_ASSERT( sizeof(struct ntdll_thread_data) + sizeof(void *) * 5 <= sizeof(((TEB *)0)->GdiTebBatch) );
 
 static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
 {
@@ -135,7 +146,8 @@ static const SIZE_T page_size = 0x1000;
 static const SIZE_T teb_size = 0x3800;  /* TEB64 + TEB32 + debug info */
 static const SIZE_T signal_stack_mask = 0xffff;
 static const SIZE_T signal_stack_size = 0x10000 - 0x3800;
-static const SIZE_T kernel_stack_size = 0x100000;
+static const SIZE_T kernel_stack_shift = 20;
+static const SIZE_T kernel_stack_size = 1 << kernel_stack_shift;
 static const SIZE_T min_kernel_stack  = 0x2000;
 static const LONG teb_offset = 0x2000;
 
@@ -572,6 +584,18 @@ static inline NTSTATUS map_section( HANDLE mapping, void **ptr, SIZE_T *size, UL
     *size = 0;
     return NtMapViewOfSection( mapping, NtCurrentProcess(), ptr, user_space_wow_limit,
                                0, NULL, size, ViewShare, 0, protect );
+}
+
+/* Find a valid stack pointer address for a space region of size at least `size`, usually this just
+ * rounds `sp - size` down to `align` alignment. If ASan is enabled, we also unpoison the memory
+ * region before returning. */
+static inline ULONG_PTR find_valid_sp( ULONG_PTR sp, SIZE_T size, ULONG_PTR align )
+{
+    sp = (sp - size) & ~(align - 1);
+#if WINE_ASAN
+    __asan_unpoison_stack_memory( (void *)sp, size );
+#endif
+    return sp;
 }
 
 #endif /* __NTDLL_UNIX_PRIVATE_H */

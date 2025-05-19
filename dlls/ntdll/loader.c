@@ -4392,6 +4392,10 @@ void loader_init( CONTEXT *context, void **entry )
 
     if (process_detaching) NtTerminateThread( GetCurrentThread(), 0 );
 
+#if WINE_ASAN
+    wine_asan_init();
+#endif
+
     RtlEnterCriticalSection( &loader_section );
 
     if (!imports_fixup_done)

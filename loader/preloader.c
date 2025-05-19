@@ -60,6 +60,10 @@
  *  http://www.linuxbase.org/spec/booksets/LSB-Embedded/LSB-Embedded/book387.html
  */
 
+#if 0
+#pragma makedep do_not_sanitize
+#endif
+
 #ifdef __linux__
 
 #include "config.h"

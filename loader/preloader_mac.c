@@ -22,6 +22,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#if 0
+#pragma makedep do_not_sanitize
+#endif
+
 #ifdef __APPLE__
 
 #include "config.h"
