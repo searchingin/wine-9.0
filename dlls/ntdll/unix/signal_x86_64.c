@@ -2971,6 +2971,11 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
                    "testl $4,%r14d\n\t"            /* SYSCALL_HAVE_PTHREAD_TEB */
                    "jz 1f\n\t"
                    "movw 0x338(%r13),%fs\n"        /* amd64_thread_data()->fs */
+# ifdef __FreeBSD__
+                   /* reset %ss (after sysret) for AMD */
+                   "movq $0x3b,%rsi\n\t"           /* GSEL(GUDATA_SEL, SEL_UPL) */
+                   "movq %rsi,%ss\n\t"
+# endif
                    "1:\n\t"
 #elif defined __APPLE__
                    "movq %rax,%r8\n\t"
@@ -3258,6 +3263,11 @@ __ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
                    "testl $4,%r14d\n\t"            /* SYSCALL_HAVE_PTHREAD_TEB */
                    "jz 1f\n\t"
                    "movw 0x338(%r13),%fs\n"        /* amd64_thread_data()->fs */
+# ifdef __FreeBSD__
+                   /* reset %ss (after sysret) for AMD */
+                   "movq $0x3b,%rsi\n\t"           /* GSEL(GUDATA_SEL, SEL_UPL) */
+                   "movq %rsi,%ss\n\t"
+# endif
                    "1:\n\t"
 #elif defined __APPLE__
                    "movq %rax,%rdx\n\t"
