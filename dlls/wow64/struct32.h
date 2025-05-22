@@ -651,6 +651,23 @@ typedef struct
 
 typedef struct
 {
+    USHORT Length;
+    UCHAR  ScsiStatus;
+    UCHAR  PathId;
+    UCHAR  TargetId;
+    UCHAR  Lun;
+    UCHAR  CdbLength;
+    UCHAR  SenseInfoLength;
+    UCHAR  DataIn;
+    ULONG  DataTransferLength;
+    ULONG  TimeOutValue;
+    ULONG  DataBuffer;
+    ULONG  SenseInfoOffset;
+    UCHAR  Cdb[16];
+} SCSI_PASS_THROUGH_DIRECT32;
+
+typedef struct
+{
     LOGICAL_PROCESSOR_RELATIONSHIP Relationship;
     DWORD Size;
     union
