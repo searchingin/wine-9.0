@@ -82,38 +82,19 @@ static HRESULT create_effect_pool(DWORD *data, ID3D10Device *device, ID3D10Effec
     return D3D10CreateEffectPoolFromMemory(data, data[6], 0, device, pool);
 }
 
-/*
- * test_effect_constant_buffer_type
- */
-#if 0
-cbuffer cb : register(b1)
-{
-    float   f1 : SV_POSITION;
-    float   f2 : COLOR0;
-};
-
-cbuffer cb2 : register(b0)
-{
-    float   f3 : packoffset(c2);
-};
-#endif
-static DWORD fx_test_ecbt[] =
-{
-    0x43425844, 0x7cfb8cde, 0x31ec2d95, 0x38500042, 0xa9330c67, 0x00000001, 0x00000145, 0x00000001,
-    0x00000024, 0x30315846, 0x00000119, 0xfeff1001, 0x00000002, 0x00000003, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000049, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x66006263,
-    0x74616f6c, 0x00000700, 0x00000100, 0x00000000, 0x00000400, 0x00001000, 0x00000400, 0x00090900,
-    0x00316600, 0x505f5653, 0x5449534f, 0x004e4f49, 0x43003266, 0x524f4c4f, 0x62630030, 0x33660032,
-    0x00000400, 0x00001000, 0x00000000, 0x00000200, 0x00000100, 0x00000000, 0x00002900, 0x00000d00,
-    0x00002c00, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00003800, 0x00000d00, 0x00003b00,
-    0x00000400, 0x00000000, 0x00000000, 0x00000000, 0x00004200, 0x00003000, 0x00000000, 0x00000100,
-    0x00000000, 0x00000000, 0x00004600, 0x00000d00, 0x00000000, 0x00002000, 0x00000000, 0x00000400,
-    0x00000000, 0x00000000,
-};
-
 static void test_effect_constant_buffer_type(void)
 {
+    static char source[] =
+        "cbuffer cb : register(b1)\n"
+        "{\n"
+        "    float   f1 : SV_POSITION;\n"
+        "    float   f2 : COLOR0;\n"
+        "};\n"
+        "\n"
+        "cbuffer cb2 : register(b0)\n"
+        "{\n"
+        "    float   f3 : packoffset(c2);\n"
+        "};";
     ID3D10Effect *effect;
     ID3D10EffectConstantBuffer *constantbuffer;
     ID3D10EffectType *type, *type2, *null_type;
@@ -125,6 +106,7 @@ static void test_effect_constant_buffer_type(void)
     D3D10_EFFECT_DESC desc;
     ID3D10Device *device;
     ID3D10Buffer *buffer;
+    ID3D10Blob *blob;
     ULONG refcount;
     HRESULT hr;
     LPCSTR string;
@@ -136,10 +118,14 @@ static void test_effect_constant_buffer_type(void)
         return;
     }
 
-    hr = create_effect(fx_test_ecbt, 0, NULL, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, NULL, NULL, &effect);
     ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#lx.\n", hr);
 
-    hr = create_effect(fx_test_ecbt, 0, device, NULL, &effect);
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, NULL);
@@ -148,7 +134,7 @@ static void test_effect_constant_buffer_type(void)
     hr = effect->lpVtbl->GetDesc(effect, &desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n", desc.ConstantBuffers);
+    ok(desc.ConstantBuffers == 3, "Unexpected constant buffers count %u.\n", desc.ConstantBuffers);
     ok(desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             desc.SharedConstantBuffers);
     ok(desc.GlobalVariables == 3, "Unexpected global variables count %u.\n", desc.GlobalVariables);
@@ -156,7 +142,7 @@ static void test_effect_constant_buffer_type(void)
             desc.SharedGlobalVariables);
     ok(desc.Techniques == 0, "Unexpected techniques count %u.\n", desc.Techniques);
 
-    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 0);
+    constantbuffer = effect->lpVtbl->GetConstantBufferByName(effect, "cb");
 
     hr = constantbuffer->lpVtbl->GetDesc(constantbuffer, &var_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
@@ -273,7 +259,7 @@ static void test_effect_constant_buffer_type(void)
     string = type->lpVtbl->GetMemberSemantic(type, 3);
     ok(string == NULL, "GetMemberSemantic is \"%s\", expected \"NULL\"\n", string);
 
-    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 1);
+    constantbuffer = effect->lpVtbl->GetConstantBufferByName(effect, "cb2");
     v = constantbuffer->lpVtbl->GetMemberByIndex(constantbuffer, 0);
     hr = v->lpVtbl->GetDesc(v, &var_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
@@ -291,60 +277,30 @@ static void test_effect_constant_buffer_type(void)
 
     effect->lpVtbl->Release(effect);
 
+    ID3D10Blob_Release(blob);
+
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-/*
- * test_effect_variable_type
- */
-#if 0
-struct test
-{
-    float   f3 : SV_POSITION;
-    float   f4 : COLOR0;
-};
-struct test1
-{
-    float   f1;
-    float   f2;
-    test    t;
-};
-cbuffer cb
-{
-    test1 t1;
-};
-#endif
-static DWORD fx_test_evt[] = {
-0x43425844, 0xe079efed, 0x90bda0f2, 0xa6e2d0b4,
-0xd2d6c200, 0x00000001, 0x0000018c, 0x00000001,
-0x00000024, 0x30315846, 0x00000160, 0xfeff1001,
-0x00000001, 0x00000001, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x000000e0,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x74006263,
-0x31747365, 0x00316600, 0x616f6c66, 0x00100074,
-0x00010000, 0x00000000, 0x00040000, 0x00100000,
-0x00040000, 0x09090000, 0x32660000, 0x74007400,
-0x00747365, 0x53003366, 0x4f505f56, 0x49544953,
-0x66004e4f, 0x4f430034, 0x30524f4c, 0x00003700,
-0x00000300, 0x00000000, 0x00000800, 0x00001000,
-0x00000800, 0x00000200, 0x00003c00, 0x00003f00,
-0x00000000, 0x00001600, 0x00004b00, 0x00004e00,
-0x00000400, 0x00001600, 0x00000700, 0x00000300,
-0x00000000, 0x00001800, 0x00002000, 0x00001000,
-0x00000300, 0x00000d00, 0x00000000, 0x00000000,
-0x00001600, 0x00003200, 0x00000000, 0x00000400,
-0x00001600, 0x00003500, 0x00000000, 0x00001000,
-0x00005500, 0x00317400, 0x00000004, 0x00000020,
-0x00000000, 0x00000001, 0xffffffff, 0x00000000,
-0x000000dd, 0x00000091, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000,
-};
-
 static void test_effect_variable_type(void)
 {
+    static char source[] =
+        "struct test\n"
+        "{\n"
+        "    float   f3 : SV_POSITION;\n"
+        "    float   f4 : COLOR0;\n"
+        "};\n"
+        "struct test1\n"
+        "{\n"
+        "    float   f1;\n"
+        "    float   f2;\n"
+        "    test    t;\n"
+        "};\n"
+        "cbuffer cb\n"
+        "{\n"
+        "    test1 t1;\n"
+        "};";
     ID3D10Effect *effect;
     ID3D10EffectConstantBuffer *constantbuffer;
     ID3D10EffectVariable *variable;
@@ -352,6 +308,7 @@ static void test_effect_variable_type(void)
     D3D10_EFFECT_TYPE_DESC type_desc;
     D3D10_EFFECT_DESC desc;
     ID3D10Device *device;
+    ID3D10Blob *blob;
     ULONG refcount;
     HRESULT hr;
     LPCSTR string;
@@ -363,13 +320,17 @@ static void test_effect_variable_type(void)
         return;
     }
 
-    hr = create_effect(fx_test_evt, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(desc.ConstantBuffers == 1, "Unexpected constant buffers count %u.\n", desc.ConstantBuffers);
+    ok(desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n", desc.ConstantBuffers);
     ok(desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             desc.SharedConstantBuffers);
     ok(desc.GlobalVariables == 1, "Unexpected global variables count %u.\n", desc.GlobalVariables);
@@ -377,7 +338,7 @@ static void test_effect_variable_type(void)
             desc.SharedGlobalVariables);
     ok(desc.Techniques == 0, "Unexpected techniques count %u.\n", desc.Techniques);
 
-    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 0);
+    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 1);
     type = constantbuffer->lpVtbl->GetType(constantbuffer);
     hr = type->lpVtbl->GetDesc(type, &type_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
@@ -393,7 +354,7 @@ static void test_effect_variable_type(void)
     ok(type_desc.UnpackedSize == 0x20, "UnpackedSize is %#x, expected 0x20\n", type_desc.UnpackedSize);
     ok(type_desc.Stride == 0x20, "Stride is %#x, expected 0x20\n", type_desc.Stride);
 
-    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 0);
+    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 1);
     variable = constantbuffer->lpVtbl->GetMemberByIndex(constantbuffer, 0);
     type = variable->lpVtbl->GetType(variable);
     hr = type->lpVtbl->GetDesc(type, &type_desc);
@@ -539,66 +500,37 @@ static void test_effect_variable_type(void)
 
     effect->lpVtbl->Release(effect);
 
+    ID3D10Blob_Release(blob);
+
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-/*
- * test_effect_variable_member
- */
-#if 0
-struct test
-{
-    float   f3 : SV_POSITION;
-    float   f4 : COLOR0;
-};
-struct test1
-{
-    float   f1;
-    float   f2;
-    test    t;
-};
-cbuffer cb
-{
-    test1 t1;
-};
-#endif
-static DWORD fx_test_evm[] = {
-0x43425844, 0xe079efed, 0x90bda0f2, 0xa6e2d0b4,
-0xd2d6c200, 0x00000001, 0x0000018c, 0x00000001,
-0x00000024, 0x30315846, 0x00000160, 0xfeff1001,
-0x00000001, 0x00000001, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x000000e0,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x74006263,
-0x31747365, 0x00316600, 0x616f6c66, 0x00100074,
-0x00010000, 0x00000000, 0x00040000, 0x00100000,
-0x00040000, 0x09090000, 0x32660000, 0x74007400,
-0x00747365, 0x53003366, 0x4f505f56, 0x49544953,
-0x66004e4f, 0x4f430034, 0x30524f4c, 0x00003700,
-0x00000300, 0x00000000, 0x00000800, 0x00001000,
-0x00000800, 0x00000200, 0x00003c00, 0x00003f00,
-0x00000000, 0x00001600, 0x00004b00, 0x00004e00,
-0x00000400, 0x00001600, 0x00000700, 0x00000300,
-0x00000000, 0x00001800, 0x00002000, 0x00001000,
-0x00000300, 0x00000d00, 0x00000000, 0x00000000,
-0x00001600, 0x00003200, 0x00000000, 0x00000400,
-0x00001600, 0x00003500, 0x00000000, 0x00001000,
-0x00005500, 0x00317400, 0x00000004, 0x00000020,
-0x00000000, 0x00000001, 0xffffffff, 0x00000000,
-0x000000dd, 0x00000091, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000,
-};
-
 static void test_effect_variable_member(void)
 {
+    static char source[] =
+        "struct test\n"
+        "{\n"
+        "    float   f3 : SV_POSITION;\n"
+        "    float   f4 : COLOR0;\n"
+        "};\n"
+        "struct test1\n"
+        "{\n"
+        "    float   f1;\n"
+        "    float   f2;\n"
+        "    test    t;\n"
+        "};\n"
+        "cbuffer cb\n"
+        "{\n"
+        "    test1 t1;\n"
+        "};";
     ID3D10Effect *effect;
     ID3D10EffectConstantBuffer *constantbuffer;
     ID3D10EffectVariable *variable, *variable2, *variable3, *null_variable;
     D3D10_EFFECT_VARIABLE_DESC desc;
     D3D10_EFFECT_DESC effect_desc;
     ID3D10Device *device;
+    ID3D10Blob *blob;
     ULONG refcount;
     HRESULT hr;
 
@@ -608,13 +540,17 @@ static void test_effect_variable_member(void)
         return;
     }
 
-    hr = create_effect(fx_test_evm, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &effect_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!effect_desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(effect_desc.ConstantBuffers == 1, "Unexpected constant buffers count %u.\n",
+    ok(effect_desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n",
             effect_desc.ConstantBuffers);
     ok(effect_desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             effect_desc.SharedConstantBuffers);
@@ -624,7 +560,7 @@ static void test_effect_variable_member(void)
             effect_desc.SharedGlobalVariables);
     ok(effect_desc.Techniques == 0, "Unexpected techniques count %u.\n", effect_desc.Techniques);
 
-    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 0);
+    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 1);
     hr = constantbuffer->lpVtbl->GetDesc(constantbuffer, &desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
@@ -753,65 +689,31 @@ static void test_effect_variable_member(void)
 
     effect->lpVtbl->Release(effect);
 
+    ID3D10Blob_Release(blob);
+
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-/*
- * test_effect_variable_element
- */
-#if 0
-struct test
-{
-    float   f3 : SV_POSITION;
-    float   f4 : COLOR0;
-    float   f5 : COLOR1;
-};
-struct test1
-{
-    float   f1;
-    float   f2[3];
-    test    t[2];
-};
-cbuffer cb
-{
-    test1 t1;
-};
-#endif
-static DWORD fx_test_eve[] = {
-0x43425844, 0x6ea69fd9, 0x9b4e6390, 0x006f9f71,
-0x57ad58f4, 0x00000001, 0x000001c2, 0x00000001,
-0x00000024, 0x30315846, 0x00000196, 0xfeff1001,
-0x00000001, 0x00000001, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000116,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x74006263,
-0x31747365, 0x00316600, 0x616f6c66, 0x00100074,
-0x00010000, 0x00000000, 0x00040000, 0x00100000,
-0x00040000, 0x09090000, 0x32660000, 0x00001000,
-0x00000100, 0x00000300, 0x00002400, 0x00001000,
-0x00000c00, 0x00090900, 0x74007400, 0x00747365,
-0x53003366, 0x4f505f56, 0x49544953, 0x66004e4f,
-0x4f430034, 0x30524f4c, 0x00356600, 0x4f4c4f43,
-0x53003152, 0x03000000, 0x02000000, 0x1c000000,
-0x10000000, 0x18000000, 0x03000000, 0x58000000,
-0x5b000000, 0x00000000, 0x16000000, 0x67000000,
-0x6a000000, 0x04000000, 0x16000000, 0x71000000,
-0x74000000, 0x08000000, 0x16000000, 0x07000000,
-0x03000000, 0x00000000, 0x5c000000, 0x60000000,
-0x28000000, 0x03000000, 0x0d000000, 0x00000000,
-0x00000000, 0x16000000, 0x32000000, 0x00000000,
-0x10000000, 0x35000000, 0x51000000, 0x00000000,
-0x40000000, 0x7b000000, 0x74000000, 0x00040031,
-0x00600000, 0x00000000, 0x00010000, 0xffff0000,
-0x0000ffff, 0x01130000, 0x00c70000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000,
-};
-
 static void test_effect_variable_element(void)
 {
+    static char source[] =
+        "struct test\n"
+        "{\n"
+        "    float   f3 : SV_POSITION;\n"
+        "    float   f4 : COLOR0;\n"
+        "    float   f5 : COLOR1;\n"
+        "};\n"
+        "struct test1\n"
+        "{\n"
+        "    float   f1;\n"
+        "    float   f2[3];\n"
+        "    test    t[2];\n"
+        "};\n"
+        "cbuffer cb\n"
+        "{\n"
+        "    test1 t1;\n"
+        "};";
     ID3D10Effect *effect;
     ID3D10EffectConstantBuffer *constantbuffer, *parent;
     ID3D10EffectVariable *variable, *variable2, *variable3, *variable4, *variable5;
@@ -820,6 +722,7 @@ static void test_effect_variable_element(void)
     D3D10_EFFECT_TYPE_DESC type_desc;
     D3D10_EFFECT_DESC effect_desc;
     ID3D10Device *device;
+    ID3D10Blob *blob;
     ULONG refcount;
     HRESULT hr;
 
@@ -829,13 +732,17 @@ static void test_effect_variable_element(void)
         return;
     }
 
-    hr = create_effect(fx_test_eve, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &effect_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!effect_desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(effect_desc.ConstantBuffers == 1, "Unexpected constant buffers count %u.\n",
+    ok(effect_desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n",
             effect_desc.ConstantBuffers);
     ok(effect_desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             effect_desc.SharedConstantBuffers);
@@ -845,7 +752,7 @@ static void test_effect_variable_element(void)
             effect_desc.SharedGlobalVariables);
     ok(effect_desc.Techniques == 0, "Unexpected techniques count %u.\n", effect_desc.Techniques);
 
-    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 0);
+    constantbuffer = effect->lpVtbl->GetConstantBufferByIndex(effect, 1);
     hr = constantbuffer->lpVtbl->GetDesc(constantbuffer, &desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
@@ -1291,6 +1198,8 @@ static void test_effect_variable_element(void)
     ok(type_desc.Stride == 0x10, "Stride is %#x, expected 0x10\n", type_desc.Stride);
 
     effect->lpVtbl->Release(effect);
+
+    ID3D10Blob_Release(blob);
 
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
@@ -3959,47 +3868,26 @@ if (0)
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-/*
- * test_effect_get_variable_by
- */
-#if 0
-cbuffer cb
-{
-    float   f1 : SV_POSITION;
-    float   f2 : COLOR0;
-};
-cbuffer cb2
-{
-    float   f3 : SV_POSITION;
-    float   f4 : COLOR1;
-};
-Texture1D tex1 : COLOR2;
-Texture1D tex2 : COLOR1;
-#endif
-static DWORD fx_test_egvb[] = {
-0x43425844, 0x63d60ede, 0xf75a09d1, 0x47da5604, 0x7ef6e331, 0x00000001, 0x000001ca, 0x00000001,
-0x00000024, 0x30315846, 0x0000019e, 0xfeff1001, 0x00000002, 0x00000004, 0x00000002, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x0000008a, 0x00000000, 0x00000002, 0x00000000, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x66006263,
-0x74616f6c, 0x00000700, 0x00000100, 0x00000000, 0x00000400, 0x00001000, 0x00000400, 0x00090900,
-0x00316600, 0x505f5653, 0x5449534f, 0x004e4f49, 0x43003266, 0x524f4c4f, 0x62630030, 0x33660032,
-0x00346600, 0x4f4c4f43, 0x54003152, 0x75747865, 0x44316572, 0x00005300, 0x00000200, 0x00000000,
-0x00000000, 0x00000000, 0x00000000, 0x00000a00, 0x78657400, 0x4f430031, 0x32524f4c, 0x78657400,
-0x00040032, 0x00100000, 0x00000000, 0x00020000, 0xffff0000, 0x0000ffff, 0x00290000, 0x000d0000,
-0x002c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00380000, 0x000d0000, 0x003b0000,
-0x00040000, 0x00000000, 0x00000000, 0x00000000, 0x00420000, 0x00100000, 0x00000000, 0x00020000,
-0xffff0000, 0x0000ffff, 0x00460000, 0x000d0000, 0x002c0000, 0x00000000, 0x00000000, 0x00000000,
-0x00000000, 0x00490000, 0x000d0000, 0x004c0000, 0x00040000, 0x00000000, 0x00000000, 0x00000000,
-0x00790000, 0x005d0000, 0x007e0000, 0xffff0000, 0x0000ffff, 0x00850000, 0x005d0000, 0x004c0000,
-0xffff0000, 0x0000ffff, 0x00000000,
-};
-
 static void test_effect_get_variable_by(void)
 {
+    static char source[] =
+        "cbuffer cb\n"
+        "{\n"
+        "    float   f1 : SV_POSITION;\n"
+        "    float   f2 : COLOR0;\n"
+        "};\n"
+        "cbuffer cb2\n"
+        "{\n"
+        "    float   f3 : SV_POSITION;\n"
+        "    float   f4 : COLOR1;\n"
+        "};\n"
+        "Texture1D tex1 : COLOR2;\n"
+        "Texture1D tex2 : COLOR1;\n";
     ID3D10Effect *effect;
     ID3D10EffectVariable *variable_by_index, *variable, *null_variable;
     D3D10_EFFECT_DESC effect_desc;
     ID3D10Device *device;
+    ID3D10Blob *blob;
     ULONG refcount;
     HRESULT hr;
 
@@ -4009,13 +3897,17 @@ static void test_effect_get_variable_by(void)
         return;
     }
 
-    hr = create_effect(fx_test_egvb, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &effect_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!effect_desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(effect_desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n",
+    ok(effect_desc.ConstantBuffers == 3, "Unexpected constant buffers count %u.\n",
             effect_desc.ConstantBuffers);
     ok(effect_desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             effect_desc.SharedConstantBuffers);
@@ -4110,6 +4002,8 @@ static void test_effect_get_variable_by(void)
     ok(variable != variable_by_index, "GetVariableBySemantic failed %p\n", variable);
 
     effect->lpVtbl->Release(effect);
+
+    ID3D10Blob_Release(blob);
 
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
@@ -4779,43 +4673,21 @@ static void test_effect_state_groups(void)
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-#if 0
-RasterizerState rast_state {};
-DepthStencilState ds_state {};
-BlendState blend_state {};
-SamplerState sampler0 {};
-
-technique10 tech0
-{
-    pass pass0
-        <string a="text";>
-    {
-    }
-};
-#endif
-static DWORD fx_test_state_group_defaults[] =
-{
-    0x43425844, 0xef2bd174, 0x123794f9, 0xbea23fa0, 0x953a31dd, 0x00000001, 0x00000209, 0x00000001,
-    0x00000024, 0x30315846, 0x000001dd, 0xfeff1001, 0x00000000, 0x00000000, 0x00000004, 0x00000000,
-    0x00000000, 0x00000000, 0x00000001, 0x0000010d, 0x00000000, 0x00000000, 0x00000001, 0x00000001,
-    0x00000001, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x74736152,
-    0x7a697265, 0x74537265, 0x00657461, 0x00000004, 0x00000002, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000004, 0x74736172, 0x6174735f, 0x44006574, 0x68747065, 0x6e657453, 0x536c6963,
-    0x65746174, 0x00003b00, 0x00000200, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000300,
-    0x5f736400, 0x74617473, 0x6c420065, 0x53646e65, 0x65746174, 0x00007200, 0x00000200, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000200, 0x656c6200, 0x735f646e, 0x65746174, 0x6d615300,
-    0x72656c70, 0x74617453, 0x00a50065, 0x00020000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00150000, 0x61730000, 0x656c706d, 0x74003072, 0x30686365, 0x73617000, 0x53003073, 0x6e697274,
-    0x00e30067, 0x00020000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00010000, 0x00610000,
-    0x74786574, 0x00003000, 0x00001400, 0x00000000, 0xffffff00, 0x000000ff, 0x00000000, 0x00006900,
-    0x00004d00, 0x00000000, 0xffffff00, 0x000000ff, 0x00000000, 0x00009900, 0x00007d00, 0x00000000,
-    0xffffff00, 0x000000ff, 0x00000000, 0x0000ce00, 0x0000b200, 0x00000000, 0xffffff00, 0x000000ff,
-    0x00000000, 0x0000d700, 0x00000100, 0x00000000, 0x0000dd00, 0x00000000, 0x00000100, 0x00010600,
-    0x0000ea00, 0x00010800, 0x00000000,
-};
-
 static void test_effect_state_group_defaults(void)
 {
+    static char source[] =
+        "RasterizerState rast_state {};\n"
+        "DepthStencilState ds_state {};\n"
+        "BlendState blend_state {};\n"
+        "SamplerState sampler0 {};\n"
+        "\n"
+        "technique10 tech0\n"
+        "{\n"
+        "    pass pass0\n"
+        "        <string a=\"text\";>\n"
+        "    {\n"
+        "    }\n"
+        "};";
     ID3D10EffectDepthStencilVariable *d;
     ID3D10EffectRasterizerVariable *r;
     ID3D10EffectTechnique *technique;
@@ -4831,6 +4703,7 @@ static void test_effect_state_group_defaults(void)
     ID3D10EffectPass *pass;
     ID3D10Effect *effect;
     ID3D10Device *device;
+    ID3D10Blob *blob;
     unsigned int idx;
     ULONG refcount;
     HRESULT hr;
@@ -4841,13 +4714,17 @@ static void test_effect_state_group_defaults(void)
         return;
     }
 
-    hr = create_effect(fx_test_state_group_defaults, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &effect_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!effect_desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(effect_desc.ConstantBuffers == 0, "Unexpected constant buffers count %u.\n",
+    ok(effect_desc.ConstantBuffers == 1, "Unexpected constant buffers count %u.\n",
             effect_desc.ConstantBuffers);
     ok(effect_desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             effect_desc.SharedConstantBuffers);
@@ -4955,46 +4832,11 @@ static void test_effect_state_group_defaults(void)
 
     effect->lpVtbl->Release(effect);
 
+    ID3D10Blob_Release(blob);
+
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
-
-/*
- * test_effect_scalar_variable
- */
-#if 0
-cbuffer cb
-{
-    float f0, f_a[2];
-    int i0, i_a[2];
-    bool b0, b_a[2];
-    uint i1, i1_a[2];
-};
-#endif
-static DWORD fx_test_scalar_variable[] =
-{
-    0x43425844, 0x7d97f44c, 0x1da4b110, 0xb710407e, 0x26750c1c, 0x00000001, 0x00000288, 0x00000001,
-    0x00000024, 0x30315846, 0x0000025c, 0xfeff1001, 0x00000001, 0x00000008, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000118, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x66006263,
-    0x74616f6c, 0x00000700, 0x00000100, 0x00000000, 0x00000400, 0x00001000, 0x00000400, 0x00090900,
-    0x00306600, 0x00000007, 0x00000001, 0x00000002, 0x00000014, 0x00000010, 0x00000008, 0x00000909,
-    0x00615f66, 0x00746e69, 0x0000004c, 0x00000001, 0x00000000, 0x00000004, 0x00000010, 0x00000004,
-    0x00000911, 0x4c003069, 0x01000000, 0x02000000, 0x14000000, 0x10000000, 0x08000000, 0x11000000,
-    0x69000009, 0x6200615f, 0x006c6f6f, 0x0000008f, 0x00000001, 0x00000000, 0x00000004, 0x00000010,
-    0x00000004, 0x00000921, 0x8f003062, 0x01000000, 0x02000000, 0x14000000, 0x10000000, 0x08000000,
-    0x21000000, 0x62000009, 0x7500615f, 0x00746e69, 0x000000d3, 0x00000001, 0x00000000, 0x00000004,
-    0x00000010, 0x00000004, 0x00000919, 0xd3003169, 0x01000000, 0x02000000, 0x14000000, 0x10000000,
-    0x08000000, 0x19000000, 0x69000009, 0x00615f31, 0x00000004, 0x00000090, 0x00000000, 0x00000008,
-    0xffffffff, 0x00000000, 0x00000029, 0x0000000d, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000048, 0x0000002c, 0x00000000, 0x00000010, 0x00000000, 0x00000000, 0x00000000,
-    0x0000006c, 0x00000050, 0x00000000, 0x00000024, 0x00000000, 0x00000000, 0x00000000, 0x0000008b,
-    0x0000006f, 0x00000000, 0x00000030, 0x00000000, 0x00000000, 0x00000000, 0x000000b0, 0x00000094,
-    0x00000000, 0x00000044, 0x00000000, 0x00000000, 0x00000000, 0x000000cf, 0x000000b3, 0x00000000,
-    0x00000050, 0x00000000, 0x00000000, 0x00000000, 0x000000f4, 0x000000d8, 0x00000000, 0x00000064,
-    0x00000000, 0x00000000, 0x00000000, 0x00000113, 0x000000f7, 0x00000000, 0x00000070, 0x00000000,
-    0x00000000, 0x00000000,
-};
 
 static void test_scalar_methods(ID3D10EffectScalarVariable *var, D3D10_SHADER_VARIABLE_TYPE type,
         const char *name)
@@ -5249,6 +5091,14 @@ static void test_scalar_array_methods(ID3D10EffectScalarVariable *var, D3D10_SHA
 
 static void test_effect_scalar_variable(void)
 {
+    static char source[] =
+        "cbuffer cb\n"
+        "{\n"
+        "    float f0, f_a[2];\n"
+        "    int i0, i_a[2];\n"
+        "    bool b0, b_a[2];\n"
+        "    uint i1, i1_a[2];\n"
+        "};";
     static const struct
     {
         const char *name;
@@ -5272,6 +5122,7 @@ static void test_effect_scalar_variable(void)
     ID3D10EffectType *type;
     ID3D10Device *device;
     ID3D10Effect *effect;
+    ID3D10Blob *blob;
     unsigned int i;
     ULONG refcount;
     HRESULT hr;
@@ -5283,13 +5134,17 @@ static void test_effect_scalar_variable(void)
         return;
     }
 
-    hr = create_effect(fx_test_scalar_variable, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &effect_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!effect_desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(effect_desc.ConstantBuffers == 1, "Unexpected constant buffers count %u.\n",
+    ok(effect_desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n",
             effect_desc.ConstantBuffers);
     ok(effect_desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             effect_desc.SharedConstantBuffers);
@@ -5349,6 +5204,8 @@ static void test_effect_scalar_variable(void)
     ok(f == 1.0f, "Unexpected value %f.\n", f);
 
     effect->lpVtbl->Release(effect);
+
+    ID3D10Blob_Release(blob);
 
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
@@ -5768,7 +5625,6 @@ static void test_effect_vector_variable(void)
         test_vector_methods(v_var, t->Type, tests[i].name, t->Rows);
         if (t->Elements)
             test_vector_array_methods(v_var, t->Type, tests[i].name, t->Rows, t->Elements);
-
         winetest_pop_context();
     }
 
@@ -5777,57 +5633,6 @@ static void test_effect_vector_variable(void)
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
-
-/*
- * test_effect_matrix_variable
- */
-#if 0
-cbuffer cb
-{
-    float4x4 m_f0;
-    float4x4 m_f_a[2];
-
-    row_major int2x3 m_i0;
-
-    bool3x2 m_b0;
-    bool3x2 m_b_a[2];
-};
-#endif
-
-static DWORD fx_test_matrix_variable[] =
-{
-    0x43425844, 0xc95a5c42, 0xa138d3cb, 0x8a4ef493,
-    0x3515b7ee, 0x00000001, 0x000001e2, 0x00000001,
-    0x00000024, 0x30315846, 0x000001b6, 0xfeff1001,
-    0x00000001, 0x00000005, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x000000c6,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x66006263,
-    0x74616f6c, 0x00347834, 0x00000007, 0x00000001,
-    0x00000000, 0x00000040, 0x00000040, 0x00000040,
-    0x0000640b, 0x30665f6d, 0x00000700, 0x00000100,
-    0x00000200, 0x00008000, 0x00004000, 0x00008000,
-    0x00640b00, 0x665f6d00, 0x6900615f, 0x7832746e,
-    0x00530033, 0x00010000, 0x00000000, 0x001c0000,
-    0x00200000, 0x00180000, 0x1a130000, 0x5f6d0000,
-    0x62003069, 0x336c6f6f, 0x7b003278, 0x01000000,
-    0x00000000, 0x1c000000, 0x20000000, 0x18000000,
-    0x23000000, 0x6d000053, 0x0030625f, 0x0000007b,
-    0x00000001, 0x00000002, 0x0000003c, 0x00000020,
-    0x00000030, 0x00005323, 0x5f625f6d, 0x00040061,
-    0x01400000, 0x00000000, 0x00050000, 0xffff0000,
-    0x0000ffff, 0x002c0000, 0x00100000, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000,
-    0x004d0000, 0x00310000, 0x00000000, 0x00400000,
-    0x00000000, 0x00000000, 0x00000000, 0x00760000,
-    0x005a0000, 0x00000000, 0x00c00000, 0x00000000,
-    0x00000000, 0x00000000, 0x009f0000, 0x00830000,
-    0x00000000, 0x00e00000, 0x00000000, 0x00000000,
-    0x00000000, 0x00c00000, 0x00a40000, 0x00000000,
-    0x01000000, 0x00000000, 0x00000000, 0x00000000,
-    0x00000000,
-};
 
 struct d3d10_matrix
 {
@@ -6055,6 +5860,17 @@ static void test_matrix_array_methods(ID3D10EffectMatrixVariable *var, D3D10_SHA
 
 static void test_effect_matrix_variable(void)
 {
+    static char source[] =
+        "cbuffer cb\n"
+        "{\n"
+        "    float4x4 m_f0;\n"
+        "    float4x4 m_f_a[2];\n"
+        "\n"
+        "    row_major int2x3 m_i0;\n"
+        "\n"
+        "    bool3x2 m_b0;\n"
+        "    bool3x2 m_b_a[2];\n"
+        "};";
     static const struct
     {
         const char *name;
@@ -6075,6 +5891,7 @@ static void test_effect_matrix_variable(void)
     ID3D10EffectType *type;
     ID3D10Device *device;
     ID3D10Effect *effect;
+    ID3D10Blob *blob;
     unsigned int i;
     ULONG refcount;
     HRESULT hr;
@@ -6085,13 +5902,17 @@ static void test_effect_matrix_variable(void)
         return;
     }
 
-    hr = create_effect(fx_test_matrix_variable, 0, device, NULL, &effect);
+    hr = D3D10CompileEffectFromMemory(source, sizeof(source), NULL, NULL, NULL, 0, 0,
+            &blob, NULL);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     hr = effect->lpVtbl->GetDesc(effect, &effect_desc);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ok(!effect_desc.IsChildEffect, "Unexpected IsChildEffect.\n");
-    ok(effect_desc.ConstantBuffers == 1, "Unexpected constant buffers count %u.\n",
+    ok(effect_desc.ConstantBuffers == 2, "Unexpected constant buffers count %u.\n",
             effect_desc.ConstantBuffers);
     ok(effect_desc.SharedConstantBuffers == 0, "Unexpected shared constant buffers count %u.\n",
             effect_desc.SharedConstantBuffers);
@@ -6132,6 +5953,8 @@ static void test_effect_matrix_variable(void)
     }
 
     effect->lpVtbl->Release(effect);
+
+    ID3D10Blob_Release(blob);
 
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
@@ -9869,34 +9692,16 @@ static void test_effect_fx_4_1(void)
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-#if 0
-BlendState blend_state
-{
-    srcblend = one;
-};
-#endif
-static DWORD fx_4_1_test_blend_state[] =
-{
-    0x43425844, 0xe4566da7, 0x2242fb47, 0xa5924d09, 0x8280296f, 0x00000001, 0x000001a7, 0x00000001,
-    0x00000024, 0x30315846, 0x0000017b, 0xfeff1011, 0x00000000, 0x00000000, 0x00000001, 0x00000000,
-    0x00000000, 0x00000000, 0x00000000, 0x00000097, 0x00000000, 0x00000000, 0x00000000, 0x00000001,
-    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x6e656c42,
-    0x61745364, 0x04006574, 0x02000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x02000000,
-    0x62000000, 0x646e656c, 0x6174735f, 0x01006574, 0x02000000, 0x02000000, 0x01000000, 0x02000000,
-    0x02000000, 0x01000000, 0x02000000, 0x02000000, 0x01000000, 0x02000000, 0x02000000, 0x01000000,
-    0x02000000, 0x02000000, 0x01000000, 0x02000000, 0x02000000, 0x01000000, 0x02000000, 0x02000000,
-    0x01000000, 0x02000000, 0x02000000, 0x2b000000, 0x0f000000, 0x00000000, 0xff000000, 0x08ffffff,
-    0x26000000, 0x00000000, 0x01000000, 0x37000000, 0x26000000, 0x01000000, 0x01000000, 0x43000000,
-    0x26000000, 0x02000000, 0x01000000, 0x4f000000, 0x26000000, 0x03000000, 0x01000000, 0x5b000000,
-    0x26000000, 0x04000000, 0x01000000, 0x67000000, 0x26000000, 0x05000000, 0x01000000, 0x73000000,
-    0x26000000, 0x06000000, 0x01000000, 0x7f000000, 0x26000000, 0x07000000, 0x01000000, 0x8b000000,
-    0x00000000, 0x00000000,
-};
-
 static void test_effect_fx_4_1_blend_state(void)
 {
+    static const char source[] =
+        "BlendState blend_state\n"
+        "{\n"
+        "    srcblend = one;\n"
+        "};";
     ID3D10Effect *effect = NULL;
     ID3D10Device *device;
+    ID3D10Blob *blob;
     ULONG refcount;
     HRESULT hr;
 
@@ -9906,8 +9711,13 @@ static void test_effect_fx_4_1_blend_state(void)
         return;
     }
 
-    hr = create_effect(fx_4_1_test_blend_state, 0, device, NULL, &effect);
+    hr = D3DCompile(source, sizeof(source), NULL, NULL, NULL, "main", "fx_4_1", 0, 0, &blob, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+
+    hr = create_effect(ID3D10Blob_GetBufferPointer(blob), 0, device, NULL, &effect);
     ok(hr == E_FAIL, "Got unexpected hr %#lx.\n", hr);
+
+    ID3D10Blob_Release(blob);
 
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %lu references left.\n", refcount);
