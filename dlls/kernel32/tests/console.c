@@ -35,6 +35,8 @@ static DWORD (WINAPI *pGetConsoleProcessList)(LPDWORD, DWORD);
 static HANDLE (WINAPI *pOpenConsoleW)(LPCWSTR,DWORD,BOOL,DWORD);
 static BOOL (WINAPI *pSetConsoleInputExeNameA)(LPCSTR);
 static BOOL (WINAPI *pVerifyConsoleIoHandle)(HANDLE handle);
+static BOOL (WINAPI *pReadConsoleInputExA)(HANDLE handle, INPUT_RECORD *buffer,
+        DWORD length, DWORD *count, USHORT flags);
 
 static BOOL skip_nt;
 
@@ -81,6 +83,7 @@ static void init_function_pointers(void)
     KERNEL32_GET_PROC(OpenConsoleW);
     KERNEL32_GET_PROC(SetConsoleInputExeNameA);
     KERNEL32_GET_PROC(VerifyConsoleIoHandle);
+    KERNEL32_GET_PROC(ReadConsoleInputExA);
 
 #undef KERNEL32_GET_PROC
 }
@@ -3426,6 +3429,55 @@ static void test_ReadConsole(HANDLE input)
     CloseHandle(output);
 }
 
+static void test_ReadConsoleInputEx(HANDLE input)
+{
+    DWORD ret, count;
+    INPUT_RECORD buf;
+    HANDLE invalid_handle = (HANDLE)-1;
+
+    ret = pReadConsoleInputExA(input, &buf, 1, &count, 0x0001);
+    if (!ret && GetLastError() == ERROR_CALL_NOT_IMPLEMENTED) {
+        skip("ReadConsoleInputExA not implemented\n");
+    }
+
+    // When empty, just return as is without blocking
+    ret = pReadConsoleInputExA(input, &buf, 1, &count, 0x0002);
+    ok(ret, "ReadConsoleInputExA nowait failed %ld %ld \n", count, GetLastError());
+
+    memset(&buf, 0, sizeof(buf));
+    buf.EventType = MOUSE_EVENT;
+    buf.Event.MouseEvent.dwEventFlags = DOUBLE_CLICK;
+    ret = WriteConsoleInputA(input, &buf, 1, &count);
+    ok(ret, "got error %lu\n", GetLastError());
+
+    SetLastError(0);
+    memset(&buf, 0, sizeof(buf));
+    ret = pReadConsoleInputExA(input, &buf, 1, &count, 0x0000);
+    ok(ret && buf.EventType == MOUSE_EVENT, "ReadConsoleInputExA failed %#lx \n", GetLastError());
+
+    memset(&buf, 0, sizeof(buf));
+    buf.EventType = MOUSE_EVENT;
+    buf.Event.MouseEvent.dwEventFlags = DOUBLE_CLICK;
+    ret = WriteConsoleInputA(input, &buf, 1, &count);
+    ok(ret, "got error %lu\n", GetLastError());
+
+    memset(&buf, 0, sizeof(buf));
+    ret = pReadConsoleInputExA(input, &buf, 1, &count, 0x0002);
+    ok(ret && buf.EventType == MOUSE_EVENT, "ReadConsoleInputExA failed %#lx.\n", GetLastError());
+
+    /* Invalid parameter */
+    memset(&buf, 0, sizeof(buf));
+    ret = pReadConsoleInputExA(input, &buf, 1, &count, 0xFFFF);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER,
+            "ReadConsoleInputExA should be invalid parameter %#lx.\n", GetLastError());
+
+    /* Invalid handle */
+    memset(&buf, 0, sizeof(buf));
+    ret = pReadConsoleInputExA(invalid_handle, &buf, 1, &count, 0xFFFF);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE,
+            "ReadConsoleInputExA should be invalid handle %#lx.\n", GetLastError());
+}
+
 static void test_GetCurrentConsoleFont(HANDLE std_output)
 {
     BOOL ret;
@@ -5943,6 +5995,8 @@ START_TEST(console)
     if (!ret) return;
 
     test_ReadConsole(hConIn);
+    test_ReadConsoleInputEx(hConIn);
+
     /* Non interactive tests */
     testCursor(hConOut, sbi.dwSize);
     /* test parameters (FIXME: test functionality) */
