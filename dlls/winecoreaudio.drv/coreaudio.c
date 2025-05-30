@@ -1762,31 +1762,19 @@ static NTSTATUS unix_set_volumes(void *args)
 {
     struct set_volumes_params *params = args;
     struct coreaudio_stream *stream = handle_get_stream(params->stream);
-    Float32 level = params->master_volume;
+    Float32 level = 1.0, tmp;
     OSStatus sc;
     UINT32 i;
-    AudioObjectPropertyAddress prop_addr = {
-        kAudioDevicePropertyVolumeScalar,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
 
-    sc = AudioObjectSetPropertyData(stream->dev_id, &prop_addr, 0, NULL, sizeof(float), &level);
-    if (sc == noErr)
-        level = 1.0f;
-    else
-        WARN("Couldn't set master volume, applying it directly to the channels: %x\n", (int)sc);
-
-    for (i = 1; i <= stream->fmt->nChannels; ++i) {
-        const float vol = level * params->session_volumes[i - 1] * params->volumes[i - 1];
-
-        prop_addr.mElement = i;
-
-        sc = AudioObjectSetPropertyData(stream->dev_id, &prop_addr, 0, NULL, sizeof(float), &vol);
-        if (sc != noErr) {
-            WARN("Couldn't set channel #%u volume: %x\n", i, (int)sc);
-        }
+    for(i = 0; i < stream->fmt->nChannels; ++i){
+        tmp = params->master_volume * params->volumes[i] * params->session_volumes[i];
+        level = tmp < level ? tmp : level;
     }
+
+    sc = AudioUnitSetParameter(stream->unit, kHALOutputParam_Volume,
+                               kAudioUnitScope_Global, 0, level, 0);
+    if(sc != noErr)
+        WARN("Couldn't set volume: %x\n", (int)sc);
 
     return STATUS_SUCCESS;
 }
