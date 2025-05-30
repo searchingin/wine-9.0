@@ -42,6 +42,7 @@
 #include <fcntl.h>
 #include <fenv.h>
 #include <unistd.h>
+#include <math.h>
 
 #include <CoreAudio/CoreAudio.h>
 #include <AudioToolbox/AudioFormat.h>
@@ -1760,15 +1761,19 @@ static NTSTATUS unix_get_prop_value(void *args)
 
 static NTSTATUS unix_set_volumes(void *args)
 {
+    static unsigned int once;
+    if (!once++)
+        WARN("CoreAudio doesn't support per-channel volume control\n");
+
     struct set_volumes_params *params = args;
     struct coreaudio_stream *stream = handle_get_stream(params->stream);
-    Float32 level = 1.0, tmp;
+    Float32 level = params->master_volume;
     OSStatus sc;
     UINT32 i;
 
     for(i = 0; i < stream->fmt->nChannels; ++i){
-        tmp = params->master_volume * params->volumes[i] * params->session_volumes[i];
-        level = tmp < level ? tmp : level;
+        const Float32 vol = params->master_volume * params->volumes[i] * params->session_volumes[i];
+        level = fminf(level, vol);
     }
 
     sc = AudioUnitSetParameter(stream->unit, kHALOutputParam_Volume,
