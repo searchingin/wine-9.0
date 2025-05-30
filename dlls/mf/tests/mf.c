@@ -1136,6 +1136,181 @@ static IMFAsyncCallback *create_test_callback(BOOL check_media_event)
     return &callback->IMFAsyncCallback_iface;
 }
 
+struct test_byte_stream
+{
+    IMFByteStream iface;
+    ULONG refcount;
+
+    IMFByteStream *inner;
+};
+
+static struct test_byte_stream *test_byte_stream_from_iface(IMFByteStream *iface)
+{
+    return (struct test_byte_stream *) iface;
+}
+
+static HRESULT WINAPI test_byte_stream_QueryInterface(IMFByteStream *iface, REFIID riid, void **obj)
+{
+    struct test_byte_stream *stream = test_byte_stream_from_iface(iface);
+
+    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IMFByteStream))
+    {
+        *obj = &stream->iface;
+        IMFByteStream_AddRef(iface);
+        return S_OK;
+    }
+
+    return IMFByteStream_QueryInterface(stream->inner, riid, obj);
+}
+
+static ULONG WINAPI test_byte_stream_AddRef(IMFByteStream *iface)
+{
+    return ++test_byte_stream_from_iface(iface)->refcount;
+}
+
+static ULONG WINAPI test_byte_stream_Release(IMFByteStream *iface)
+{
+    struct test_byte_stream *stream = test_byte_stream_from_iface(iface);
+    ULONG rc = --stream->refcount;
+    if (rc == 0) {
+        IMFByteStream_Release(stream->inner);
+        free(stream);
+    }
+    return rc;
+}
+
+static HRESULT WINAPI test_byte_stream_GetCapabilities(IMFByteStream *iface, DWORD *pdwCapabilities)
+{
+    return IMFByteStream_GetCapabilities(test_byte_stream_from_iface(iface)->inner, pdwCapabilities);
+}
+
+static HRESULT WINAPI test_byte_stream_GetLength(IMFByteStream *iface, QWORD *pqwLength)
+{
+    return IMFByteStream_GetLength(test_byte_stream_from_iface(iface)->inner, pqwLength);
+}
+
+static HRESULT WINAPI test_byte_stream_SetLength(IMFByteStream *iface, QWORD qwLength)
+{
+    return IMFByteStream_SetLength(test_byte_stream_from_iface(iface)->inner, qwLength);
+}
+
+static HRESULT WINAPI test_byte_stream_GetCurrentPosition(IMFByteStream *iface, QWORD *pqwPosition)
+{
+    return IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, pqwPosition);
+}
+
+static HRESULT WINAPI test_byte_stream_SetCurrentPosition(IMFByteStream *iface, QWORD qwPosition)
+{
+    todo_wine_if(qwPosition % 0x40000 != 0)
+    ok(qwPosition % 0x40000 == 0, "IMFByteStream::SetCurrentPosition pos=%lld should be aligned on 0x40000 boundary.\n", qwPosition);
+
+    return IMFByteStream_SetCurrentPosition(test_byte_stream_from_iface(iface)->inner, qwPosition);
+}
+
+static HRESULT WINAPI test_byte_stream_IsEndOfStream(IMFByteStream *iface, BOOL *pfEndOfStream)
+{
+    return IMFByteStream_IsEndOfStream(test_byte_stream_from_iface(iface)->inner, pfEndOfStream);
+}
+
+static HRESULT WINAPI test_byte_stream_Read(IMFByteStream *iface, BYTE* pb, ULONG cb, ULONG *pcbRead)
+{
+    QWORD current = 0;
+    IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, &current);
+    todo_wine_if(current % 0x40000 != 0)
+    ok(current % 0x40000 == 0, "IMFByteStream::Read pos=%lld should be aligned on 0x40000 boundary.\n", current);
+
+    todo_wine_if(cb > 0x40000)
+    ok(cb <= 0x40000, "IMFByteStream::BeginRead size=%lu should not be larger than 0x40000.\n", cb);
+
+    return IMFByteStream_Read(test_byte_stream_from_iface(iface)->inner, pb, cb, pcbRead);
+}
+
+static HRESULT WINAPI test_byte_stream_BeginRead(IMFByteStream *iface, BYTE *pb, ULONG cb, IMFAsyncCallback *pCallback, IUnknown *punkState)
+{
+    QWORD current = 0;
+    IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, &current);
+    todo_wine_if(current % 0x40000 != 0)
+    ok(current % 0x40000 == 0, "IMFByteStream::BeginRead pos=%lld should be aligned on 0x40000 boundary.\n", current);
+
+    todo_wine_if(cb > 0x40000)
+    ok(cb <= 0x40000, "IMFByteStream::BeginRead size=%lu should not be larger than 0x40000.\n", cb);
+
+    return IMFByteStream_BeginRead(test_byte_stream_from_iface(iface)->inner, pb, cb, pCallback, punkState);
+}
+
+static HRESULT WINAPI test_byte_stream_EndRead(IMFByteStream *iface, IMFAsyncResult *pResult, ULONG *pcbRead)
+{
+    return IMFByteStream_EndRead(test_byte_stream_from_iface(iface)->inner, pResult, pcbRead);
+}
+
+static HRESULT WINAPI test_byte_stream_Write(IMFByteStream *iface, const BYTE *pb, ULONG cb, ULONG *pcbWritten)
+{
+    return IMFByteStream_Write(test_byte_stream_from_iface(iface)->inner, pb, cb, pcbWritten);
+}
+
+static HRESULT WINAPI test_byte_stream_BeginWrite(IMFByteStream *iface, const BYTE *pb, ULONG cb, IMFAsyncCallback *pCallback, IUnknown *punkState)
+{
+    return IMFByteStream_BeginWrite(test_byte_stream_from_iface(iface)->inner, pb, cb, pCallback, punkState);
+}
+
+static HRESULT WINAPI test_byte_stream_EndWrite(IMFByteStream *iface, IMFAsyncResult *pResult, ULONG *pcbWritten)
+{
+    return IMFByteStream_EndWrite(test_byte_stream_from_iface(iface)->inner, pResult, pcbWritten);
+}
+
+static HRESULT WINAPI test_byte_stream_Seek(IMFByteStream *iface, MFBYTESTREAM_SEEK_ORIGIN SeekOrigin, LONGLONG llSeekOffset, DWORD dwSeekFlags, QWORD *pqwCurrentPosition)
+{
+    HRESULT hr = IMFByteStream_Seek(test_byte_stream_from_iface(iface)->inner, SeekOrigin, llSeekOffset, dwSeekFlags, pqwCurrentPosition);
+
+    QWORD current = 0;
+    IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, &current);
+    todo_wine_if(current % 0x40000 != 0)
+    ok(current % 0x40000 == 0, "IMFByteStream::Seek pos=%lld should be aligned on 0x40000 boundary.\n", current);
+
+    return hr;
+}
+
+static HRESULT WINAPI test_byte_stream_Flush(IMFByteStream *iface)
+{
+    return IMFByteStream_Flush(test_byte_stream_from_iface(iface)->inner);
+}
+
+static HRESULT WINAPI test_byte_stream_Close(IMFByteStream *iface)
+{
+    return IMFByteStream_Close(test_byte_stream_from_iface(iface)->inner);
+}
+
+static const IMFByteStreamVtbl test_byte_stream_vtbl = {
+    test_byte_stream_QueryInterface,
+    test_byte_stream_AddRef,
+    test_byte_stream_Release,
+    test_byte_stream_GetCapabilities,
+    test_byte_stream_GetLength,
+    test_byte_stream_SetLength,
+    test_byte_stream_GetCurrentPosition,
+    test_byte_stream_SetCurrentPosition,
+    test_byte_stream_IsEndOfStream,
+    test_byte_stream_Read,
+    test_byte_stream_BeginRead,
+    test_byte_stream_EndRead,
+    test_byte_stream_Write,
+    test_byte_stream_BeginWrite,
+    test_byte_stream_EndWrite,
+    test_byte_stream_Seek,
+    test_byte_stream_Flush,
+    test_byte_stream_Close,
+};
+
+static IMFByteStream *create_test_byte_stream(IMFByteStream *inner)
+{
+    struct test_byte_stream *stream = calloc(1, sizeof *stream);
+    stream->iface.lpVtbl = &test_byte_stream_vtbl;
+    stream->refcount = 1;
+    stream->inner = inner;
+
+    return &stream->iface;
+}
+
 #define wait_media_event(a, b, c, d, e) wait_media_event_(__LINE__, a, b, c, d, e)
 static HRESULT wait_media_event_(int line, IMFMediaSession *session, IMFAsyncCallback *callback,
         MediaEventType expect_type, DWORD timeout, PROPVARIANT *value)
@@ -1225,6 +1400,9 @@ static IMFMediaSource *create_media_source(const WCHAR *name, const WCHAR *mime)
 
     hr = MFCreateTempFile(MF_ACCESSMODE_READWRITE, MF_OPENMODE_DELETE_IF_EXIST, MF_FILEFLAGS_NONE, &stream);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    stream = create_test_byte_stream(stream);
+
     hr = IMFByteStream_Write(stream, resource_data, resource_len, &resource_len);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     hr = IMFByteStream_SetCurrentPosition(stream, 0);
@@ -6802,6 +6980,84 @@ static void test_media_session_Close(void)
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 }
 
+void test_media_session_bufsize(void)
+{
+    media_type_desc video_rgb32_desc =
+    {
+        ATTR_GUID(MF_MT_MAJOR_TYPE, MFMediaType_Video),
+        ATTR_GUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32),
+    };
+
+    struct test_grabber_callback *grabber_callback;
+    IMFAsyncCallback *callback;
+    IMFActivate *sink_activate;
+    IMFMediaType *output_type;
+    IMFMediaSession *session;
+    IMFMediaSource *source;
+    IMFTopology *topology;
+    PROPVARIANT propvar;
+    HRESULT hr;
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#lx.\n", hr);
+
+    if (!(source = create_media_source(L"large.mp4", L"video/mp4")))
+    {
+        win_skip("MP4 media source is not supported, skipping tests.\n");
+        goto done;
+    }
+
+    callback = create_test_callback(TRUE);
+    grabber_callback = impl_from_IMFSampleGrabberSinkCallback(create_test_grabber_callback());
+
+    hr = MFCreateMediaSession(NULL, &session);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = MFCreateMediaType(&output_type);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    init_media_type(output_type, video_rgb32_desc, -1);
+    hr = MFCreateSampleGrabberSinkActivate(output_type, &grabber_callback->IMFSampleGrabberSinkCallback_iface, &sink_activate);
+    ok(hr == S_OK, "Failed to create grabber sink, hr %#lx.\n", hr);
+    IMFMediaType_Release(output_type);
+
+    topology = create_test_topology(source, sink_activate, NULL);
+    hr = IMFMediaSession_SetTopology(session, 0, topology);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    IMFTopology_Release(topology);
+
+    propvar.vt = VT_EMPTY;
+    hr = IMFMediaSession_Start(session, &GUID_NULL, &propvar);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = wait_media_event(session, callback, MEEndOfPresentation, 5000, &propvar);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    hr = IMFMediaSession_ClearTopologies(session);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    hr = IMFMediaSession_Close(session);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    hr = wait_media_event(session, callback, MESessionClosed, 1000, &propvar);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    ok(propvar.vt == VT_EMPTY, "got vt %u\n", propvar.vt);
+
+    hr = IMFMediaSession_Shutdown(session);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    hr = IMFMediaSource_Shutdown(source);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    hr = IMFActivate_ShutdownObject(sink_activate);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    IMFActivate_Release(sink_activate);
+    IMFMediaSession_Release(session);
+    IMFMediaSource_Release(source);
+
+    IMFSampleGrabberSinkCallback_Release(&grabber_callback->IMFSampleGrabberSinkCallback_iface);
+
+done:
+    hr = MFShutdown();
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+}
+
 START_TEST(mf)
 {
     init_functions();
@@ -6838,4 +7094,5 @@ START_TEST(mf)
     test_MFEnumDeviceSources();
     test_media_session_Close();
     test_media_session_source_shutdown();
+    test_media_session_bufsize();
 }

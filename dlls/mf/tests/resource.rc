@@ -177,3 +177,12 @@ rgb24frame.bmp RCDATA rgb24frame.bmp
  */
 /* @makedep: test.mp4 */
 test.mp4 RCDATA test.mp4
+
+/* Generated with:
+ *  gst-launch-1.0 videotestsrc num-buffers=60 pattern=snow ! \
+ *      video/x-raw,format=I420,width=128,height=128,framerate=60000/1001 ! \
+ *      videoflip method=clockwise ! videoconvert ! \
+ *      x264enc bitrate=16384 ! mp4mux ! filesink location=dlls/mf/tests/large.mp4
+ */
+/* @makedep: large.mp4 */
+large.mp4 RCDATA large.mp4
