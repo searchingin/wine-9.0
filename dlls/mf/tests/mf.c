@@ -1201,7 +1201,6 @@ static HRESULT WINAPI test_byte_stream_GetCurrentPosition(IMFByteStream *iface, 
 
 static HRESULT WINAPI test_byte_stream_SetCurrentPosition(IMFByteStream *iface, QWORD qwPosition)
 {
-    todo_wine_if(qwPosition % 0x40000 != 0)
     ok(qwPosition % 0x40000 == 0, "IMFByteStream::SetCurrentPosition pos=%lld should be aligned on 0x40000 boundary.\n", qwPosition);
 
     return IMFByteStream_SetCurrentPosition(test_byte_stream_from_iface(iface)->inner, qwPosition);
@@ -1216,10 +1215,8 @@ static HRESULT WINAPI test_byte_stream_Read(IMFByteStream *iface, BYTE* pb, ULON
 {
     QWORD current = 0;
     IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, &current);
-    todo_wine_if(current % 0x40000 != 0)
     ok(current % 0x40000 == 0, "IMFByteStream::Read pos=%lld should be aligned on 0x40000 boundary.\n", current);
 
-    todo_wine_if(cb > 0x40000)
     ok(cb <= 0x40000, "IMFByteStream::BeginRead size=%lu should not be larger than 0x40000.\n", cb);
 
     return IMFByteStream_Read(test_byte_stream_from_iface(iface)->inner, pb, cb, pcbRead);
@@ -1229,10 +1226,8 @@ static HRESULT WINAPI test_byte_stream_BeginRead(IMFByteStream *iface, BYTE *pb,
 {
     QWORD current = 0;
     IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, &current);
-    todo_wine_if(current % 0x40000 != 0)
     ok(current % 0x40000 == 0, "IMFByteStream::BeginRead pos=%lld should be aligned on 0x40000 boundary.\n", current);
 
-    todo_wine_if(cb > 0x40000)
     ok(cb <= 0x40000, "IMFByteStream::BeginRead size=%lu should not be larger than 0x40000.\n", cb);
 
     return IMFByteStream_BeginRead(test_byte_stream_from_iface(iface)->inner, pb, cb, pCallback, punkState);
@@ -1264,7 +1259,6 @@ static HRESULT WINAPI test_byte_stream_Seek(IMFByteStream *iface, MFBYTESTREAM_S
 
     QWORD current = 0;
     IMFByteStream_GetCurrentPosition(test_byte_stream_from_iface(iface)->inner, &current);
-    todo_wine_if(current % 0x40000 != 0)
     ok(current % 0x40000 == 0, "IMFByteStream::Seek pos=%lld should be aligned on 0x40000 boundary.\n", current);
 
     return hr;
