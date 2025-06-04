@@ -18,12 +18,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#pragma makedep register
+#pragma makedep register impl
+#pragma winrt
 
-#ifdef __WIDL__
-#pragma winrt ns_prefix
-#endif
-
+import "objidlbase.idl";
+import "activation.idl";
 import "inspectable.idl";
 import "asyncinfo.idl";
 import "eventtoken.idl";
@@ -38,3 +37,29 @@ import "windows.devices.power.idl";
 #include "windows.gaming.input.forcefeedback.idl"
 #include "windows.gaming.input.idl"
 #include "windows.gaming.input.custom.idl"
+#include "provider.idl"
+
+#ifdef __WIDL_IMPL__
+
+[impl(struct controller)]
+struct controller_klass
+{
+    Windows.Gaming.Input.Custom.IGameControllerImpl IGameControllerImpl_iface;
+    Windows.Gaming.Input.Custom.IGameControllerInputSink IGameControllerInputSink_iface;
+    Windows.Gaming.Input.IRawGameController IRawGameController_iface;
+    Windows.Gaming.Input.IRawGameController2 IRawGameController2_iface;
+    Windows.Gaming.Input.IGameController *IGameController_outer;
+    LONG ref;
+};
+
+[impl(struct controller_statics)]
+struct controller_statics
+{
+    IActivationFactory IActivationFactory_iface;
+    Windows.Gaming.Input.IRawGameControllerStatics IRawGameControllerStatics_iface;
+    Windows.Gaming.Input.Custom.ICustomGameControllerFactory ICustomGameControllerFactory_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
+#endif /* __WIDL_IMPL__ */

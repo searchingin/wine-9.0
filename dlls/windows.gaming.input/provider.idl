@@ -22,6 +22,7 @@
 #pragma winrt ns_prefix
 #endif
 
+#ifndef DO_NO_IMPORTS
 import "propidl.idl";
 import "inspectable.idl";
 import "eventtoken.idl";
@@ -30,6 +31,7 @@ import "windows.foundation.idl";
 import "windows.gaming.input.idl";
 import "windows.gaming.input.custom.idl";
 import "windows.gaming.input.forcefeedback.idl";
+#endif /* DO_NO_IMPORTS */
 
 namespace Windows.Gaming.Input.Custom {
     typedef enum WineGameControllerType WineGameControllerType;
@@ -189,15 +191,5 @@ namespace Windows.Gaming.Input.Custom {
     {
         [propput] HRESULT Parameters([in] WineForceFeedbackEffectParameters parameters,
                                      [in, optional] WineForceFeedbackEffectEnvelope *envelope);
-    }
-
-    [
-        marshaling_behavior(agile),
-        threading(both)
-    ]
-    runtimeclass WineGameControllerProvider
-    {
-        [default] interface Windows.Gaming.Input.Custom.IWineGameControllerProvider;
-        interface Windows.Gaming.Input.Custom.IGameControllerProvider;
     }
 }
