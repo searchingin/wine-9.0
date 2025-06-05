@@ -211,6 +211,30 @@ static void write_iface_impl_from( const type_t *klass, const type_t *impl, cons
     put_str( indent, "}\n" );
 }
 
+static void write_iface_query( const type_t *klass, const type_t *impl, const var_t *var )
+{
+    const type_t *iface = var->declspec.type;
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const char *iid = strmake( "&IID_%s", iface->c_name );
+
+    if (!iface_inherits( iface, "IUnknown" )) return;
+
+    put_str( indent, "static HRESULT %s_query_%s( struct %s *klass, REFIID iid, void **out )\n", klass->name, short_name, klass->name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    if (!(klass)->%s.lpVtbl) return E_NOINTERFACE;\n", var->name );
+    put_str( indent, "    if (IsEqualGUID( (iid), %s )", iid );
+    for (const type_t *base = type_iface_get_inherit( iface ); base; (base = type_iface_get_inherit( base )))
+        put_str( indent, "\n     || IsEqualGUID( (iid), &IID_%s )", base->c_name );
+    put_str( indent, ")\n" );
+    put_str( indent, "    {\n" );
+    put_str( indent, "        %s_AddRef( &(klass)->%s );\n", iface->c_name, var->name );
+    put_str( indent, "        *(out) = &(klass)->%s;\n", var->name );
+    put_str( indent, "        return S_OK;\n" );
+    put_str( indent, "    }\n" );
+    put_str( indent, "    return E_NOINTERFACE;\n" );
+    put_str( indent, "}\n" );
+}
+
 static void write_impl( const type_t *impl, const type_t *klass )
 {
     bool from_klass, destroy;
@@ -270,6 +294,13 @@ static void write_impl( const type_t *impl, const type_t *klass )
     {
         if (!strendswith( var->name, "_iface" )) continue;
         write_iface_impl_from( klass, impl, var );
+    }
+    put_str( indent, "\n" );
+
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        if (!strendswith( var->name, "_iface" )) continue;
+        write_iface_query( klass, impl, var );
     }
     put_str( indent, "\n" );
 
