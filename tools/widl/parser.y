@@ -222,6 +222,7 @@ PARSER_LTYPE pop_import(void);
 %token tHYPER tID tIDEMPOTENT
 %token tIGNORE tIIDIS
 %token tIMMEDIATEBIND
+%token tIMPL
 %token tIMPLICITHANDLE
 %token tIMPORT tIMPORTLIB
 %token tIN tIN_LINE tINLINE
@@ -706,6 +707,7 @@ attribute
         | tIGNORE                               { $$ = attr_int( @$, ATTR_IGNORE, 0 ); }
         | tIIDIS '(' expr ')'                   { $$ = attr_ptr( @$, ATTR_IIDIS, $3 ); }
         | tIMMEDIATEBIND                        { $$ = attr_int( @$, ATTR_IMMEDIATEBIND, 0 ); }
+        | tIMPL '(' type ')'                    { $$ = attr_ptr( @$, ATTR_IMPL, $3 ); }
         | tIMPLICITHANDLE '(' arg ')'           { $$ = attr_ptr( @$, ATTR_IMPLICIT_HANDLE, $3 ); }
         | tIN                                   { $$ = attr_int( @$, ATTR_IN, 0 ); }
         | tINPUTSYNC                            { $$ = attr_int( @$, ATTR_INPUTSYNC, 0 ); }
