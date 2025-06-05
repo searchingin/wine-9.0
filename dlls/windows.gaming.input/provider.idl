@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#pragma makedep header
+#pragma makedep header impl
 
 #ifdef __WIDL__
 #pragma winrt ns_prefix
@@ -193,3 +193,16 @@ namespace Windows.Gaming.Input.Custom {
                                      [in, optional] WineForceFeedbackEffectEnvelope *envelope);
     }
 }
+
+#ifdef __WIDL_IMPL__
+
+[impl(struct provider)]
+struct provider_klass
+{
+    Windows.Gaming.Input.Custom.IWineGameControllerProvider IWineGameControllerProvider_iface;
+    Windows.Gaming.Input.Custom.IGameControllerProvider IGameControllerProvider_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
+#endif /* __WIDL_IMPL__ */
