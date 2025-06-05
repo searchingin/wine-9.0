@@ -22,6 +22,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "widl.h"
 #include "utils.h"
@@ -32,6 +33,12 @@
 #include "typelib.h"
 
 static int indent;
+
+static char *strupper( char *s )
+{
+    for (char *p = s; *p; p++) *p = toupper( *p );
+    return s;
+}
 
 static void write_import( const char *import )
 {
@@ -59,8 +66,27 @@ static void write_imports( const statement_list_t *stmts )
     }
 }
 
+static void write_iface_impl_from( const type_t *klass, const type_t *impl, const var_t *var )
+{
+    const type_t *iface = var->declspec.type;
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+
+    put_str( indent, "static inline struct %s *%s_from_%s( %s *iface )\n", klass->name, klass->name, short_name, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    return CONTAINING_RECORD( iface, struct %s, %s );\n", klass->name, var->name );
+    put_str( indent, "}\n" );
+
+    if (impl == klass) return;
+
+    put_str( indent, "static inline struct %s *%s_from_%s( %s *iface )\n", impl->name, impl->name, short_name, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    return %s_funcs.from_klass( %s_from_%s( iface ) );\n", impl->name, klass->name, short_name );
+    put_str( indent, "}\n" );
+}
+
 static void write_impl( const type_t *impl, const type_t *klass )
 {
+    bool from_klass;
     struct strbuf str = {0};
     const var_t *var;
 
@@ -75,6 +101,28 @@ static void write_impl( const type_t *impl, const type_t *klass )
         str.pos = 0;
     }
     put_str( --indent, "};\n\n" );
+
+    from_klass = impl != klass;
+
+    put_str( indent, "static const struct %s_funcs\n", impl->name );
+    put_str( indent, "{\n" );
+    if (from_klass) put_str( indent, "    struct %s *(*from_klass)( struct %s *klass );\n", impl->name, klass->name );
+    put_str( indent, "    int placeholder;\n" );
+    put_str( indent, "} %s_funcs;\n\n", impl->name );
+
+    put_str( indent++, "#define %s_FUNCS_INIT \\\n", strupper( strdup( impl->name ) ) );
+    put_str( indent++, "{ \\\n" );
+    if (from_klass) put_str( indent, ".from_klass = %s_from_klass, \\\n", impl->name );
+    put_str( indent, "0 \\\n" );
+    put_str( --indent, "}\n" );
+    put_str( --indent, "\n" );
+
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        if (!strendswith( var->name, "_iface" )) continue;
+        write_iface_impl_from( klass, impl, var );
+    }
+    put_str( indent, "\n" );
 
     put_str( indent, "#endif /* WIDL_impl_%s */\n", impl->name );
 }
