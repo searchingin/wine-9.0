@@ -334,9 +334,13 @@ static void write_iface_impl_from( const type_t *klass, const type_t *impl, cons
 
 static void write_iface_query( const type_t *klass, const type_t *impl, const var_t *var )
 {
+    const expr_t *iid_expr = get_attrp( var->attrs, ATTR_IIDIS );
     const type_t *iface = var->declspec.type;
     const char *short_name = iface->short_name ? iface->short_name : iface->name;
-    const char *iid = strmake( "&IID_%s", iface->c_name );
+    const char *iid;
+
+    if (iid_expr) iid = strmake( "klass->%s", iid_expr->u.sval );
+    else iid = strmake( "&IID_%s", iface->c_name );
 
     if (!iface_inherits( iface, "IUnknown" )) return;
 
