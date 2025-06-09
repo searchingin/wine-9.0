@@ -14461,25 +14461,17 @@ static void test_bitmap_create(BOOL d3d11)
             bitmap_desc.bitmapOptions = subresource_tests[i].options;
             hr = ID2D1DeviceContext_CreateSharedBitmap(ctx.context, &IID_IDXGISurface2, surface2,
                     (const D2D1_BITMAP_PROPERTIES *)&bitmap_desc, &bitmap2);
-            todo_wine
             ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-            if (hr == S_OK)
-            {
-                check_bitmap_subresource_surface(&ctx, bitmap2, resource, (IDXGISurface *)surface2,
-                        expect_parent_surface, subresource_tests[i].options, TRUE);
-                ID2D1Bitmap_Release(bitmap2);
-            }
+            check_bitmap_subresource_surface(&ctx, bitmap2, resource, (IDXGISurface *)surface2,
+                    expect_parent_surface, subresource_tests[i].options, TRUE);
+            ID2D1Bitmap_Release(bitmap2);
 
             hr = ID2D1DeviceContext_CreateBitmapFromDxgiSurface(ctx.context,
                     (IDXGISurface *)surface2, &bitmap_desc, &bitmap);
-            todo_wine
             ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-            if (hr == S_OK)
-            {
-                check_bitmap_subresource_surface(&ctx, (ID2D1Bitmap *)bitmap, resource,
-                        (IDXGISurface *)surface2, expect_parent_surface, subresource_tests[i].options, FALSE);
-                ID2D1Bitmap1_Release(bitmap);
-            }
+            check_bitmap_subresource_surface(&ctx, (ID2D1Bitmap *)bitmap, resource,
+                    (IDXGISurface *)surface2, expect_parent_surface, subresource_tests[i].options, FALSE);
+            ID2D1Bitmap1_Release(bitmap);
 
             IDXGISurface2_Release(surface2);
             winetest_pop_context();

@@ -418,7 +418,8 @@ static HRESULT STDMETHODCALLTYPE d2d_device_context_CreateSharedBitmap(ID2D1Devi
     if (desc)
     {
         memcpy(&bitmap_desc, desc, sizeof(*desc));
-        if (IsEqualIID(iid, &IID_IDXGISurface) || IsEqualIID(iid, &IID_IDXGISurface1))
+        if (IsEqualIID(iid, &IID_IDXGISurface) || IsEqualIID(iid, &IID_IDXGISurface1)
+                || IsEqualIID(iid, &IID_IDXGISurface2))
             bitmap_desc.bitmapOptions = d2d_get_bitmap_options_for_surface(data);
         else
             bitmap_desc.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
@@ -2204,9 +2205,17 @@ static HRESULT STDMETHODCALLTYPE d2d_device_context_CreateBitmapFromDxgiSurface(
     D2D1_BITMAP_PROPERTIES1 bitmap_desc;
     unsigned int surface_options;
     struct d2d_bitmap *object;
+    ID3D11Texture2D *texture;
     HRESULT hr;
 
     TRACE("iface %p, surface %p, desc %p, bitmap %p.\n", iface, surface, desc, bitmap);
+
+    if (FAILED(hr = d2d_get_resource_from_surface(surface, &IID_ID3D11Texture2D, NULL, (void **)&texture)))
+    {
+        WARN("Surface is not from a 2D texture, hr %#lx.\n", hr);
+        return hr;
+    }
+    ID3D11Texture2D_Release(texture);
 
     surface_options = d2d_get_bitmap_options_for_surface(surface);
 
@@ -3460,7 +3469,8 @@ static HRESULT d2d_gdi_interop_get_surface(struct d2d_device_context *context, I
         return D2DERR_TARGET_NOT_GDI_COMPATIBLE;
 
     ID3D11RenderTargetView_GetResource(context->target.bitmap->rtv, &resource);
-    hr = ID3D11Resource_QueryInterface(resource, &IID_IDXGISurface1, (void **)surface);
+    hr = d2d_get_surface_from_resource(resource, context->target.bitmap->subresource_idx,
+            &IID_IDXGISurface1, (void **)surface);
     ID3D11Resource_Release(resource);
     if (FAILED(hr))
     {
@@ -3815,7 +3825,7 @@ static const char shape_ps_code[] =
     "} colour_brush, opacity_brush;\n"
     "\n"
     "SamplerState s0, s1;\n"
-    "Texture2D t0, t1;\n"
+    "Texture2DArray t0, t1;\n"
     "Buffer<float4> b0, b1;\n"
     "\n"
     "struct input\n"
@@ -3904,7 +3914,7 @@ static const char shape_ps_code[] =
     "    return sample_gradient(gradient, stop_count, l / t);\n"
     "}\n"
     "\n"
-    "float4 brush_bitmap(struct brush brush, Texture2D t, SamplerState s, float2 position)\n"
+    "float4 brush_bitmap(struct brush brush, Texture2DArray t, SamplerState s, float2 position)\n"
     "{\n"
     "    float3 transform[2];\n"
     "    bool ignore_alpha;\n"
@@ -3917,13 +3927,13 @@ static const char shape_ps_code[] =
     "\n"
     "    texcoord.x = dot(position.xy, transform[0].xy) + transform[0].z;\n"
     "    texcoord.y = dot(position.xy, transform[1].xy) + transform[1].z;\n"
-    "    colour = t.Sample(s, texcoord);\n"
+    "    colour = t.Sample(s, float3(texcoord, 0.0));\n"
     "    if (ignore_alpha)\n"
     "        colour.a = 1.0;\n"
     "    return colour;\n"
     "}\n"
     "\n"
-    "float4 sample_brush(struct brush brush, Texture2D t, SamplerState s, Buffer<float4> b, float2 position)\n"
+    "float4 sample_brush(struct brush brush, Texture2DArray t, SamplerState s, Buffer<float4> b, float2 position)\n"
     "{\n"
     "    if (brush.type == BRUSH_TYPE_SOLID)\n"
     "        return brush.data[0] * brush.opacity;\n"
