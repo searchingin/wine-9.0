@@ -83,7 +83,7 @@ static void test_longpath_support(void)
 
     SetLastError(0xdeadbeef);
     ret = pGetFinalPathNameByHandleW(file, dummy, 128, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
-    todo_wine ok(ret > 128, "GetFinalPathNameByHandleW returned %ld but expected more than 128, error %lu\n",
+    ok(ret > 128, "GetFinalPathNameByHandleW returned %ld but expected more than 128, error %lu\n",
             ret, GetLastError());
 
     CloseHandle(file);
