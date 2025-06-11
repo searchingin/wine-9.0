@@ -24,11 +24,13 @@
 #include <windef.h>
 #include <winbase.h>
 #include <winerror.h>
+#include <winternl.h>
 #include <ioringapi.h>
 
 #include "wine/test.h"
 
 static HRESULT (WINAPI *pQueryIoRingCapabilities)(IORING_CAPABILITIES *);
+static HRESULT (WINAPI *pGetFinalPathNameByHandleW)(HANDLE, WCHAR *, DWORD, DWORD);
 
 static void test_ioring_caps(void)
 {
@@ -46,12 +48,56 @@ static void test_ioring_caps(void)
     todo_wine ok(hr == S_OK, "got %#lx.\n", hr);
 }
 
+static void test_longpath_support(void)
+{
+    HANDLE file;
+    DWORD ret;
+    WCHAR dummy[128] = {};
+    BOOL success;
+    /* Individual path components cannot be more than lpMaximumComponentLength as returned by
+     * GetVolumeInformation. This is typically only 255 characters, so testing long path support
+     * requires making a containing folder first */
+    static const WCHAR testfolder[] =
+        L"\\\\?\\C:\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    static const WCHAR testfile[] =
+        L"\\\\?\\C:\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    if (!pGetFinalPathNameByHandleW)
+    {
+        win_skip("GetFinalPathNameByHandleW is missing\n");
+        return;
+    }
+
+    SetLastError(0xdeadbeef);
+    success = CreateDirectoryW(testfolder, NULL);
+    ok(success != 0, "CreateDirectoryW error %lu\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    file = CreateFileW(testfile, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+            FILE_FLAG_DELETE_ON_CLOSE, 0);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFileW error %lu\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = pGetFinalPathNameByHandleW(file, dummy, 128, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    todo_wine ok(ret > 128, "GetFinalPathNameByHandleW returned %ld but expected more than 128, error %lu\n",
+            ret, GetLastError());
+
+    CloseHandle(file);
+    RemoveDirectoryW(testfolder);
+}
+
 START_TEST(file)
 {
     HMODULE hmod;
 
     hmod = LoadLibraryA("kernelbase.dll");
     pQueryIoRingCapabilities = (void *)GetProcAddress(hmod, "QueryIoRingCapabilities");
+    pGetFinalPathNameByHandleW = (void *)GetProcAddress(hmod, "GetFinalPathNameByHandleW");
 
     test_ioring_caps();
+    test_longpath_support();
 }
