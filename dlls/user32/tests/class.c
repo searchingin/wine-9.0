@@ -2218,7 +2218,7 @@ static void test_actctx_classes(void)
     tmp_hwnd = FindWindowExA( NULL, NULL, MAKEINTRESOURCEA( class ), NULL );
     todo_wine ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     tmp_hwnd = FindWindowExA( NULL, NULL, wc_integral.lpszClassName, NULL );
-    todo_wine ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
+    ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     tmp_hwnd = FindWindowExA(NULL, NULL, wc_integral_versioned.lpszClassName, NULL);
     ok( tmp_hwnd == NULL, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
 
@@ -2228,7 +2228,7 @@ static void test_actctx_classes(void)
     tmp_hwnd = FindWindowExA( NULL, NULL, MAKEINTRESOURCEA( class ), NULL );
     todo_wine ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     tmp_hwnd = FindWindowExA( NULL, NULL, wc_integral.lpszClassName, NULL );
-    todo_wine ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
+    ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     tmp_hwnd = FindWindowExA(NULL, NULL, wc_integral_versioned.lpszClassName, NULL);
     ok( tmp_hwnd == NULL, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     DestroyWindow( hwnd );
@@ -2238,7 +2238,7 @@ static void test_actctx_classes(void)
     tmp_hwnd = FindWindowExA( NULL, NULL, MAKEINTRESOURCEA( class ), NULL );
     todo_wine ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     tmp_hwnd = FindWindowExA( NULL, NULL, wc_integral.lpszClassName, NULL );
-    todo_wine ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
+    ok( tmp_hwnd == hwnd, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     tmp_hwnd = FindWindowExA( NULL, NULL, wc_integral_versioned.lpszClassName, NULL );
     ok( tmp_hwnd == NULL, "FindWindowExA returned %p, error %lu\n", tmp_hwnd, GetLastError() );
     DestroyWindow( hwnd );
