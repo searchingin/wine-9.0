@@ -167,33 +167,23 @@ DECL_HANDLER(create_class)
     struct atom_table *table = get_user_atom_table();
     atom_t atom, base_atom;
 
-    if (name.len)
+    if (!(atom = add_atom( table, &name ))) return;
+    if (req->name_offset && req->name_offset < name.len / sizeof(WCHAR))
     {
-        atom = add_atom( table, &name );
-        if (!atom) return;
-        if (req->name_offset && req->name_offset < name.len / sizeof(WCHAR))
-        {
-            name.str += req->name_offset;
-            name.len -= req->name_offset * sizeof(WCHAR);
+        name.str += req->name_offset;
+        name.len -= req->name_offset * sizeof(WCHAR);
 
-            base_atom = add_atom( table, &name );
-            if (!base_atom)
-            {
-                release_atom( table, atom );
-                return;
-            }
-        }
-        else
+        base_atom = add_atom( table, &name );
+        if (!base_atom)
         {
-            base_atom = atom;
-            grab_atom( table, atom );
+            release_atom( table, atom );
+            return;
         }
     }
     else
     {
-        base_atom = atom = req->atom;
-        if (!grab_atom( table, atom )) return;
-        grab_atom( table, base_atom );
+        base_atom = atom;
+        grab_atom( table, atom );
     }
 
     class = find_class( current->process, atom, req->instance );
@@ -234,11 +224,11 @@ DECL_HANDLER(destroy_class)
     struct window_class *class;
     struct unicode_str name = get_req_unicode_str();
     struct atom_table *table = get_user_atom_table();
-    atom_t atom = req->atom;
+    atom_t atom;
 
-    if (name.len) atom = find_atom( table, &name );
-
-    if (!(class = find_class( current->process, atom, req->instance )))
+    if (!(atom = find_atom( table, &name )))
+        set_win32_error( ERROR_CLASS_DOES_NOT_EXIST );
+    else if (!(class = find_class( current->process, atom, req->instance )))
         set_win32_error( ERROR_CLASS_DOES_NOT_EXIST );
     else if (class->count)
         set_win32_error( ERROR_CLASS_HAS_WINDOWS );

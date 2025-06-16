@@ -489,9 +489,8 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
 
     if (!(class = calloc( 1, sizeof(CLASS) + wc->cbClsExtra ))) return 0;
 
-    class->atomName = get_int_atom_value( name );
     class->basename = class->name;
-    if (!class->atomName && name)
+    if (!(atom = get_int_atom_value( name )))
     {
         memcpy( class->name, name->Buffer, name->Length );
         class->name[name->Length / sizeof(WCHAR)] = 0;
@@ -499,8 +498,9 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
     }
     else
     {
-        UNICODE_STRING str = { .MaximumLength = sizeof(class->name), .Buffer = class->name };
-        NtUserGetAtomName( class->atomName, &str );
+        name->Buffer = class->name;
+        name->MaximumLength = sizeof(class->name);
+        name->Length = NtUserGetAtomName( atom, name ) * sizeof(WCHAR);
     }
 
     class->style      = wc->style;
@@ -517,9 +517,8 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
         req->extra      = class->cbClsExtra;
         req->win_extra  = class->cbWndExtra;
         req->client_ptr = wine_server_client_ptr( class );
-        req->atom       = class->atomName;
         req->name_offset = version->Length / sizeof(WCHAR);
-        if (!req->atom && name) wine_server_add_data( req, name->Buffer, name->Length );
+        wine_server_add_data( req, name->Buffer, name->Length );
         ret = !wine_server_call_err( req );
         class->atomName = reply->atom;
     }
@@ -564,16 +563,24 @@ ATOM WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *nam
 BOOL WINAPI NtUserUnregisterClass( UNICODE_STRING *name, HINSTANCE instance,
                                    struct client_menu_name *client_menu_name )
 {
+    WCHAR nameW[MAX_ATOM_LEN + 1];
     CLASS *class = NULL;
+    ATOM atom;
 
     /* create the desktop window to trigger builtin class registration */
     get_desktop_window();
 
+    if ((atom = get_int_atom_value( name )))
+    {
+        name->Buffer = nameW;
+        name->MaximumLength = sizeof(nameW);
+        name->Length = NtUserGetAtomName( atom, name ) * sizeof(WCHAR);
+    }
+
     SERVER_START_REQ( destroy_class )
     {
         req->instance = wine_server_client_ptr( instance );
-        if (!(req->atom = get_int_atom_value( name )) && name->Length)
-            wine_server_add_data( req, name->Buffer, name->Length );
+        wine_server_add_data( req, name->Buffer, name->Length );
         if (!wine_server_call_err( req )) class = wine_server_get_ptr( reply->client_ptr );
     }
     SERVER_END_REQ;
