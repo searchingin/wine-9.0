@@ -3585,12 +3585,20 @@ static LRESULT retrieve_reply( const struct send_message_info *info,
 
     free( reply_data );
 
-    TRACE( "hwnd %p msg %x (%s) wp %lx lp %lx got reply %lx (err=%d)\n",
-           info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd), (long)info->wparam,
-           info->lparam, *result, status );
-
     /* MSDN states that last error is 0 on timeout, but at least NT4 returns ERROR_TIMEOUT */
-    if (status) RtlSetLastWin32Error( RtlNtStatusToDosError(status) );
+    if (status)
+    {
+        WARN( "hwnd %p msg %x (%s) wp %lx lp %lx got reply %lx (err=%d)\n",
+              info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd), (long)info->wparam,
+              info->lparam, *result, status );
+        RtlSetLastWin32Error( RtlNtStatusToDosError(status) );
+    }
+    else
+    {
+        TRACE( "hwnd %p msg %x (%s) wp %lx lp %lx got reply %lx (err=%d)\n",
+               info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd), (long)info->wparam,
+               info->lparam, *result, status );
+    }
     return !status;
 }
 
