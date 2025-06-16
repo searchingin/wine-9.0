@@ -4532,6 +4532,10 @@ LRESULT WINAPI NtUserMessageCall( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
             DWORD_PTR res = 0;
             params->result = send_client_message( hwnd, msg, wparam, lparam, params->flags,
                                                   params->timeout, &res, ansi );
+            if (!params->result && (params->flags & SMTO_NOTIMEOUTIFNOTHUNG))
+            {
+                FIXME( "Timeout and SMTO_NOTIMEOUTIFNOTHUNG is not implemented\n" );
+            }
             return res;
         }
 
