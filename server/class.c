@@ -254,7 +254,6 @@ DECL_HANDLER(destroy_class)
 DECL_HANDLER(set_class_info)
 {
     struct window_class *class = get_window_class( req->window );
-    struct atom_table *table = get_user_atom_table();
 
     if (!class) return;
 
@@ -293,12 +292,6 @@ DECL_HANDLER(set_class_info)
     reply->old_instance  = class->instance;
     reply->base_atom     = class->base_atom;
 
-    if (req->flags & SET_CLASS_ATOM)
-    {
-        if (!grab_atom( table, req->atom )) return;
-        release_atom( table, class->atom );
-        class->atom = req->atom;
-    }
     if (req->flags & SET_CLASS_STYLE) class->style = req->style;
     if (req->flags & SET_CLASS_WINEXTRA) class->win_extra = req->win_extra;
     if (req->flags & SET_CLASS_INSTANCE) class->instance = req->instance;
