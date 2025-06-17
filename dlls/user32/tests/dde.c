@@ -1274,7 +1274,12 @@ static LRESULT WINAPI dde_server_wndprocA(HWND hwnd, UINT msg, WPARAM wparam, LP
 
         if ((cmd = GlobalLock((HGLOBAL)hi)))
         {
-            ack.fAck = !lstrcmpA(cmd, exec_cmdA) || !lstrcmpW((LPCWSTR)cmd, exec_cmdW);
+            SIZE_T size;
+            BOOL maybe_w, maybe_a;
+            size = GlobalSize((HGLOBAL)hi);
+            maybe_w = (size % sizeof(WCHAR) == 0) && ((WCHAR *)cmd)[size / sizeof(WCHAR) - 1] == 0;
+            maybe_a = cmd[size - 1] == 0;
+            ack.fAck = (maybe_a && !lstrcmpA(cmd, exec_cmdA)) || (maybe_w && !lstrcmpW((LPCWSTR)cmd, exec_cmdW));
 
             switch (step % 5)
             {
@@ -1407,7 +1412,12 @@ static LRESULT WINAPI dde_server_wndprocW(HWND hwnd, UINT msg, WPARAM wparam, LP
 
         if ((cmd = GlobalLock((HGLOBAL)hi)))
         {
-            ack.fAck = !lstrcmpA(cmd, exec_cmdA) || !lstrcmpW((LPCWSTR)cmd, exec_cmdW);
+            SIZE_T size;
+            BOOL maybe_w, maybe_a;
+            size = GlobalSize((HGLOBAL)hi);
+            maybe_w = (size % sizeof(WCHAR) == 0) && ((WCHAR *)cmd)[size / sizeof(WCHAR) - 1] == 0;
+            maybe_a = cmd[size - 1] == 0;
+            ack.fAck = (maybe_a && !lstrcmpA(cmd, exec_cmdA)) || (maybe_w && !lstrcmpW((LPCWSTR)cmd, exec_cmdW));
 
             switch (step % 5)
             {
