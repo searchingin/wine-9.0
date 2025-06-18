@@ -1859,7 +1859,7 @@ static void test_move(void)
     ok(!file_exists("nonexistence"), "Expected nonexistence to not exist.\n");
     check_file_operation(FO_MOVE, FOF_NO_UI,
             "test1.txt\0", "\0",
-            ERROR_FILE_NOT_FOUND, FALSE, FALSE, FALSE);
+            ERROR_NO_MORE_SEARCH_HANDLES, FALSE, TRUE, FALSE);
     check_file_operation(FO_MOVE, FOF_NO_UI,
             "testdir2\0", "\0",
             DE_DESTSAMETREE, FALSE, TRUE, FALSE);
