@@ -49,7 +49,7 @@ static void test_formats(void)
     ok(ret == ICERR_OK, "Got %Id.\n", ret);
 
     ret = ICDecompressGetFormat(hic, &in, NULL);
-    todo_wine ok(ret == offsetof(BITMAPINFO, bmiColors[256]), "Got %Id.\n", ret);
+    ok(ret == offsetof(BITMAPINFO, bmiColors[256]), "Got %Id.\n", ret);
 
     in.biWidth = 320;
     in.biHeight = 240;
@@ -64,14 +64,14 @@ static void test_formats(void)
     ok(out->bmiHeader.biSize == sizeof(BITMAPINFOHEADER), "Got size %lu.\n", out->bmiHeader.biSize);
     ok(out->bmiHeader.biWidth == 320, "Got width %ld.\n", out->bmiHeader.biWidth);
     ok(out->bmiHeader.biHeight == 240, "Got height %ld.\n", out->bmiHeader.biHeight);
-    todo_wine ok(out->bmiHeader.biPlanes == 1, "Got %u planes.\n", out->bmiHeader.biPlanes);
+    ok(out->bmiHeader.biPlanes == 1, "Got %u planes.\n", out->bmiHeader.biPlanes);
     ok(out->bmiHeader.biBitCount == 24, "Got depth %u.\n", out->bmiHeader.biBitCount);
     ok(out->bmiHeader.biCompression == BI_RGB, "Got compression %#lx.\n", out->bmiHeader.biCompression);
     ok(out->bmiHeader.biSizeImage == 320 * 240 * 3, "Got image size %lu.\n", out->bmiHeader.biSizeImage);
-    todo_wine ok(!out->bmiHeader.biXPelsPerMeter, "Got horizontal resolution %ld.\n", out->bmiHeader.biXPelsPerMeter);
-    todo_wine ok(!out->bmiHeader.biYPelsPerMeter, "Got vertical resolution %ld.\n", out->bmiHeader.biYPelsPerMeter);
-    todo_wine ok(!out->bmiHeader.biClrUsed, "Got %lu used colours.\n", out->bmiHeader.biClrUsed);
-    todo_wine ok(!out->bmiHeader.biClrImportant, "Got %lu important colours.\n", out->bmiHeader.biClrImportant);
+    ok(!out->bmiHeader.biXPelsPerMeter, "Got horizontal resolution %ld.\n", out->bmiHeader.biXPelsPerMeter);
+    ok(!out->bmiHeader.biYPelsPerMeter, "Got vertical resolution %ld.\n", out->bmiHeader.biYPelsPerMeter);
+    ok(!out->bmiHeader.biClrUsed, "Got %lu used colours.\n", out->bmiHeader.biClrUsed);
+    ok(!out->bmiHeader.biClrImportant, "Got %lu important colours.\n", out->bmiHeader.biClrImportant);
     ok(out->bmiColors[0].rgbRed == 0xcc, "Expected colours to be unmodified.\n");
 
     ret = ICDecompressQuery(hic, &in, out);
@@ -85,12 +85,12 @@ static void test_formats(void)
 
     out->bmiHeader.biHeight = -480;
     ret = ICDecompressQuery(hic, &in, out);
-    todo_wine ok(ret == ICERR_BADPARAM, "Got %Id.\n", ret);
+    ok(ret == ICERR_BADPARAM, "Got %Id.\n", ret);
     out->bmiHeader.biHeight = -240;
 
     out->bmiHeader.biWidth = 640;
     ret = ICDecompressQuery(hic, &in, out);
-    todo_wine ok(ret == ICERR_BADPARAM, "Got %Id.\n", ret);
+    ok(ret == ICERR_BADPARAM, "Got %Id.\n", ret);
     out->bmiHeader.biWidth = 320;
 
     out->bmiHeader.biBitCount = 8;
@@ -111,7 +111,7 @@ static void test_formats(void)
     ((DWORD *)&out->bmiColors[0])[1] = 0x07e0;
     ((DWORD *)&out->bmiColors[0])[2] = 0x001f;
     ret = ICDecompressQuery(hic, &in, out);
-    todo_wine ok(ret == ICERR_OK, "Got %Id.\n", ret);
+    ok(ret == ICERR_OK, "Got %Id.\n", ret);
 
     out->bmiHeader.biCompression = mmioFOURCC('C','L','J','R');
     out->bmiHeader.biBitCount = 8;
