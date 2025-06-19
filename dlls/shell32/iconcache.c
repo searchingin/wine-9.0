@@ -1000,19 +1000,24 @@ HRESULT WINAPI SHGetStockIconInfo(SHSTOCKICONID id, UINT flags, SHSTOCKICONINFO 
 
     GetSystemDirectoryW(sii->szPath, MAX_PATH);
 
-    /* no icons defined: use default */
-    sii->iIcon = -IDI_SHELL_FILE;
+    sii->iIcon = id;
     lstrcatW(sii->szPath, L"\\shell32.dll");
 
-    if (flags)
-        FIXME("flags 0x%x not implemented\n", flags);
+    if (flags & ~SHGSI_ICON)
+        FIXME("unhandled flags 0x%x\n", flags);
 
     sii->hIcon = NULL;
-    if (flags & SHGSI_ICON)
-        sii->hIcon = LoadIconW(GetModuleHandleW(sii->szPath), MAKEINTRESOURCEW(sii->iIcon));
+    if (flags & SHGSI_ICON) {
+        sii->hIcon = LoadIconW(GetModuleHandleW(sii->szPath), MAKEINTRESOURCEW(id));
+        if (!sii->hIcon) {
+          FIXME("Could not find StockIcon, using placeholder\n");
+          sii->iIcon = SIID_DOCASSOC;
+          sii->hIcon = LoadIconW(GetModuleHandleW(sii->szPath), MAKEINTRESOURCEW(sii->iIcon));
+        }
+    }
     sii->iSysImageIndex = -1;
 
-    TRACE("%3d: returning %s (%d)\n", id, debugstr_w(sii->szPath), sii->iIcon);
+    TRACE("%3d: returning %s (%d), icon handle=%p\n", id, debugstr_w(sii->szPath), sii->iIcon, sii->hIcon);
 
     return S_OK;
 }
