@@ -64,12 +64,14 @@ namespace Windows.Storage {
     interface IStorageFileStatics;
     interface IStorageFileStatics2;
     interface IStorageItem;
+    interface IStreamedFileDataRequest;
 
     runtimeclass ApplicationData;
     runtimeclass ApplicationDataContainer;
     runtimeclass KnownFolders;
     runtimeclass SetVersionDeferral;
     runtimeclass SetVersionRequest;
+    runtimeclass StreamedFileDataRequest;
     runtimeclass StorageFolder;
     runtimeclass StorageFile;
     runtimeclass StorageStreamTransaction;
@@ -238,6 +240,12 @@ namespace Windows.Storage {
         uuid(a05791e6-cc9f-4687-acab-a364fd785463)
     ]
     delegate HRESULT ApplicationDataSetVersionHandler([in] Windows.Storage.SetVersionRequest *version);
+
+    [
+        contract(Windows.Foundation.UniversalApiContract, 1.0),
+        uuid(fef6a824-2fe1-4d07-a35b-b77c50b5f4cc)
+    ]
+    delegate HRESULT StreamedFileDataRequestedHandler([in] Windows.Storage.StreamedFileDataRequest *stream);
 
     [
         contract(Windows.Foundation.UniversalApiContract, 1.0),
@@ -514,6 +522,21 @@ namespace Windows.Storage {
 
     [
         contract(Windows.Foundation.UniversalApiContract, 1.0),
+        exclusiveto(Windows.Storage.StorageFile),
+        uuid(5984c710-daf2-43c8-8bb4-a4d3eacfd03f)
+    ]
+    interface IStorageFileStatics : IInspectable
+    {
+        HRESULT CreateStreamedFileAsync(
+            [in] HSTRING display_name_with_extensions,
+            [in] Windows.Storage.StreamedFileDataRequestedHandler *data_requested,
+            [in] Windows.Storage.Streams.IRandomAccessStreamReference *thumbnail,
+            [out, retval] Windows.Foundation.IAsyncOperation<Windows.Storage.StorageFile *> **operation
+        );
+    }
+
+    [
+        contract(Windows.Foundation.UniversalApiContract, 1.0),
         uuid(72d1cb78-b3ef-4f75-a80b-6fd9dae2944b)
     ]
     interface IStorageFolder : IInspectable
@@ -648,6 +671,14 @@ namespace Windows.Storage {
     runtimeclass SetVersionRequest
     {
         [default] interface Windows.Storage.ISetVersionRequest;
+    }
+
+    [
+        contract(Windows.Foundation.UniversalApiContract, 1.0),
+    ]
+    runtimeclass StreamedFileDataRequest
+    {
+        [default] interface Windows.Storage.IStreamedFileDataRequest;
     }
 
     [
