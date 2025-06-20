@@ -662,31 +662,23 @@ static void test_IApiInformationStatics(void)
 
     ret = FALSE;
     hr = IApiInformationStatics_IsApiContractPresentByMajorAndMinor(statics, str, 1, 0, &ret);
-    todo_wine
     ok(hr == S_OK, "IsApiContractPresentByMajorAndMinor failed, hr %#lx.\n", hr);
-    todo_wine
     ok(ret == TRUE, "IsApiContractPresentByMajorAndMinor returned FALSE.\n");
 
     ret = FALSE;
     hr = IApiInformationStatics_IsApiContractPresentByMajorAndMinor(statics, str, 0, 999, &ret);
-    todo_wine
     ok(hr == S_OK, "IsApiContractPresentByMajorAndMinor failed, hr %#lx.\n", hr);
-    todo_wine
     ok(ret == TRUE, "IsApiContractPresentByMajorAndMinor returned FALSE.\n");
 
     ret = FALSE;
     hr = IApiInformationStatics_IsApiContractPresentByMajorAndMinor(statics, str, 1, 999, &ret);
-    todo_wine
     ok(hr == S_OK, "IsApiContractPresentByMajorAndMinor failed, hr %#lx.\n", hr);
-    todo_wine
     ok(ret == TRUE || broken(ret == FALSE) /* Win10 1507 */,
             "IsApiContractPresentByMajorAndMinor returned FALSE.\n");
 
     ret = TRUE;
     hr = IApiInformationStatics_IsApiContractPresentByMajorAndMinor(statics, str, 999, 999, &ret);
-    todo_wine
     ok(hr == S_OK, "IsApiContractPresentByMajorAndMinor failed, hr %#lx.\n", hr);
-    todo_wine
     ok(ret == FALSE, "IsApiContractPresentByMajorAndMinor returned TRUE.\n");
 
     WindowsDeleteString(str);
@@ -699,7 +691,7 @@ static void test_IApiInformationStatics(void)
         for (j = 0; j <= present_contracts[i].max_major; ++j)
         {
             ret = FALSE;
-            hr = IApiInformationStatics_IsApiContractPresentByMajor(statics, str, i, &ret);
+            hr = IApiInformationStatics_IsApiContractPresentByMajor(statics, str, j, &ret);
             ok(hr == S_OK, "IsApiContractPresentByMajor failed, hr %#lx, i %u, major %u.\n", hr, i, j);
             ok(ret == TRUE, "IsApiContractPresentByMajor returned FALSE, i %u, major %u.\n", i, j);
         }
