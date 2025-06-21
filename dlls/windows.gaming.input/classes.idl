@@ -190,4 +190,23 @@ struct motor_klass
     LONG ref;
 };
 
+[impl(struct controller)]
+struct controller_klass
+{
+    Windows.Gaming.Input.IGameController IGameController_iface;
+    Windows.Gaming.Input.IGameControllerBatteryInfo IGameControllerBatteryInfo_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
+[impl(struct manager_statics)]
+struct manager_statics
+{
+    IActivationFactory IActivationFactory_iface;
+    Windows.Gaming.Input.Custom.IGameControllerFactoryManagerStatics IGameControllerFactoryManagerStatics_iface;
+    Windows.Gaming.Input.Custom.IGameControllerFactoryManagerStatics2 IGameControllerFactoryManagerStatics2_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */
