@@ -93,7 +93,7 @@
 2579 stub -noname SetWindowShowState  # NtUserSetWindowShowState
 
 2581 stub -noname GetWindowTrackInfoAsync  # NtUserGetWindowTrackInfoAsync
-2582 stub -noname ScheduleDispatchNotification  # NtUserScheduleDispatchNotification
+2582 stdcall -noname ScheduleDispatchNotification(ptr) NtUserScheduleDispatchNotification
 
 2584 stub -noname EnableModernAppWindowKeyboardIntercept  # NtUserEnableModernAppWindowKeyboardIntercept
 2585 stub -noname UpdateWindowTrackingInfo  # NtUserUpdateWindowTrackingInfo
@@ -642,7 +642,7 @@
 @ stdcall GetPointerInfo(long ptr)
 # @ stub GetPointerInfoHistory
 # @ stub GetPointerInputTransform
-# @ stub GetPointerPenInfo
+@ stdcall GetPointerPenInfo(long ptr)
 # @ stub GetPointerPenInfoHistory
 @ stdcall GetPointerTouchInfo(long ptr)
 @ stdcall GetPointerTouchInfoHistory(long ptr ptr)

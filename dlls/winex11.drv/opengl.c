@@ -202,17 +202,9 @@ struct x11drv_context
     struct list entry;
 };
 
-enum dc_gl_type
-{
-    DC_GL_NONE,       /* no GL support (pixel format not set yet) */
-    DC_GL_WINDOW,     /* normal top-level window */
-    DC_GL_PBUFFER     /* pseudo memory DC using a PBuffer */
-};
-
 struct gl_drawable
 {
     struct opengl_drawable         base;
-    enum dc_gl_type                type;         /* type of GL surface */
     RECT                           rect;         /* current size of the GL drawable */
     GLXDrawable                    drawable;     /* drawable for rendering with GL */
     Window                         window;       /* window if drawable is a GLXWindow */
@@ -350,7 +342,8 @@ static const GLubyte *(*pglGetString)(GLenum name);
 static void *opengl_handle;
 static const struct opengl_funcs *funcs;
 static const struct opengl_driver_funcs x11drv_driver_funcs;
-static const struct opengl_drawable_funcs x11drv_drawable_funcs;
+static const struct opengl_drawable_funcs x11drv_surface_funcs;
+static const struct opengl_drawable_funcs x11drv_pbuffer_funcs;
 
 /* check if the extension is present in the list */
 static BOOL has_extension( const char *list, const char *ext )
@@ -835,27 +828,17 @@ static struct gl_drawable *grab_gl_drawable( struct gl_drawable *gl )
     return gl;
 }
 
-static void x11drv_drawable_destroy( struct opengl_drawable *base )
+static void x11drv_surface_destroy( struct opengl_drawable *base )
 {
-    struct gl_drawable *gl = impl_from_opengl_drawable(base);
-    switch (gl->type)
-    {
-    case DC_GL_WINDOW:
-        TRACE( "destroying %lx drawable %lx\n", gl->window, gl->drawable );
-        pglXDestroyWindow( gdi_display, gl->drawable );
-        destroy_client_window( gl->base.hwnd, gl->window );
-        XFreeColormap( gdi_display, gl->colormap );
-        break;
-    case DC_GL_PBUFFER:
-        TRACE( "destroying pbuffer drawable %lx\n", gl->drawable );
-        pglXDestroyPbuffer( gdi_display, gl->drawable );
-        break;
-    default:
-        break;
-    }
+    struct gl_drawable *gl = impl_from_opengl_drawable( base );
+
+    TRACE( "drawable %s\n", debugstr_opengl_drawable( base ) );
+
+    pglXDestroyWindow( gdi_display, gl->drawable );
+    destroy_client_window( gl->base.hwnd, gl->window );
+    XFreeColormap( gdi_display, gl->colormap );
     if (gl->hdc_src) NtGdiDeleteObjectApp( gl->hdc_src );
     if (gl->hdc_dst) NtGdiDeleteObjectApp( gl->hdc_dst );
-    free( gl );
 }
 
 static BOOL set_swap_interval( struct gl_drawable *gl, int interval )
@@ -925,29 +908,21 @@ static GLXContext create_glxcontext( struct x11drv_context *context, int format,
     return ctx;
 }
 
-/***********************************************************************
- *              create_gl_drawable
- */
-static struct gl_drawable *create_gl_drawable( HWND hwnd, int format )
+static BOOL x11drv_surface_create( HWND hwnd, HDC hdc, int format, struct opengl_drawable **drawable )
 {
     struct glx_pixel_format *fmt = glx_pixel_format_from_format( format );
+    struct opengl_drawable *previous;
     struct gl_drawable *gl, *prev;
     RECT rect;
 
+    if ((previous = *drawable) && previous->format == format) return TRUE;
     NtUserGetClientRect( hwnd, &rect, NtUserGetDpiForWindow( hwnd ) );
 
-    if (!(gl = calloc( 1, sizeof(*gl) ))) return NULL;
-    gl->base.funcs = &x11drv_drawable_funcs;
-    gl->base.ref = 1;
-    gl->base.hwnd = hwnd;
-    gl->base.hdc = 0;
-    gl->base.format = format;
-
+    if (!(gl = opengl_drawable_create( sizeof(*gl), &x11drv_surface_funcs, format, hwnd, hdc ))) return FALSE;
     /* Default GLX and WGL swap interval is 1, but in case of glXSwapIntervalSGI there is no way to query it. */
     gl->swap_interval = INT_MIN;
     gl->rect = rect;
 
-    gl->type = DC_GL_WINDOW;
     gl->colormap = XCreateColormap( gdi_display, get_dummy_parent(), fmt->visual->visual,
                                     (fmt->visual->class == PseudoColor || fmt->visual->class == GrayScale ||
                                      fmt->visual->class == DirectColor) ? AllocAll : AllocNone );
@@ -957,7 +932,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, int format )
     if (!gl->drawable)
     {
         free( gl );
-        return NULL;
+        return FALSE;
     }
 
     TRACE( "Created drawable %s with client window %lx\n", debugstr_opengl_drawable( &gl->base ), gl->window );
@@ -965,26 +940,13 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, int format )
     pthread_mutex_lock( &context_mutex );
     if (!XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&prev ))
         opengl_drawable_release( &prev->base );
-    XSaveContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char *)grab_gl_drawable(gl) );
+    XSaveContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char *)gl );
     pthread_mutex_unlock( &context_mutex );
-    return gl;
-}
 
-static BOOL x11drv_set_pixel_format( HWND hwnd, int old_format, int new_format, BOOL internal )
-{
-    struct gl_drawable *gl;
-
-    /* Even for internal pixel format fail setting it if the app has already set a
-     * different pixel format. Let wined3d create a backup GL context instead.
-     * Switching pixel format involves drawable recreation and is much more expensive
-     * than blitting from backup context. */
-    if (old_format) return old_format == new_format;
-
-    if (!(gl = create_gl_drawable( hwnd, new_format ))) return FALSE;
-    TRACE( "created GL drawable %lx for win %p\n", gl->drawable, hwnd);
     XFlush( gdi_display );
-    opengl_drawable_release( &gl->base );
 
+    if (previous) opengl_drawable_release( previous );
+    opengl_drawable_add_ref( (*drawable = &gl->base) );
     return TRUE;
 }
 
@@ -1067,12 +1029,12 @@ void sync_gl_drawable( HWND hwnd )
     pthread_mutex_lock( &context_mutex );
     LIST_FOR_EACH_ENTRY( context, &context_list, struct x11drv_context, entry )
     {
-        if ((gl = context->draw) && gl->type == DC_GL_WINDOW && gl->base.hwnd == hwnd)
+        if ((gl = context->draw) && gl->base.funcs == &x11drv_surface_funcs && gl->base.hwnd == hwnd)
         {
             update_gl_drawable_size( gl );
             update_gl_drawable_offscreen( gl );
         }
-        if ((gl = context->read) && gl->type == DC_GL_WINDOW && gl->base.hwnd == hwnd)
+        if ((gl = context->read) && gl->base.funcs == &x11drv_surface_funcs && gl->base.hwnd == hwnd)
         {
             update_gl_drawable_size( gl );
             update_gl_drawable_offscreen( gl );
@@ -1313,17 +1275,17 @@ static void *x11drv_get_proc_address( const char *name )
     return pglXGetProcAddressARB( (const GLubyte *)name );
 }
 
-static void set_context_drawables( struct x11drv_context *ctx, struct gl_drawable *draw,
-                                   struct gl_drawable *read )
+static void set_context_drawables( struct x11drv_context *ctx, struct gl_drawable **draw,
+                                   struct gl_drawable **read )
 {
     struct gl_drawable *old_draw, *old_read;
 
     old_draw = ctx->draw;
     old_read = ctx->read;
-    ctx->draw = grab_gl_drawable( draw );
-    ctx->read = read ? grab_gl_drawable( read ) : NULL;
-    if (old_draw) opengl_drawable_release( &old_draw->base );
-    if (old_read) opengl_drawable_release( &old_read->base );
+    ctx->draw = *draw;
+    ctx->read = *read;
+    *draw = old_draw;
+    *read = old_read;
 }
 
 static BOOL x11drv_context_make_current( HDC draw_hdc, HDC read_hdc, void *private )
@@ -1350,7 +1312,7 @@ static BOOL x11drv_context_make_current( HDC draw_hdc, HDC read_hdc, void *priva
         else ret = pglXMakeContextCurrent( gdi_display, draw_gl->drawable, read_gl ? read_gl->drawable : 0, ctx->ctx );
         if (ret)
         {
-            set_context_drawables( ctx, draw_gl, read_gl );
+            set_context_drawables( ctx, &draw_gl, &read_gl );
             NtCurrentTeb()->glReserved2 = ctx;
             pthread_mutex_unlock( &context_mutex );
             goto done;
@@ -1406,7 +1368,7 @@ static BOOL x11drv_context_flush( void *private, HWND hwnd, HDC hdc, int interva
     struct gl_drawable *gl;
 
     if (!(gl = get_gl_drawable( hwnd, 0 ))) return FALSE;
-    if (gl->type != DC_GL_WINDOW)
+    if (gl->base.funcs != &x11drv_surface_funcs)
     {
         opengl_drawable_release( &gl->base );
         return FALSE;
@@ -1532,14 +1494,8 @@ static BOOL x11drv_pbuffer_create( HDC hdc, int format, BOOL largest, GLenum tex
     }
     glx_attribs[count++] = 0;
 
-    if (!(gl = calloc( 1, sizeof(*gl) ))) return FALSE;
-    gl->base.funcs = &x11drv_drawable_funcs;
-    gl->base.ref = 1;
-    gl->base.hwnd = 0;
-    gl->base.hdc = hdc;
-    gl->base.format = format;
+    if (!(gl = opengl_drawable_create( sizeof(*gl), &x11drv_pbuffer_funcs, format, 0, hdc ))) return FALSE;
 
-    gl->type = DC_GL_PBUFFER;
     gl->drawable = pglXCreatePbuffer( gdi_display, fmt->fbconfig, glx_attribs );
     TRACE( "new Pbuffer drawable as %p (%lx)\n", gl, gl->drawable );
     if (!gl->drawable)
@@ -1560,18 +1516,18 @@ static BOOL x11drv_pbuffer_create( HDC hdc, int format, BOOL largest, GLenum tex
     return TRUE;
 }
 
-static BOOL x11drv_pbuffer_destroy( HDC hdc, struct opengl_drawable *base )
+static void x11drv_pbuffer_destroy( struct opengl_drawable *base )
 {
     struct gl_drawable *gl = impl_from_opengl_drawable( base );
+    HDC hdc = gl->base.hdc;
 
-    TRACE( "hdc %p, drawable %s\n", hdc, debugstr_opengl_drawable( base ) );
+    TRACE( "drawable %s\n", debugstr_opengl_drawable( base ) );
 
     pthread_mutex_lock( &context_mutex );
     XDeleteContext( gdi_display, (XID)hdc, gl_pbuffer_context );
     pthread_mutex_unlock( &context_mutex );
-    opengl_drawable_release( &gl->base );
 
-    return GL_TRUE;
+    pglXDestroyPbuffer( gdi_display, gl->drawable );
 }
 
 static BOOL x11drv_pbuffer_updated( HDC hdc, struct opengl_drawable *base, GLenum cube_face, GLint mipmap_level )
@@ -1715,10 +1671,10 @@ static BOOL x11drv_swap_buffers( void *private, HWND hwnd, HDC hdc, int interval
         RtlSetLastWin32Error( ERROR_INVALID_HANDLE );
         return FALSE;
     }
-    if (gl->type != DC_GL_WINDOW)
+    if (gl->base.funcs == &x11drv_pbuffer_funcs)
     {
         opengl_drawable_release( &gl->base );
-        return FALSE;
+        return TRUE;
     }
 
     pthread_mutex_lock( &context_mutex );
@@ -1749,21 +1705,25 @@ static const struct opengl_driver_funcs x11drv_driver_funcs =
     .p_init_pixel_formats = x11drv_init_pixel_formats,
     .p_describe_pixel_format = x11drv_describe_pixel_format,
     .p_init_wgl_extensions = x11drv_init_wgl_extensions,
-    .p_set_pixel_format = x11drv_set_pixel_format,
+    .p_surface_create = x11drv_surface_create,
     .p_swap_buffers = x11drv_swap_buffers,
     .p_context_create = x11drv_context_create,
     .p_context_destroy = x11drv_context_destroy,
     .p_context_flush = x11drv_context_flush,
     .p_context_make_current = x11drv_context_make_current,
     .p_pbuffer_create = x11drv_pbuffer_create,
-    .p_pbuffer_destroy = x11drv_pbuffer_destroy,
     .p_pbuffer_updated = x11drv_pbuffer_updated,
     .p_pbuffer_bind = x11drv_pbuffer_bind,
 };
 
-static const struct opengl_drawable_funcs x11drv_drawable_funcs =
+static const struct opengl_drawable_funcs x11drv_surface_funcs =
 {
-    .destroy = x11drv_drawable_destroy,
+    .destroy = x11drv_surface_destroy,
+};
+
+static const struct opengl_drawable_funcs x11drv_pbuffer_funcs =
+{
+    .destroy = x11drv_pbuffer_destroy,
 };
 
 #else  /* no OpenGL includes */

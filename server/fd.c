@@ -129,6 +129,7 @@ struct fd
 {
     struct object        obj;         /* object header */
     const struct fd_ops *fd_ops;      /* file descriptor operations */
+    struct event_sync   *sync;        /* sync object for wait/signal */
     struct inode        *inode;       /* inode that this fd belongs to */
     struct list          inode_entry; /* entry in inode fd list */
     struct closed_fd    *closed;      /* structure to store the unix fd at destroy time */
@@ -145,7 +146,6 @@ struct fd
     int                  unix_fd;     /* unix file descriptor */
     unsigned int         no_fd_status;/* status to return when unix_fd is -1 */
     unsigned int         cacheable :1;/* can the fd be cached on the client side? */
-    unsigned int         signaled :1; /* is the fd signaled? */
     unsigned int         fs_locks :1; /* can we use filesystem locks for this fd? */
     int                  poll_index;  /* index of fd in poll array */
     struct async_queue   read_q;      /* async readers of this fd */
@@ -157,6 +157,7 @@ struct fd
 };
 
 static void fd_dump( struct object *obj, int verbose );
+static struct object *fd_get_sync( struct object *obj );
 static void fd_destroy( struct object *obj );
 
 static const struct object_ops fd_ops =
@@ -164,12 +165,13 @@ static const struct object_ops fd_ops =
     sizeof(struct fd),        /* size */
     &no_type,                 /* type */
     fd_dump,                  /* dump */
-    no_add_queue,             /* add_queue */
+    NULL,                     /* add_queue */
     NULL,                     /* remove_queue */
     NULL,                     /* signaled */
     NULL,                     /* satisfied */
     no_signal,                /* signal */
     no_get_fd,                /* get_fd */
+    fd_get_sync,              /* get_sync */
     default_map_access,       /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
@@ -211,6 +213,7 @@ static const struct object_ops device_ops =
     NULL,                     /* satisfied */
     no_signal,                /* signal */
     no_get_fd,                /* get_fd */
+    default_get_sync,         /* get_sync */
     default_map_access,       /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
@@ -251,6 +254,7 @@ static const struct object_ops inode_ops =
     NULL,                     /* satisfied */
     no_signal,                /* signal */
     no_get_fd,                /* get_fd */
+    default_get_sync,         /* get_sync */
     default_map_access,       /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
@@ -293,6 +297,7 @@ static const struct object_ops file_lock_ops =
     no_satisfied,               /* satisfied */
     no_signal,                  /* signal */
     no_get_fd,                  /* get_fd */
+    default_get_sync,           /* get_sync */
     default_map_access,         /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
@@ -1560,6 +1565,12 @@ static void fd_dump( struct object *obj, int verbose )
     fprintf( stderr, "\n" );
 }
 
+static struct object *fd_get_sync( struct object *obj )
+{
+    struct fd *fd = (struct fd *)obj;
+    return grab_object( fd->sync );
+}
+
 static void fd_destroy( struct object *obj )
 {
     struct fd *fd = (struct fd *)obj;
@@ -1584,6 +1595,7 @@ static void fd_destroy( struct object *obj )
         if (fd->unix_fd != -1) close( fd->unix_fd );
         free( fd->unix_name );
     }
+    if (fd->sync) release_object( fd->sync );
 }
 
 /* check if the desired access is possible without violating */
@@ -1684,6 +1696,7 @@ static struct fd *alloc_fd_object(void)
     if (!fd) return NULL;
 
     fd->fd_ops     = NULL;
+    fd->sync       = NULL;
     fd->user       = NULL;
     fd->inode      = NULL;
     fd->closed     = NULL;
@@ -1697,7 +1710,6 @@ static struct fd *alloc_fd_object(void)
     fd->nt_name    = NULL;
     fd->nt_namelen = 0;
     fd->cacheable  = 0;
-    fd->signaled   = 1;
     fd->fs_locks   = 1;
     fd->poll_index = -1;
     fd->completion = NULL;
@@ -1708,12 +1720,14 @@ static struct fd *alloc_fd_object(void)
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
 
-    if ((fd->poll_index = add_poll_user( fd )) == -1)
-    {
-        release_object( fd );
-        return NULL;
-    }
+    if (!(fd->sync = create_event_sync( 1, 1 ))) goto error;
+    if ((fd->poll_index = add_poll_user( fd )) == -1) goto error;
+
     return fd;
+
+error:
+    release_object( fd );
+    return NULL;
 }
 
 /* allocate a pseudo fd object, for objects that need to behave like files but don't have a unix fd */
@@ -1724,6 +1738,7 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
     if (!fd) return NULL;
 
     fd->fd_ops     = fd_user_ops;
+    fd->sync       = NULL;
     fd->user       = user;
     fd->inode      = NULL;
     fd->closed     = NULL;
@@ -1737,7 +1752,6 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
     fd->nt_namelen = 0;
     fd->unix_fd    = -1;
     fd->cacheable  = 0;
-    fd->signaled   = 1;
     fd->fs_locks   = 0;
     fd->poll_index = -1;
     fd->completion = NULL;
@@ -1748,6 +1762,12 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
     init_async_queue( &fd->wait_q );
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
+
+    if (!(fd->sync = create_event_sync( 1, 1 )))
+    {
+        release_object( fd );
+        return NULL;
+    }
     return fd;
 }
 
@@ -2151,8 +2171,8 @@ int is_fd_removable( struct fd *fd )
 void set_fd_signaled( struct fd *fd, int signaled )
 {
     if (fd->comp_flags & FILE_SKIP_SET_EVENT_ON_HANDLE) return;
-    fd->signaled = signaled;
-    if (signaled) wake_up( fd->user, 0 );
+    if (signaled) signal_sync( fd->sync );
+    else reset_sync( fd->sync );
 }
 
 /* check if events are pending and if yes return which one(s) */
@@ -2169,12 +2189,28 @@ int check_fd_events( struct fd *fd, int events )
     return pfd.revents;
 }
 
-/* default signaled() routine for objects that poll() on an fd */
-int default_fd_signaled( struct object *obj, struct wait_queue_entry *entry )
+/* default get_sync() routine for objects that poll() on an fd */
+struct object *default_fd_get_sync( struct object *obj )
 {
     struct fd *fd = get_obj_fd( obj );
-    int ret = fd->signaled;
+    struct object *sync = get_obj_sync( &fd->obj );
     release_object( fd );
+    return sync;
+}
+
+/* default get_full_name() routine for objects with an fd */
+WCHAR *default_fd_get_full_name( struct object *obj, data_size_t max, data_size_t *ret_len )
+{
+    struct fd *fd = get_obj_fd( obj );
+    WCHAR *ret = NULL;
+
+    if (fd->nt_name)
+    {
+        *ret_len = fd->nt_namelen;
+        ret = memdup( fd->nt_name, fd->nt_namelen );
+    }
+    release_object( fd );
+    if (*ret_len > max) set_error( STATUS_BUFFER_OVERFLOW );
     return ret;
 }
 

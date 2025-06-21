@@ -601,6 +601,16 @@ static enum table customattribute_type_to_table( UINT token )
     }
 }
 
+static enum table has_semantics_to_table( UINT token )
+{
+    switch (token & 0x1)
+    {
+    case 0: return TABLE_EVENT;
+    case 1: return TABLE_PROPERTY;
+    default: assert( 0 );
+    }
+}
+
 struct module_row
 {
     USHORT generation;
@@ -998,6 +1008,149 @@ static void serialize_assemblyref_table( void )
     }
 }
 
+struct propertymap_row
+{
+    UINT parent;
+    UINT proplist;
+};
+
+static UINT add_propertymap_row( UINT parent, UINT proplist )
+{
+    struct propertymap_row row = { parent, proplist };
+    return add_row( TABLE_PROPERTYMAP, (const BYTE *)&row, sizeof(row) );
+}
+
+static void serialize_propertymap_table( void )
+{
+    const struct propertymap_row *row = (const struct propertymap_row *)tables[TABLE_PROPERTYMAP].ptr;
+    UINT i;
+
+    for (i = 0; i < tables[TABLE_PROPERTYMAP].count; i++)
+    {
+        serialize_table_idx( row->parent, TABLE_TYPEDEF );
+        serialize_table_idx( row->proplist, TABLE_PROPERTY );
+        row++;
+    }
+}
+
+struct property_row
+{
+    USHORT flags;
+    UINT   name;
+    UINT   type;
+};
+
+static UINT add_property_row( USHORT flags, UINT name, UINT type )
+{
+    struct property_row row = { flags, name, type };
+    return add_row( TABLE_PROPERTY, (const BYTE *)&row, sizeof(row) );
+}
+
+static void serialize_property_table( void )
+{
+    const struct property_row *row = (const struct property_row *)tables[TABLE_PROPERTY].ptr;
+    UINT i;
+
+    for (i = 0; i < tables[TABLE_PROPERTY].count; i++)
+    {
+        serialize_ushort( row->flags );
+        serialize_string_idx( row->name );
+        serialize_blob_idx( row->type );
+        row++;
+    }
+}
+
+struct eventmap_row
+{
+    UINT parent;
+    UINT eventlist;
+};
+
+static UINT add_eventmap_row( UINT parent, UINT eventlist )
+{
+    struct eventmap_row row = { parent, eventlist };
+    return add_row( TABLE_EVENTMAP, (const BYTE *)&row, sizeof(row) );
+}
+
+static void serialize_eventmap_table( void )
+{
+    const struct eventmap_row *row = (const struct eventmap_row *)tables[TABLE_EVENTMAP].ptr;
+    UINT i;
+
+    for (i = 0; i < tables[TABLE_EVENTMAP].count; i++)
+    {
+        serialize_table_idx( row->parent, TABLE_TYPEDEF );
+        serialize_table_idx( row->eventlist, TABLE_EVENT );
+        row++;
+    }
+}
+
+struct event_row
+{
+    USHORT flags;
+    UINT   name;
+    UINT   type;
+};
+
+static UINT add_event_row( USHORT flags, UINT name, UINT type )
+{
+    struct event_row row = { flags, name, type };
+    return add_row( TABLE_EVENT, (const BYTE *)&row, sizeof(row) );
+}
+
+static void serialize_event_table( void )
+{
+    const struct event_row *row = (const struct event_row *)tables[TABLE_EVENT].ptr;
+    UINT i;
+
+    for (i = 0; i < tables[TABLE_EVENT].count; i++)
+    {
+        serialize_ushort( row->flags );
+        serialize_string_idx( row->name );
+        serialize_table_idx( row->type, typedef_or_ref_to_table(row->type) );
+        row++;
+    }
+}
+
+struct methodsemantics_row
+{
+    USHORT semantics;
+    UINT   method;
+    UINT   association;
+};
+
+static UINT add_methodsemantics_row( USHORT flags, UINT name, UINT type )
+{
+    struct methodsemantics_row row = { flags, name, type };
+    return add_row( TABLE_METHODSEMANTICS, (const BYTE *)&row, sizeof(row) );
+}
+
+static int cmp_methodsemantics_row( const void *a, const void *b )
+{
+    const struct methodsemantics_row *row = a, *row2 = b;
+    if (row->association > row2->association) return 1;
+    if (row->association < row2->association) return -1;
+    return 0;
+}
+
+/* sorted by association */
+static void serialize_methodsemantics_table( void )
+{
+    const struct methodsemantics_row *row = (const struct methodsemantics_row *)tables[TABLE_METHODSEMANTICS].ptr;
+    UINT i;
+
+    qsort( tables[TABLE_METHODSEMANTICS].ptr, tables[TABLE_METHODSEMANTICS].count, sizeof(*row),
+           cmp_methodsemantics_row );
+
+    for (i = 0; i < tables[TABLE_METHODSEMANTICS].count; i++)
+    {
+        serialize_ushort( row->semantics );
+        serialize_table_idx( row->method, TABLE_METHODDEF );
+        serialize_table_idx( row->association, has_semantics_to_table(row->association) );
+        row++;
+    }
+}
+
 static UINT typedef_or_ref( enum table table, UINT row )
 {
     switch (table)
@@ -1077,6 +1230,16 @@ static UINT customattribute_type( enum table table, UINT row )
     {
     case TABLE_METHODDEF: return row << 3 | 2;
     case TABLE_MEMBERREF: return row << 3 | 3;
+    default: assert( 0 );
+    }
+}
+
+static UINT has_semantics( enum table table, UINT row )
+{
+    switch (table)
+    {
+    case TABLE_EVENT: return row << 1;
+    case TABLE_PROPERTY: return row << 1 | 1;
     default: assert( 0 );
     }
 }
@@ -1198,6 +1361,15 @@ enum
 
 enum
 {
+    METHOD_SEM_SETTER   = 0x0001,
+    METHOD_SEM_GETTER   = 0x0002,
+    METHOD_SEM_OTHER    = 0x0004,
+    METHOD_SEM_ADDON    = 0x0008,
+    METHOD_SEM_REMOVEON = 0x0010
+};
+
+enum
+{
     PARAM_ATTR_IN       = 0x0001,
     PARAM_ATTR_OUT      = 0x0002,
     PARAM_ATTR_OPTIONAL = 0x0010
@@ -1221,6 +1393,8 @@ enum
 
 #define MODULE_ROW      1
 #define MSCORLIB_ROW    1
+
+#define MAX_NAME        256
 
 static UINT add_name( type_t *type, UINT *namespace )
 {
@@ -1422,6 +1596,44 @@ static UINT make_method_sig( const var_t *method, BYTE *buf )
     return len;
 }
 
+static UINT make_property_sig( const var_t *method, BYTE *buf )
+{
+    const var_t *arg;
+    const var_list_t *arg_list = type_function_get_args( method->declspec.type );
+    UINT len = 3;
+
+    buf[0] = SIG_TYPE_HASTHIS | SIG_TYPE_PROPERTY;
+    buf[1] = 0;
+    buf[2] = ELEMENT_TYPE_VOID;
+
+    LIST_FOR_EACH_ENTRY( arg, arg_list, var_t, entry )
+    {
+        const type_t *type;
+
+        if (!is_attr( arg->attrs, ATTR_RETVAL )) continue;
+        type = type_pointer_get_ref_type( arg->declspec.type ); /* retval must be a pointer */
+        len = make_type_sig( type, buf + 2 ) + 2;
+    }
+
+    return len;
+}
+
+static UINT make_deprecated_sig( UINT token, BYTE *buf )
+{
+    UINT len = 5;
+
+    buf[0] = SIG_TYPE_HASTHIS;
+    buf[1] = 4;
+    buf[2] = ELEMENT_TYPE_VOID;
+    buf[3] = ELEMENT_TYPE_STRING;
+    buf[4] = ELEMENT_TYPE_VALUETYPE;
+    len += encode_int( token, buf + 5 );
+    buf[len++] = ELEMENT_TYPE_U4;
+    buf[len++] = ELEMENT_TYPE_STRING;
+
+    return len;
+}
+
 static UINT make_contract_value( const type_t *type, BYTE *buf )
 {
     const expr_t *contract = get_attrp( type->attrs, ATTR_CONTRACT );
@@ -1478,7 +1690,7 @@ static void add_contract_attr_step1( type_t *type )
 static void add_contract_attr_step2( type_t *type )
 {
     UINT parent, attr_type, value_size;
-    BYTE value[256 + sizeof(UINT) + 5];
+    BYTE value[MAX_NAME + sizeof(UINT) + 5];
 
     if (!is_attr( type->attrs, ATTR_CONTRACT )) return;
 
@@ -1706,7 +1918,7 @@ static void add_exclusiveto_attr_step1( type_t *type )
 static void add_exclusiveto_attr_step2( type_t *type )
 {
     UINT parent, attr_type, value_size;
-    BYTE value[256 + 5];
+    BYTE value[MAX_NAME + 5];
 
     if (!is_attr( type->attrs, ATTR_EXCLUSIVETO )) return;
 
@@ -1716,8 +1928,176 @@ static void add_exclusiveto_attr_step2( type_t *type )
     add_customattribute_row( parent, attr_type, add_blob(value, value_size) );
 }
 
+static UINT make_overload_value( const var_t *method, BYTE *buf )
+{
+    UINT len = strlen( method->name );
+
+    buf[0] = 1;
+    buf[1] = 0;
+    buf[2] = len;
+    memcpy( buf + 3, method->name, len );
+    len += 3;
+    buf[len++] = 0;
+    buf[len++] = 0;
+
+    return len;
+}
+
+static void add_overload_attr_step1( const var_t *method )
+{
+    static const BYTE sig[] = { SIG_TYPE_HASTHIS, 1, ELEMENT_TYPE_VOID, ELEMENT_TYPE_STRING };
+    UINT assemblyref, scope, typeref, class;
+    type_t *type = method->declspec.type;
+
+    if (!is_attr( method->attrs, ATTR_OVERLOAD )) return;
+
+    assemblyref = add_assemblyref_row( 0x200, 0, add_string("Windows.Foundation") );
+    scope = resolution_scope( TABLE_ASSEMBLYREF, assemblyref );
+    typeref = add_typeref_row( scope, add_string("OverloadAttribute"), add_string("Windows.Foundation.Metadata") );
+
+    class = memberref_parent( TABLE_TYPEREF, typeref );
+    type->md.member[MD_ATTR_OVERLOAD] = add_memberref_row( class, add_string(".ctor"), add_blob(sig, sizeof(sig)) );
+}
+
+static void add_overload_attr_step2( const var_t *method )
+{
+    const type_t *type = method->declspec.type;
+    UINT parent, attr_type, value_size;
+    BYTE value[MAX_NAME + 5];
+
+    if (!is_attr( method->attrs, ATTR_OVERLOAD )) return;
+
+    parent = has_customattribute( TABLE_METHODDEF, type->md.def );
+    attr_type = customattribute_type( TABLE_MEMBERREF, type->md.member[MD_ATTR_OVERLOAD] );
+    value_size = make_overload_value( method, value );
+    add_customattribute_row( parent, attr_type, add_blob(value, value_size) );
+}
+
+static void add_default_overload_attr_step1( const var_t *method )
+{
+    static const BYTE sig[] = { SIG_TYPE_HASTHIS, 0, ELEMENT_TYPE_VOID };
+    UINT assemblyref, scope, typeref, class;
+    type_t *type = method->declspec.type;
+
+    if (!is_attr( method->attrs, ATTR_DEFAULT_OVERLOAD ) || !is_attr( method->attrs, ATTR_OVERLOAD )) return;
+
+    assemblyref = add_assemblyref_row( 0x200, 0, add_string("Windows.Foundation") );
+    scope = resolution_scope( TABLE_ASSEMBLYREF, assemblyref );
+    typeref = add_typeref_row( scope, add_string("DefaultOverloadAttribute"), add_string("Windows.Foundation.Metadata") );
+
+    class = memberref_parent( TABLE_TYPEREF, typeref );
+    type->md.member[MD_ATTR_DEFAULT_OVERLOAD] = add_memberref_row( class, add_string(".ctor"), add_blob(sig, sizeof(sig)) );
+}
+
+static void add_default_overload_attr_step2( const var_t *method )
+{
+    static const BYTE value[] = { 0x01, 0x00, 0x00, 0x00 };
+    const type_t *type = method->declspec.type;
+    UINT parent, attr_type;
+
+    if (!is_attr( method->attrs, ATTR_DEFAULT_OVERLOAD ) || !is_attr( method->attrs, ATTR_OVERLOAD )) return;
+
+    parent = has_customattribute( TABLE_METHODDEF, type->md.def );
+    attr_type = customattribute_type( TABLE_MEMBERREF, type->md.member[MD_ATTR_DEFAULT_OVERLOAD] );
+    add_customattribute_row( parent, attr_type, add_blob(value, sizeof(value)) );
+}
+
+static UINT make_deprecated_value( const var_t *method, BYTE **ret_buf )
+{
+    static const BYTE zero[] = { 0x00, 0x00, 0x00, 0x00 }, one[] = { 0x01, 0x00, 0x00, 0x00 };
+    const expr_t *attr = get_attrp( method->attrs, ATTR_DEPRECATED );
+    const char *text = attr->ref->u.sval;
+    const char *kind = attr->u.ext->u.sval;
+    BYTE encoded[4];
+    UINT len, len_text = strlen( text ), len_encoded = encode_int( len_text, encoded );
+    BYTE *buf = xmalloc( 2 + len_encoded + len_text + 6 + MAX_NAME + 5 );
+    char *contract;
+
+    buf[0] = 1;
+    buf[1] = 0;
+    memcpy( buf + 2, encoded, len_encoded );
+    len = 2 + len_encoded;
+    memcpy( buf + len, text, len_text );
+    len += len_text;
+    if (!strcmp( kind, "remove" )) memcpy( buf + len, one, sizeof(one) );
+    else memcpy( buf + len, zero, sizeof(zero) );
+    len += 4;
+    buf[len++] = 0;
+    buf[len++] = 0;
+
+    buf[len++] = 1;
+    buf[len++] = 0;
+    contract = format_namespace( attr->ext2->u.tref.type->namespace, "", ".", attr->ext2->u.tref.type->name, NULL );
+    len_text = strlen( contract );
+    buf[len++] = len_text;
+    memcpy( buf + len, contract, len_text );
+    free( contract );
+    len += len_text;
+    buf[len++] = 0;
+    buf[len++] = 0;
+
+    *ret_buf = buf;
+    return len;
+}
+
+static void add_deprecated_attr_step1( const var_t *method )
+{
+    UINT assemblyref, scope, typeref_type, typeref, class, sig_size;
+    type_t *type = method->declspec.type;
+    BYTE sig[32];
+
+    if (!is_attr( method->attrs, ATTR_DEPRECATED )) return;
+
+    assemblyref = add_assemblyref_row( 0x200, 0, add_string("Windows.Foundation") );
+    scope = resolution_scope( TABLE_ASSEMBLYREF, assemblyref );
+    typeref_type = add_typeref_row( scope, add_string("DeprecationType"), add_string("Windows.Foundation.Metadata") );
+    typeref = add_typeref_row( scope, add_string("DeprecatedAttribute"), add_string("Windows.Foundation.Metadata") );
+
+    sig_size = make_deprecated_sig( typedef_or_ref(TABLE_TYPEREF, typeref_type), sig );
+    class = memberref_parent( TABLE_TYPEREF, typeref );
+    type->md.member[MD_ATTR_DEPRECATED] = add_memberref_row( class, add_string(".ctor"), add_blob(sig, sig_size) );
+}
+
+static void add_deprecated_attr_step2( const var_t *method )
+{
+    const type_t *type = method->declspec.type;
+    UINT parent, attr_type, value_size;
+    BYTE *value;
+
+    if (!is_attr( method->attrs, ATTR_DEPRECATED )) return;
+
+    parent = has_customattribute( TABLE_METHODDEF, type->md.def );
+    attr_type = customattribute_type( TABLE_MEMBERREF, type->md.member[MD_ATTR_DEPRECATED] );
+    value_size = make_deprecated_value( method, &value );
+    add_customattribute_row( parent, attr_type, add_blob(value, value_size) );
+    free( value );
+}
+
+static void add_method_params_step1( var_list_t *arg_list )
+{
+    var_t *arg;
+
+    if (!arg_list) return;
+
+    LIST_FOR_EACH_ENTRY( arg, arg_list, var_t, entry )
+    {
+        type_t *type = arg->declspec.type;
+
+        if (type_get_type( type ) == TYPE_POINTER) type = type_pointer_get_ref_type( type );
+
+        if (type->name && !strcmp( type->name, "EventRegistrationToken" ))
+        {
+            UINT assemblyref, scope;
+            assemblyref = add_assemblyref_row( 0x200, 0, add_string("Windows.Foundation") );
+            scope = resolution_scope( TABLE_ASSEMBLYREF, assemblyref );
+            type->md.ref = add_typeref_row( scope, add_string("EventRegistrationToken"), add_string("Windows.Foundation") );
+        }
+    }
+}
+
 static void add_interface_type_step1( type_t *type )
 {
+    const statement_t *stmt;
     UINT name, namespace;
 
     name = add_name( type, &namespace );
@@ -1727,6 +2107,17 @@ static void add_interface_type_step1( type_t *type )
     add_contract_attr_step1( type );
     add_uuid_attr_step1( type );
     add_exclusiveto_attr_step1( type );
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts(type) )
+    {
+        const var_t *method = stmt->u.var;
+
+        add_method_params_step1( type_function_get_args(method->declspec.type) );
+
+        add_overload_attr_step1( method );
+        add_default_overload_attr_step1( method );
+        add_deprecated_attr_step1( method );
+    }
 }
 
 static UINT get_param_attrs( const var_t *arg )
@@ -1766,11 +2157,160 @@ static UINT add_method_params_step2( var_list_t *arg_list )
     return first;
 }
 
+static void add_propget_method( const type_t *iface, const var_t *method )
+{
+    UINT methoddef, property, sig_size, paramlist, attrs;
+    BYTE sig[256];
+    char *name;
+
+    /* method may already have been added by add_propput_method() */
+    if (method->declspec.type->md.property) return;
+
+    sig_size = make_property_sig( method, sig );
+    property = add_property_row( 0, add_string(method->name), add_blob(sig, sig_size) );
+    method->declspec.type->md.property = property;
+    add_propertymap_row( iface->md.def, property );
+
+    paramlist = add_method_params_step2( type_function_get_args(method->declspec.type) );
+    sig_size = make_method_sig( method, sig );
+
+    attrs = METHOD_ATTR_PUBLIC  | METHOD_ATTR_VIRTUAL  | METHOD_ATTR_HIDEBYSIG |
+            METHOD_ATTR_NEWSLOT | METHOD_ATTR_ABSTRACT | METHOD_ATTR_SPECIALNAME;
+
+    name = strmake( "get_%s", method->name );
+    methoddef = add_methoddef_row( 0, attrs, add_string(name), add_blob(sig, sig_size), paramlist );
+    free( name );
+
+    add_methodsemantics_row( METHOD_SEM_GETTER, methoddef, has_semantics(TABLE_PROPERTY, property) );
+}
+
+static const var_t *find_propget_method( const type_t *iface, const char *name )
+{
+    const statement_t *stmt;
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts(iface) )
+    {
+        const var_t *method = stmt->u.var;
+        if (is_attr( method->attrs, ATTR_PROPGET ) && !strcmp( method->name, name )) return method;
+    }
+    return NULL;
+}
+
+static void add_propput_method( const type_t *iface, const var_t *method )
+{
+    const var_t *propget = find_propget_method( iface, method->name );
+    UINT methoddef, property, sig_size, paramlist, attrs;
+    BYTE sig[256];
+    char *name;
+
+    paramlist = add_method_params_step2( type_function_get_args(method->declspec.type) );
+    sig_size = make_method_sig( method, sig );
+
+    attrs = METHOD_ATTR_PUBLIC  | METHOD_ATTR_VIRTUAL  | METHOD_ATTR_HIDEBYSIG |
+            METHOD_ATTR_NEWSLOT | METHOD_ATTR_ABSTRACT | METHOD_ATTR_SPECIALNAME;
+
+    name = strmake( "put_%s", method->name );
+    methoddef = add_methoddef_row( 0, attrs, add_string(name), add_blob(sig, sig_size), paramlist );
+    free( name );
+
+    /* add propget method if not already added */
+    if (!propget->declspec.type->md.property) add_propget_method( iface, propget );
+    property = propget->declspec.type->md.property;
+
+    add_methodsemantics_row( METHOD_SEM_SETTER, methoddef, has_semantics(TABLE_PROPERTY, property) );
+}
+
+static void add_eventadd_method( const type_t *iface, const var_t *method )
+{
+    UINT methoddef, event, sig_size, paramlist, attrs;
+    BYTE sig[256];
+    char *name;
+
+    event = add_event_row( 0, add_string(method->name), typedef_or_ref(TABLE_TYPEREF, method->declspec.type->md.ref) );
+    method->declspec.type->md.event = event;
+    add_eventmap_row( iface->md.def, event );
+
+    /* method may already have been added by add_eventremove_method() */
+    if (method->declspec.type->md.event) return;
+
+    paramlist = add_method_params_step2( type_function_get_args(method->declspec.type) );
+    sig_size = make_method_sig( method, sig );
+
+    attrs = METHOD_ATTR_PUBLIC  | METHOD_ATTR_VIRTUAL  | METHOD_ATTR_HIDEBYSIG |
+            METHOD_ATTR_NEWSLOT | METHOD_ATTR_ABSTRACT | METHOD_ATTR_SPECIALNAME;
+
+    name = strmake( "add_%s", method->name );
+    methoddef = add_methoddef_row( 0, attrs, add_string(name), add_blob(sig, sig_size), paramlist );
+    free( name );
+
+    add_methodsemantics_row( METHOD_SEM_ADDON, methoddef, has_semantics(TABLE_EVENT, event) );
+}
+
+static const var_t *find_eventadd_method( const type_t *iface, const char *name )
+{
+    const statement_t *stmt;
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts(iface) )
+    {
+        const var_t *method = stmt->u.var;
+        if (is_attr( method->attrs, ATTR_EVENTADD ) && !strcmp( method->name, name )) return method;
+    }
+    return NULL;
+}
+
+static void add_eventremove_method( const type_t *iface, const var_t *method )
+{
+    const var_t *eventadd = find_eventadd_method( iface, method->name );
+    UINT methoddef, event, sig_size, paramlist, attrs;
+    BYTE sig[256];
+    char *name;
+
+    paramlist = add_method_params_step2( type_function_get_args(method->declspec.type) );
+    sig_size = make_method_sig( method, sig );
+
+    attrs = METHOD_ATTR_PUBLIC  | METHOD_ATTR_VIRTUAL  | METHOD_ATTR_HIDEBYSIG |
+            METHOD_ATTR_NEWSLOT | METHOD_ATTR_ABSTRACT | METHOD_ATTR_SPECIALNAME;
+
+    name = strmake( "remove_%s", method->name );
+    methoddef = add_methoddef_row( 0, attrs, add_string(name), add_blob(sig, sig_size), paramlist );
+    free( name );
+
+    /* add eventadd method if not already added */
+    if (!eventadd->declspec.type->md.event) add_eventadd_method( iface, eventadd );
+    event = eventadd->declspec.type->md.event;
+
+    add_methodsemantics_row( METHOD_SEM_REMOVEON, methoddef, has_semantics(TABLE_EVENT, event) );
+}
+
+static const char *get_method_name( const var_t *method )
+{
+    const char *name = get_attrp( method->attrs, ATTR_OVERLOAD );
+    if (name) return name;
+    return method->name;
+}
+
+static void add_method( const var_t *method )
+{
+    const char *name = get_method_name( method );
+    type_t *type = method->declspec.type;
+    UINT paramlist, sig_size, attrs;
+    BYTE sig[256];
+
+    paramlist = add_method_params_step2( type_function_get_args(method->declspec.type) );
+    sig_size = make_method_sig( method, sig );
+
+    attrs = METHOD_ATTR_PUBLIC  | METHOD_ATTR_VIRTUAL | METHOD_ATTR_HIDEBYSIG |
+            METHOD_ATTR_NEWSLOT | METHOD_ATTR_ABSTRACT;
+
+    type->md.def = add_methoddef_row( 0, attrs, add_string(name), add_blob(sig, sig_size), paramlist );
+}
+
 static void add_interface_type_step2( type_t *type )
 {
     UINT name, namespace, interface, flags = TYPE_ATTR_INTERFACE | TYPE_ATTR_ABSTRACT | TYPE_ATTR_UNKNOWN;
     const typeref_list_t *require_list = type_iface_get_requires( type );
     const typeref_t *require;
+    const statement_t *stmt;
 
     name = add_name( type, &namespace );
 
@@ -1781,6 +2321,21 @@ static void add_interface_type_step2( type_t *type )
     {
         interface = typedef_or_ref( TABLE_TYPEREF, require->type->md.ref );
         add_interfaceimpl_row( type->md.def, interface );
+    }
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts(type) )
+    {
+        const var_t *method = stmt->u.var;
+
+        if (is_attr( method->attrs, ATTR_PROPGET )) add_propget_method( type, method );
+        else if (is_attr( method->attrs, ATTR_PROPPUT )) add_propput_method( type, method );
+        else if (is_attr( method->attrs, ATTR_EVENTADD )) add_eventadd_method( type, method );
+        else if (is_attr( method->attrs, ATTR_EVENTREMOVE )) add_eventremove_method( type, method );
+        else add_method( method );
+
+        add_deprecated_attr_step2( method );
+        add_default_overload_attr_step2( method );
+        add_overload_attr_step2( method );
     }
 
     add_contract_attr_step2( type );
@@ -2052,6 +2607,11 @@ static void build_table_stream( const statement_list_t *stmts )
     serialize_memberref_table();
     serialize_constant_table();
     serialize_customattribute_table();
+    serialize_eventmap_table();
+    serialize_event_table();
+    serialize_propertymap_table();
+    serialize_property_table();
+    serialize_methodsemantics_table();
     serialize_assembly_table();
     serialize_assemblyref_table();
 }

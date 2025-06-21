@@ -509,6 +509,9 @@ enum
     MD_ATTR_ACTIVATABLE,
     MD_ATTR_THREADING,
     MD_ATTR_MARSHALINGBEHAVIOR,
+    MD_ATTR_OVERLOAD,
+    MD_ATTR_DEFAULT_OVERLOAD,
+    MD_ATTR_DEPRECATED,
     MD_ATTR_MAX,
 };
 
@@ -518,6 +521,8 @@ struct metadata
     unsigned int def;
     unsigned int extends;
     unsigned int member[MD_ATTR_MAX];
+    unsigned int property; /* get/put methods */
+    unsigned int event;    /* add/remove methods */
 };
 
 struct _type_t {
