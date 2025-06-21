@@ -155,4 +155,20 @@ struct periodic_factory
     LONG ref;
 };
 
+[impl(struct ramp_effect)]
+struct ramp_effect_klass
+{
+    Windows.Gaming.Input.ForceFeedback.IRampForceEffect IRampForceEffect_iface;
+    const WCHAR *class_name;
+    LONG ref;
+};
+
+[impl(struct ramp_factory)]
+struct ramp_factory
+{
+    IActivationFactory IActivationFactory_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */
