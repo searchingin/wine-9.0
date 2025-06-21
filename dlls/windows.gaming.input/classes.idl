@@ -108,4 +108,20 @@ struct racing_wheel_statics
     LONG ref;
 };
 
+[impl(struct condition_effect)]
+struct condition_effect_klass
+{
+    Windows.Gaming.Input.ForceFeedback.IConditionForceEffect IConditionForceEffect_iface;
+    LONG ref;
+};
+
+[impl(struct condition_factory)]
+struct condition_factory
+{
+    IActivationFactory IActivationFactory_iface;
+    Windows.Gaming.Input.ForceFeedback.IConditionForceEffectFactory IConditionForceEffectFactory_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */
