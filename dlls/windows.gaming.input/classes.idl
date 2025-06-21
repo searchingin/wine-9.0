@@ -171,4 +171,23 @@ struct ramp_factory
     LONG ref;
 };
 
+[impl(struct effect)]
+struct effect_klass
+{
+    Windows.Gaming.Input.Custom.IWineForceFeedbackEffectImpl IWineForceFeedbackEffectImpl_iface;
+    Windows.Gaming.Input.ForceFeedback.IForceFeedbackEffect IForceFeedbackEffect_iface;
+    IAgileObject IAgileObject_iface;
+    IInspectable *IInspectable_outer;
+    LONG ref;
+};
+
+[impl(struct motor)]
+struct motor_klass
+{
+    Windows.Gaming.Input.ForceFeedback.IForceFeedbackMotor IForceFeedbackMotor_iface;
+    IAgileObject IAgileObject_iface;
+    const WCHAR *class_name;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */

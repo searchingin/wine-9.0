@@ -186,7 +186,7 @@ namespace Windows.Gaming.Input.Custom {
     [
         uuid(27833469-7760-417e-adbe-e011a66e16ee)
     ]
-    interface IWineForceFeedbackEffectImpl : IUnknown
+    interface IWineForceFeedbackEffectImpl : IInspectable
         requires Windows.Gaming.Input.ForceFeedback.IForceFeedbackEffect
     {
         [propput] HRESULT Parameters([in] WineForceFeedbackEffectParameters parameters,
