@@ -63,4 +63,27 @@ struct raw_controller_statics
     LONG ref;
 };
 
+[impl(struct gamepad)]
+struct gamepad_klass
+{
+    Windows.Gaming.Input.Custom.IGameControllerImpl IGameControllerImpl_iface;
+    Windows.Gaming.Input.Custom.IGameControllerInputSink IGameControllerInputSink_iface;
+    Windows.Gaming.Input.IGamepad IGamepad_iface;
+    Windows.Gaming.Input.IGamepad2 IGamepad2_iface;
+    Windows.Gaming.Input.IGameController *IGameController_outer;
+    const WCHAR *class_name;
+    LONG ref;
+};
+
+[impl(struct gamepad_statics)]
+struct gamepad_statics
+{
+    IActivationFactory IActivationFactory_iface;
+    Windows.Gaming.Input.IGamepadStatics IGamepadStatics_iface;
+    Windows.Gaming.Input.IGamepadStatics2 IGamepadStatics2_iface;
+    Windows.Gaming.Input.Custom.ICustomGameControllerFactory ICustomGameControllerFactory_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */
