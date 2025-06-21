@@ -124,4 +124,19 @@ struct condition_factory
     LONG ref;
 };
 
+[impl(struct constant_effect)]
+struct constant_effect_klass
+{
+    Windows.Gaming.Input.ForceFeedback.IConstantForceEffect IConstantForceEffect_iface;
+    LONG ref;
+};
+
+[impl(struct constant_factory)]
+struct constant_factory
+{
+    IActivationFactory IActivationFactory_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */
