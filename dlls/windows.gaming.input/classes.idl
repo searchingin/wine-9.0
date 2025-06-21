@@ -139,4 +139,20 @@ struct constant_factory
     LONG ref;
 };
 
+[impl(struct periodic_effect)]
+struct periodic_effect_klass
+{
+    Windows.Gaming.Input.ForceFeedback.IPeriodicForceEffect IPeriodicForceEffect_iface;
+    LONG ref;
+};
+
+[impl(struct periodic_factory)]
+struct periodic_factory
+{
+    IActivationFactory IActivationFactory_iface;
+    Windows.Gaming.Input.ForceFeedback.IPeriodicForceEffectFactory IPeriodicForceEffectFactory_iface;
+    IAgileObject IAgileObject_iface;
+    LONG ref;
+};
+
 #endif /* __WIDL_IMPL__ */
