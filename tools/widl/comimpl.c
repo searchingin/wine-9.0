@@ -72,6 +72,107 @@ static bool iface_inherits( const type_t *iface, const char *name )
     return iface_inherits( type_iface_get_inherit( iface ), name );
 }
 
+static const char *get_trace_wrapper( const char *name, const decl_spec_t *decl_spec )
+{
+    type_t *type = decl_spec->type;
+
+    switch (type_get_type_detect_alias( type ))
+    {
+    case TYPE_BASIC: break;
+    case TYPE_ALIAS:
+        if (type->name && !strcmp( type->name, "HSTRING" )) return strmake( "debugstr_hstring(%s)", name );
+        if (type->name && strstr( type->name, "CWSTR" )) return strmake( "debugstr_w(%s)", name );
+        if (type->name && strstr( type->name, "CSTR" )) return strmake( "debugstr_a(%s)", name );
+        if (type->name && !strcmp( type->name, "REFIID" )) return strmake( "debugstr_guid(%s)", name );
+        if (type->name && !strcmp( type->name, "GUID" )) return strmake( "debugstr_guid(&(%s))", name );
+        return get_trace_wrapper( name, type_alias_get_aliasee( type ) );
+    case TYPE_ENUM: return name;
+    case TYPE_STRUCT:
+    case TYPE_ENCAPSULATED_UNION:
+    case TYPE_UNION:
+        return strmake( "&%s", name );
+    case TYPE_FUNCTION: break;
+    case TYPE_INTERFACE: break;
+    case TYPE_POINTER: break;
+    case TYPE_ARRAY: break;
+    case TYPE_DELEGATE: break;
+
+    case TYPE_VOID:
+    case TYPE_MODULE:
+    case TYPE_COCLASS:
+    case TYPE_BITFIELD:
+    case TYPE_APICONTRACT:
+    case TYPE_RUNTIMECLASS:
+    case TYPE_PARAMETERIZED_TYPE:
+    case TYPE_PARAMETER:
+        assert( 0 );
+        break;
+    }
+
+    return name;
+}
+
+static const char *get_format_specifier( const char *name, const decl_spec_t *decl_spec )
+{
+    type_t *type = decl_spec->type;
+
+    switch (type_get_type_detect_alias( type ))
+    {
+    case TYPE_BASIC:
+    {
+        int flags = !!strcasestr( name, "flags" ), sign = type_basic_get_sign( type ) <= 0;
+        switch (type_basic_get_type( type ))
+        {
+        case TYPE_BASIC_INT8:           return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_INT16:          return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_INT:            return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_INT3264:        return flags ? "%#Ix"   : sign ? "%Id"   : "%Iu";
+        case TYPE_BASIC_BYTE:           return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_CHAR:           return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_WCHAR:          return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_FLOAT:          return flags ? "%#x"    : sign ? "%f"    : "%u";
+        case TYPE_BASIC_DOUBLE:         return flags ? "%#x"    : sign ? "%f"    : "%u";
+        case TYPE_BASIC_ERROR_STATUS_T: return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_HANDLE:         return flags ? "%#x"    : sign ? "%p"    : "%u";
+        case TYPE_BASIC_INT32:          return flags ? "%#x"    : sign ? "%d"    : "%u";
+        case TYPE_BASIC_LONG:           return flags ? "%#lx"   : sign ? "%ld"   : "%lu";
+        case TYPE_BASIC_INT64:          return flags ? "%#I64x" : sign ? "%I64d" : "%I64u";
+        case TYPE_BASIC_HYPER:          return flags ? "%#I64x" : sign ? "%I64d" : "%I64u";
+        }
+        break;
+    }
+    case TYPE_ALIAS:
+        if (type->name && !strcmp( type->name, "HSTRING" )) return "%s";
+        if (type->name && strstr( type->name, "CWSTR" )) return "%s";
+        if (type->name && strstr( type->name, "CSTR" )) return "%s";
+        if (type->name && !strcmp( type->name, "GUID" )) return "%s";
+        if (type->name && !strcmp( type->name, "REFIID" )) return "%s";
+        return get_format_specifier( name, type_alias_get_aliasee( type ) );
+    case TYPE_ENUM:               return "%#x";
+    case TYPE_STRUCT:             return "%p";
+    case TYPE_ENCAPSULATED_UNION: return "%p";
+    case TYPE_UNION:              return "%p";
+    case TYPE_FUNCTION:           return "%p";
+    case TYPE_INTERFACE:          return "%p";
+    case TYPE_POINTER:            return "%p";
+    case TYPE_ARRAY:              return "%p";
+    case TYPE_DELEGATE:           return "%p";
+
+    case TYPE_VOID:
+    case TYPE_MODULE:
+    case TYPE_COCLASS:
+    case TYPE_BITFIELD:
+    case TYPE_APICONTRACT:
+    case TYPE_RUNTIMECLASS:
+    case TYPE_PARAMETERIZED_TYPE:
+    case TYPE_PARAMETER:
+        assert( 0 );
+        break;
+    }
+
+    return NULL;
+}
+
 static void append_method_args_decl( struct strbuf *str, const var_list_t *args )
 {
     const var_t *arg;
@@ -82,11 +183,15 @@ static void append_method_args_decl( struct strbuf *str, const var_list_t *args 
     }
 }
 
-static void append_method_args_call( struct strbuf *str, const var_list_t *args )
+static void append_method_args_call( struct strbuf *str, const var_list_t *args, bool debug )
 {
     const var_t *arg;
+
     if (args) LIST_FOR_EACH_ENTRY( arg, args, const var_t, entry )
-        strappend( str, ", %s", arg->name );
+    {
+        if (debug) strappend( str, ", %s", get_trace_wrapper( arg->name, &arg->declspec ) );
+        else strappend( str, ", %s", arg->name );
+    }
 }
 
 static void append_method_decl_klass( struct strbuf *str, const type_t *impl, const type_t *iface, const var_t *func )
@@ -112,6 +217,16 @@ static void append_method_decl_impl( struct strbuf *str, const type_t *impl, con
     strappend( str, "struct %s *impl", impl->name );
     append_method_args_decl( str, type_function_get_args( func->declspec.type ) );
     strappend( str, " )" );
+}
+
+static void append_method_args_debug_format( struct strbuf *str, const var_list_t *args )
+{
+    const var_t *arg;
+
+    if (args) LIST_FOR_EACH_ENTRY( arg, args, const var_t, entry )
+    {
+        strappend( str, " %s %s", arg->name, get_format_specifier( arg->name, &arg->declspec ) );
+    }
 }
 
 static void write_iface_methods( const type_t *klass, const type_t *impl, const char *impl_prefix, const type_t *iface, const type_t *top_iface )
@@ -140,8 +255,15 @@ static void write_iface_methods( const type_t *klass, const type_t *impl, const 
         put_str( indent, "{\n" );
         put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
 
+        strappend( &str, "\"%s %%p", impl->name );
+        append_method_args_debug_format( &str, type_function_get_args(func->declspec.type) );
+        strappend( &str, "\\n\", impl" );
+        append_method_args_call( &str, type_function_get_args(func->declspec.type), true );
+        put_str( indent, "    TRACE( %s );\n", str.buf );
+        str.pos = 0;
+
         strappend( &str, "impl" );
-        append_method_args_call( &str, type_function_get_args( func->declspec.type ) );
+        append_method_args_call( &str, type_function_get_args( func->declspec.type ), false );
         put_str( indent, "    return %s_funcs.%s( %s );\n", impl_prefix, get_name( func ), str.buf );
         str.pos = 0;
 
