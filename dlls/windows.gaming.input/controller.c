@@ -24,8 +24,8 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(input);
 
-#define WIDL_impl_controller
-#define WIDL_impl_controller_statics
+#define WIDL_impl_raw_controller
+#define WIDL_impl_raw_controller_statics
 #include "classes_impl.h"
 
 static CRITICAL_SECTION controller_cs;
@@ -60,33 +60,33 @@ static HRESULT init_controllers(void)
     return hr;
 }
 
-struct controller
+struct raw_controller
 {
-    struct controller_klass klass;
+    struct raw_controller_klass klass;
     IGameControllerProvider *provider;
     IWineGameControllerProvider *wine_provider;
 };
 
-static struct controller *controller_from_klass( struct controller_klass *klass )
+static struct raw_controller *raw_controller_from_klass( struct raw_controller_klass *klass )
 {
-    return CONTAINING_RECORD( klass, struct controller, klass );
+    return CONTAINING_RECORD( klass, struct raw_controller, klass );
 }
 
-static HRESULT controller_missing_interface( struct controller *impl, REFIID iid, void **out )
+static HRESULT raw_controller_missing_interface( struct raw_controller *impl, REFIID iid, void **out )
 {
     FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( iid ) );
     *out = NULL;
     return E_NOINTERFACE;
 }
 
-static void controller_destroy( struct controller *impl )
+static void raw_controller_destroy( struct raw_controller *impl )
 {
     if (impl->wine_provider) IWineGameControllerProvider_Release( impl->wine_provider );
     IGameControllerProvider_Release( impl->provider );
     free( impl );
 }
 
-static HRESULT controller_Initialize( struct controller *impl, IGameController *outer, IGameControllerProvider *provider )
+static HRESULT raw_controller_Initialize( struct raw_controller *impl, IGameController *outer, IGameControllerProvider *provider )
 {
     HRESULT hr;
 
@@ -107,29 +107,29 @@ static HRESULT controller_Initialize( struct controller *impl, IGameController *
     return hr;
 }
 
-static HRESULT controller_OnInputResumed( struct controller *impl, UINT64 timestamp )
+static HRESULT raw_controller_OnInputResumed( struct raw_controller *impl, UINT64 timestamp )
 {
     FIXME( "controller %p, timestamp %I64u stub!\n", impl, timestamp );
     return E_NOTIMPL;
 }
 
-static HRESULT controller_OnInputSuspended( struct controller *impl, UINT64 timestamp )
+static HRESULT raw_controller_OnInputSuspended( struct raw_controller *impl, UINT64 timestamp )
 {
     FIXME( "controller %p, timestamp %I64u stub!\n", impl, timestamp );
     return E_NOTIMPL;
 }
 
-static HRESULT controller_get_AxisCount( struct controller *impl, INT32 *value )
+static HRESULT raw_controller_get_AxisCount( struct raw_controller *impl, INT32 *value )
 {
     return IWineGameControllerProvider_get_AxisCount( impl->wine_provider, value );
 }
 
-static HRESULT controller_get_ButtonCount( struct controller *impl, INT32 *value )
+static HRESULT raw_controller_get_ButtonCount( struct raw_controller *impl, INT32 *value )
 {
     return IWineGameControllerProvider_get_ButtonCount( impl->wine_provider, value );
 }
 
-static HRESULT controller_get_ForceFeedbackMotors( struct controller *impl, IVectorView_ForceFeedbackMotor **value )
+static HRESULT raw_controller_get_ForceFeedbackMotors( struct raw_controller *impl, IVectorView_ForceFeedbackMotor **value )
 {
     static const struct vector_iids iids =
     {
@@ -158,30 +158,30 @@ static HRESULT controller_get_ForceFeedbackMotors( struct controller *impl, IVec
     return hr;
 }
 
-static HRESULT controller_get_HardwareProductId( struct controller *impl, UINT16 *value )
+static HRESULT raw_controller_get_HardwareProductId( struct raw_controller *impl, UINT16 *value )
 {
     return IGameControllerProvider_get_HardwareProductId( impl->provider, value );
 }
 
-static HRESULT controller_get_HardwareVendorId( struct controller *impl, UINT16 *value )
+static HRESULT raw_controller_get_HardwareVendorId( struct raw_controller *impl, UINT16 *value )
 {
     return IGameControllerProvider_get_HardwareVendorId( impl->provider, value );
 }
 
-static HRESULT controller_get_SwitchCount( struct controller *impl, INT32 *value )
+static HRESULT raw_controller_get_SwitchCount( struct raw_controller *impl, INT32 *value )
 {
     return IWineGameControllerProvider_get_SwitchCount( impl->wine_provider, value );
 }
 
-static HRESULT controller_GetButtonLabel( struct controller *impl, INT32 index, enum GameControllerButtonLabel *value )
+static HRESULT raw_controller_GetButtonLabel( struct raw_controller *impl, INT32 index, enum GameControllerButtonLabel *value )
 {
     FIXME( "controller %p, index %d, value %p stub!\n", impl, index, value );
     return E_NOTIMPL;
 }
 
-static HRESULT controller_GetCurrentReading( struct controller *impl, UINT32 buttons_size, BOOLEAN *buttons,
-                                             UINT32 switches_size, enum GameControllerSwitchPosition *switches,
-                                             UINT32 axes_size, DOUBLE *axes, UINT64 *timestamp )
+static HRESULT raw_controller_GetCurrentReading( struct raw_controller *impl, UINT32 buttons_size, BOOLEAN *buttons,
+                                                 UINT32 switches_size, enum GameControllerSwitchPosition *switches,
+                                                 UINT32 axes_size, DOUBLE *axes, UINT64 *timestamp )
 {
     WineGameControllerState state;
     HRESULT hr;
@@ -199,13 +199,13 @@ static HRESULT controller_GetCurrentReading( struct controller *impl, UINT32 but
     return hr;
 }
 
-static HRESULT controller_GetSwitchKind( struct controller *impl, INT32 index, enum GameControllerSwitchKind *value )
+static HRESULT raw_controller_GetSwitchKind( struct raw_controller *impl, INT32 index, enum GameControllerSwitchKind *value )
 {
     FIXME( "controller %p, index %d, value %p stub!\n", impl, index, value );
     return E_NOTIMPL;
 }
 
-static HRESULT controller_get_SimpleHapticsControllers( struct controller *impl, IVectorView_SimpleHapticsController **value )
+static HRESULT raw_controller_get_SimpleHapticsControllers( struct raw_controller *impl, IVectorView_SimpleHapticsController **value )
 {
     static const struct vector_iids iids =
     {
@@ -228,66 +228,69 @@ static HRESULT controller_get_SimpleHapticsControllers( struct controller *impl,
     return hr;
 }
 
-static HRESULT controller_get_NonRoamableId( struct controller *impl, HSTRING *value )
+static HRESULT raw_controller_get_NonRoamableId( struct raw_controller *impl, HSTRING *value )
 {
     FIXME( "controller %p, value %p stub!\n", impl, value );
     return E_NOTIMPL;
 }
 
-static HRESULT controller_get_DisplayName( struct controller *impl, HSTRING *value )
+static HRESULT raw_controller_get_DisplayName( struct raw_controller *impl, HSTRING *value )
 {
     FIXME( "controller %p, value %p stub!\n", impl, value );
     return E_NOTIMPL;
 }
 
-static const struct controller_funcs controller_funcs = CONTROLLER_FUNCS_INIT;
+static const struct raw_controller_funcs raw_controller_funcs = RAW_CONTROLLER_FUNCS_INIT;
 
-static HRESULT controller_statics_missing_interface( struct controller_statics *statics, REFIID iid, void **out )
+static HRESULT raw_controller_statics_missing_interface( struct raw_controller_statics *statics, REFIID iid, void **out )
 {
     FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( iid ) );
     *out = NULL;
     return E_NOINTERFACE;
 }
 
-static void controller_statics_destroy( struct controller_statics *statics )
+static void raw_controller_statics_destroy( struct raw_controller_statics *statics )
 {
 }
 
-static HRESULT controller_statics_ActivateInstance( struct controller_statics *statics, IInspectable **instance )
+static HRESULT raw_controller_statics_ActivateInstance( struct raw_controller_statics *statics, IInspectable **instance )
 {
     FIXME( "statics %p, instance %p stub!\n", statics, instance );
     return E_NOTIMPL;
 }
 
-static HRESULT controller_statics_add_RawGameControllerAdded( struct controller_statics *statics, IEventHandler_RawGameController *handler,
-                                                              EventRegistrationToken *token )
+static HRESULT raw_controller_statics_add_RawGameControllerAdded( struct raw_controller_statics *statics,
+                                                                  IEventHandler_RawGameController *handler,
+                                                                  EventRegistrationToken *token )
 {
     TRACE( "statics %p, handler %p, token %p.\n", statics, handler, token );
     if (!handler) return E_INVALIDARG;
     return event_handlers_append( &controller_added_handlers, (IEventHandler_IInspectable *)handler, token );
 }
 
-static HRESULT controller_statics_remove_RawGameControllerAdded( struct controller_statics *statics, EventRegistrationToken token )
+static HRESULT raw_controller_statics_remove_RawGameControllerAdded( struct raw_controller_statics *statics, EventRegistrationToken token )
 {
     TRACE( "statics %p, token %#I64x.\n", statics, token.value );
     return event_handlers_remove( &controller_added_handlers, &token );
 }
 
-static HRESULT controller_statics_add_RawGameControllerRemoved( struct controller_statics *statics, IEventHandler_RawGameController *handler,
-                                                                EventRegistrationToken *token )
+static HRESULT raw_controller_statics_add_RawGameControllerRemoved( struct raw_controller_statics *statics,
+                                                                    IEventHandler_RawGameController *handler,
+                                                                    EventRegistrationToken *token )
 {
     TRACE( "statics %p, handler %p, token %p.\n", statics, handler, token );
     if (!handler) return E_INVALIDARG;
     return event_handlers_append( &controller_removed_handlers, (IEventHandler_IInspectable *)handler, token );
 }
 
-static HRESULT controller_statics_remove_RawGameControllerRemoved( struct controller_statics *statics, EventRegistrationToken token )
+static HRESULT raw_controller_statics_remove_RawGameControllerRemoved( struct raw_controller_statics *statics, EventRegistrationToken token )
 {
     TRACE( "statics %p, token %#I64x.\n", statics, token.value );
     return event_handlers_remove( &controller_removed_handlers, &token );
 }
 
-static HRESULT controller_statics_get_RawGameControllers( struct controller_statics *statics, IVectorView_RawGameController **value )
+static HRESULT raw_controller_statics_get_RawGameControllers( struct raw_controller_statics *statics,
+                                                              IVectorView_RawGameController **value )
 {
     HRESULT hr;
 
@@ -301,7 +304,7 @@ static HRESULT controller_statics_get_RawGameControllers( struct controller_stat
     return hr;
 }
 
-static HRESULT controller_statics_FromGameController( struct controller_statics *statics, IGameController *game_controller, IRawGameController **value )
+static HRESULT raw_controller_statics_FromGameController( struct raw_controller_statics *statics, IGameController *game_controller, IRawGameController **value )
 {
     IGameController *controller;
     HRESULT hr;
@@ -319,14 +322,14 @@ static HRESULT controller_statics_FromGameController( struct controller_statics 
     return hr;
 }
 
-static HRESULT controller_statics_CreateGameController( struct controller_statics *statics, IGameControllerProvider *provider, IInspectable **value )
+static HRESULT raw_controller_statics_CreateGameController( struct raw_controller_statics *statics, IGameControllerProvider *provider, IInspectable **value )
 {
-    struct controller *impl;
+    struct raw_controller *impl;
 
     TRACE( "statics %p, provider %p, value %p.\n", statics, provider, value );
 
     if (!(impl = calloc( 1, sizeof(*impl) ))) return E_OUTOFMEMORY;
-    controller_klass_init( &impl->klass, RuntimeClass_Windows_Gaming_Input_RawGameController );
+    raw_controller_klass_init( &impl->klass, RuntimeClass_Windows_Gaming_Input_RawGameController );
 
     TRACE( "created RawGameController %p\n", statics );
 
@@ -334,7 +337,7 @@ static HRESULT controller_statics_CreateGameController( struct controller_static
     return S_OK;
 }
 
-static HRESULT controller_statics_OnGameControllerAdded( struct controller_statics *statics, IGameController *value )
+static HRESULT raw_controller_statics_OnGameControllerAdded( struct raw_controller_statics *statics, IGameController *value )
 {
     IRawGameController *controller;
     HRESULT hr;
@@ -349,7 +352,7 @@ static HRESULT controller_statics_OnGameControllerAdded( struct controller_stati
     return S_OK;
 }
 
-static HRESULT controller_statics_OnGameControllerRemoved( struct controller_statics *statics, IGameController *value )
+static HRESULT raw_controller_statics_OnGameControllerRemoved( struct raw_controller_statics *statics, IGameController *value )
 {
     IRawGameController *controller;
     BOOLEAN found;
@@ -383,6 +386,6 @@ static HRESULT controller_statics_OnGameControllerRemoved( struct controller_sta
     return S_OK;
 }
 
-static const struct controller_statics_funcs controller_statics_funcs = CONTROLLER_STATICS_FUNCS_INIT;
-static struct controller_statics controller_statics = controller_statics_default;
-ICustomGameControllerFactory *controller_factory = &controller_statics.ICustomGameControllerFactory_iface;
+static const struct raw_controller_statics_funcs raw_controller_statics_funcs = RAW_CONTROLLER_STATICS_FUNCS_INIT;
+static struct raw_controller_statics raw_controller_statics = raw_controller_statics_default;
+ICustomGameControllerFactory *controller_factory = &raw_controller_statics.ICustomGameControllerFactory_iface;

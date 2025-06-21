@@ -41,8 +41,8 @@ import "windows.devices.power.idl";
 
 #ifdef __WIDL_IMPL__
 
-[impl(struct controller)]
-struct controller_klass
+[impl(struct raw_controller)]
+struct raw_controller_klass
 {
     Windows.Gaming.Input.Custom.IGameControllerImpl IGameControllerImpl_iface;
     Windows.Gaming.Input.Custom.IGameControllerInputSink IGameControllerInputSink_iface;
@@ -53,8 +53,8 @@ struct controller_klass
     LONG ref;
 };
 
-[impl(struct controller_statics)]
-struct controller_statics
+[impl(struct raw_controller_statics)]
+struct raw_controller_statics
 {
     IActivationFactory IActivationFactory_iface;
     Windows.Gaming.Input.IRawGameControllerStatics IRawGameControllerStatics_iface;
