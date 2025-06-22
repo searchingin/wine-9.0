@@ -107,19 +107,6 @@ static HRESULT controller_Initialize( struct controller *impl, IGameController *
     return hr;
 }
 
-static const struct IGameControllerImplVtbl controller_vtbl =
-{
-    controller_IGameControllerImpl_QueryInterface,
-    controller_IGameControllerImpl_AddRef,
-    controller_IGameControllerImpl_Release,
-    /* IInspectable methods */
-    controller_IGameControllerImpl_GetIids,
-    controller_IGameControllerImpl_GetRuntimeClassName,
-    controller_IGameControllerImpl_GetTrustLevel,
-    /* IGameControllerImpl methods */
-    controller_IGameControllerImpl_Initialize,
-};
-
 static HRESULT controller_OnInputResumed( struct controller *impl, UINT64 timestamp )
 {
     FIXME( "controller %p, timestamp %I64u stub!\n", impl, timestamp );
@@ -131,20 +118,6 @@ static HRESULT controller_OnInputSuspended( struct controller *impl, UINT64 time
     FIXME( "controller %p, timestamp %I64u stub!\n", impl, timestamp );
     return E_NOTIMPL;
 }
-
-static const struct IGameControllerInputSinkVtbl input_sink_vtbl =
-{
-    controller_IGameControllerInputSink_QueryInterface,
-    controller_IGameControllerInputSink_AddRef,
-    controller_IGameControllerInputSink_Release,
-    /* IInspectable methods */
-    controller_IGameControllerInputSink_GetIids,
-    controller_IGameControllerInputSink_GetRuntimeClassName,
-    controller_IGameControllerInputSink_GetTrustLevel,
-    /* IGameControllerInputSink methods */
-    controller_IGameControllerInputSink_OnInputResumed,
-    controller_IGameControllerInputSink_OnInputSuspended,
-};
 
 static HRESULT controller_get_AxisCount( struct controller *impl, INT32 *value )
 {
@@ -232,27 +205,6 @@ static HRESULT controller_GetSwitchKind( struct controller *impl, INT32 index, e
     return E_NOTIMPL;
 }
 
-static const struct IRawGameControllerVtbl raw_controller_vtbl =
-{
-    controller_IRawGameController_QueryInterface,
-    controller_IRawGameController_AddRef,
-    controller_IRawGameController_Release,
-    /* IInspectable methods */
-    controller_IRawGameController_GetIids,
-    controller_IRawGameController_GetRuntimeClassName,
-    controller_IRawGameController_GetTrustLevel,
-    /* IRawGameController methods */
-    controller_IRawGameController_get_AxisCount,
-    controller_IRawGameController_get_ButtonCount,
-    controller_IRawGameController_get_ForceFeedbackMotors,
-    controller_IRawGameController_get_HardwareProductId,
-    controller_IRawGameController_get_HardwareVendorId,
-    controller_IRawGameController_get_SwitchCount,
-    controller_IRawGameController_GetButtonLabel,
-    controller_IRawGameController_GetCurrentReading,
-    controller_IRawGameController_GetSwitchKind,
-};
-
 static HRESULT controller_get_SimpleHapticsControllers( struct controller *impl, IVectorView_SimpleHapticsController **value )
 {
     static const struct vector_iids iids =
@@ -288,21 +240,6 @@ static HRESULT controller_get_DisplayName( struct controller *impl, HSTRING *val
     return E_NOTIMPL;
 }
 
-static const struct IRawGameController2Vtbl raw_controller_2_vtbl =
-{
-    controller_IRawGameController2_QueryInterface,
-    controller_IRawGameController2_AddRef,
-    controller_IRawGameController2_Release,
-    /* IInspectable methods */
-    controller_IRawGameController2_GetIids,
-    controller_IRawGameController2_GetRuntimeClassName,
-    controller_IRawGameController2_GetTrustLevel,
-    /* IRawGameController2 methods */
-    controller_IRawGameController2_get_SimpleHapticsControllers,
-    controller_IRawGameController2_get_NonRoamableId,
-    controller_IRawGameController2_get_DisplayName,
-};
-
 static const struct controller_funcs controller_funcs = CONTROLLER_FUNCS_INIT;
 
 static HRESULT controller_statics_missing_interface( struct controller_statics *statics, REFIID iid, void **out )
@@ -321,19 +258,6 @@ static HRESULT controller_statics_ActivateInstance( struct controller_statics *s
     FIXME( "statics %p, instance %p stub!\n", statics, instance );
     return E_NOTIMPL;
 }
-
-static const struct IActivationFactoryVtbl factory_vtbl =
-{
-    controller_statics_IActivationFactory_QueryInterface,
-    controller_statics_IActivationFactory_AddRef,
-    controller_statics_IActivationFactory_Release,
-    /* IInspectable methods */
-    controller_statics_IActivationFactory_GetIids,
-    controller_statics_IActivationFactory_GetRuntimeClassName,
-    controller_statics_IActivationFactory_GetTrustLevel,
-    /* IActivationFactory methods */
-    controller_statics_IActivationFactory_ActivateInstance,
-};
 
 static HRESULT controller_statics_add_RawGameControllerAdded( struct controller_statics *statics, IEventHandler_RawGameController *handler,
                                                               EventRegistrationToken *token )
@@ -395,24 +319,6 @@ static HRESULT controller_statics_FromGameController( struct controller_statics 
     return hr;
 }
 
-static const struct IRawGameControllerStaticsVtbl statics_vtbl =
-{
-    controller_statics_IRawGameControllerStatics_QueryInterface,
-    controller_statics_IRawGameControllerStatics_AddRef,
-    controller_statics_IRawGameControllerStatics_Release,
-    /* IInspectable methods */
-    controller_statics_IRawGameControllerStatics_GetIids,
-    controller_statics_IRawGameControllerStatics_GetRuntimeClassName,
-    controller_statics_IRawGameControllerStatics_GetTrustLevel,
-    /* IRawGameControllerStatics methods */
-    controller_statics_IRawGameControllerStatics_add_RawGameControllerAdded,
-    controller_statics_IRawGameControllerStatics_remove_RawGameControllerAdded,
-    controller_statics_IRawGameControllerStatics_add_RawGameControllerRemoved,
-    controller_statics_IRawGameControllerStatics_remove_RawGameControllerRemoved,
-    controller_statics_IRawGameControllerStatics_get_RawGameControllers,
-    controller_statics_IRawGameControllerStatics_FromGameController,
-};
-
 static HRESULT controller_statics_CreateGameController( struct controller_statics *statics, IGameControllerProvider *provider, IInspectable **value )
 {
     struct controller *impl;
@@ -420,10 +326,10 @@ static HRESULT controller_statics_CreateGameController( struct controller_static
     TRACE( "statics %p, provider %p, value %p.\n", statics, provider, value );
 
     if (!(impl = calloc( 1, sizeof(*impl) ))) return E_OUTOFMEMORY;
-    impl->klass.IGameControllerImpl_iface.lpVtbl = &controller_vtbl;
-    impl->klass.IGameControllerInputSink_iface.lpVtbl = &input_sink_vtbl;
-    impl->klass.IRawGameController_iface.lpVtbl = &raw_controller_vtbl;
-    impl->klass.IRawGameController2_iface.lpVtbl = &raw_controller_2_vtbl;
+    impl->klass.IGameControllerImpl_iface.lpVtbl = &controller_IGameControllerImpl_vtbl;
+    impl->klass.IGameControllerInputSink_iface.lpVtbl = &controller_IGameControllerInputSink_vtbl;
+    impl->klass.IRawGameController_iface.lpVtbl = &controller_IRawGameController_vtbl;
+    impl->klass.IRawGameController2_iface.lpVtbl = &controller_IRawGameController2_vtbl;
     impl->klass.class_name = RuntimeClass_Windows_Gaming_Input_RawGameController;
     impl->klass.ref = 1;
 
@@ -482,35 +388,13 @@ static HRESULT controller_statics_OnGameControllerRemoved( struct controller_sta
     return S_OK;
 }
 
-static const struct ICustomGameControllerFactoryVtbl controller_factory_vtbl =
-{
-    controller_statics_ICustomGameControllerFactory_QueryInterface,
-    controller_statics_ICustomGameControllerFactory_AddRef,
-    controller_statics_ICustomGameControllerFactory_Release,
-    /* IInspectable methods */
-    controller_statics_ICustomGameControllerFactory_GetIids,
-    controller_statics_ICustomGameControllerFactory_GetRuntimeClassName,
-    controller_statics_ICustomGameControllerFactory_GetTrustLevel,
-    /* ICustomGameControllerFactory methods */
-    controller_statics_ICustomGameControllerFactory_CreateGameController,
-    controller_statics_ICustomGameControllerFactory_OnGameControllerAdded,
-    controller_statics_ICustomGameControllerFactory_OnGameControllerRemoved,
-};
-
-static const struct IAgileObjectVtbl controller_statics_agile_vtbl =
-{
-    controller_statics_IAgileObject_QueryInterface,
-    controller_statics_IAgileObject_AddRef,
-    controller_statics_IAgileObject_Release,
-};
-
 static const struct controller_statics_funcs controller_statics_funcs = CONTROLLER_STATICS_FUNCS_INIT;
 static struct controller_statics controller_statics =
 {
-    {&factory_vtbl},
-    {&statics_vtbl},
-    {&controller_factory_vtbl},
-    {&controller_statics_agile_vtbl},
+    {&controller_statics_IActivationFactory_vtbl},
+    {&controller_statics_IRawGameControllerStatics_vtbl},
+    {&controller_statics_ICustomGameControllerFactory_vtbl},
+    {&controller_statics_IAgileObject_vtbl},
     1,
 };
 

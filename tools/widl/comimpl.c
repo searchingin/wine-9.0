@@ -148,6 +148,35 @@ static void write_iface_methods( const type_t *klass, const type_t *impl, const 
     }
 }
 
+static void write_iface_vtable_methods( const type_t *impl, const type_t *iface, const type_t *top_iface )
+{
+    const char *short_name = top_iface->short_name ? top_iface->short_name : top_iface->name;
+    const statement_t *stmt;
+    const type_t *base;
+
+    if ((base = type_iface_get_inherit( iface ))) write_iface_vtable_methods( impl, base, top_iface );
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
+    {
+        const var_t *func = stmt->u.var;
+
+        if (is_override_method( iface, top_iface, func )) continue;
+        if (is_callas( func->attrs )) continue;
+
+        put_str( indent, "%s_%s_%s,\n", impl->name, short_name, get_name( func ) );
+    }
+}
+
+static void write_iface_vtable( const type_t *impl, const type_t *iface )
+{
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+
+    put_str( indent, "static const struct %sVtbl %s_%s_vtbl =\n", iface->c_name, impl->name, short_name );
+    put_str( indent++, "{\n" );
+    write_iface_vtable_methods( impl, iface, iface );
+    put_str( --indent, "};\n" );
+}
+
 static void write_default_IUnknown( const type_t *klass, const type_t *impl, const type_t *iface, const char *refcount )
 {
     const char *query_name, *short_name = iface->short_name ? iface->short_name : iface->name;
@@ -462,6 +491,7 @@ static void write_impl( const type_t *impl, const type_t *klass )
             write_default_IInspectable( klass, impl, var->declspec.type, cls ? cls->name : NULL );
         }
         write_iface_methods( klass, impl, impl->name, var->declspec.type, var->declspec.type );
+        write_iface_vtable( impl, var->declspec.type );
     }
     put_str( indent, "\n" );
 
