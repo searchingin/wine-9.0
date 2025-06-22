@@ -49,6 +49,7 @@ struct controller_klass
     Windows.Gaming.Input.IRawGameController IRawGameController_iface;
     Windows.Gaming.Input.IRawGameController2 IRawGameController2_iface;
     Windows.Gaming.Input.IGameController *IGameController_outer;
+    const WCHAR *class_name;
     LONG ref;
 };
 

@@ -72,6 +72,83 @@ static bool iface_inherits( const type_t *iface, const char *name )
     return iface_inherits( type_iface_get_inherit( iface ), name );
 }
 
+static void write_default_IUnknown( const type_t *klass, const type_t *impl, const type_t *iface, const char *refcount )
+{
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const char *prefix = strmake( "%s_%s", impl->name, short_name );
+
+    if (!iface_inherits( iface, "IUnknown" )) return;
+
+    if (!refcount)
+    {
+        put_str( indent, "static ULONG WINAPI %s_AddRef( %s *iface )\n", prefix, iface->c_name );
+        put_str( indent, "{\n" );
+        put_str( indent, "    return 2;\n" );
+        put_str( indent, "}\n" );
+        put_str( indent, "static ULONG WINAPI %s_Release( %s *iface )\n", prefix, iface->c_name );
+        put_str( indent, "{\n" );
+        put_str( indent, "    return 1;\n" );
+        put_str( indent, "}\n" );
+    }
+    else
+    {
+        put_str( indent, "static ULONG WINAPI %s_AddRef( %s *iface )\n", prefix, iface->c_name );
+        put_str( indent, "{\n" );
+        put_str( indent, "    struct %s *klass = %s_from_%s( iface );\n", klass->name, klass->name, short_name );
+        put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+        put_str( indent, "    LONG ref = InterlockedIncrement( &klass->%s );\n", refcount );
+        put_str( indent, "    TRACE( \"%s %%p increasing refcount to %%ld\\n\", impl, ref );\n", impl->name );
+        put_str( indent, "    return ref;\n" );
+        put_str( indent, "}\n" );
+        put_str( indent, "static ULONG WINAPI %s_Release( %s *iface )\n", prefix, iface->c_name );
+        put_str( indent, "{\n" );
+        put_str( indent, "    struct %s *klass = %s_from_%s( iface );\n", klass->name, klass->name, short_name );
+        put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+        put_str( indent, "    LONG ref = InterlockedDecrement( &klass->%s );\n", refcount );
+        put_str( indent, "    TRACE( \"%s %%p decreasing refcount to %%ld\\n\", impl, ref);\n", impl->name );
+        put_str( indent, "    if (!ref) %s_funcs.destroy( impl );\n", impl->name );
+        put_str( indent, "    return ref;\n" );
+        put_str( indent, "}\n" );
+    }
+}
+
+static void write_default_IInspectable( const type_t *klass, const type_t *impl, const type_t *iface, const char *class_name )
+{
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const char *prefix = strmake( "%s_%s", impl->name, short_name );
+
+    if (!iface_inherits( iface, "IInspectable" )) return;
+
+    put_str( indent, "static HRESULT WINAPI %s_GetIids( %s *iface, ULONG *count, IID **iids )\n", prefix, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+    put_str( indent, "    FIXME( \"%s %%p count %%p iids %%p stub!\\n\", impl, count, iids );\n", impl->name );
+    put_str( indent, "    return E_NOTIMPL;\n" );
+    put_str( indent, "}\n" );
+    put_str( indent, "static HRESULT WINAPI %s_GetRuntimeClassName( %s *iface, HSTRING *class_name )\n", prefix, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+    if (class_name)
+    {
+        put_str( indent, "    struct %s *klass = %s_from_%s( iface );\n", klass->name, klass->name, short_name );
+        put_str( indent, "    TRACE( \"%s %%p class_name %%p\\n\", impl, class_name );\n", impl->name );
+        put_str( indent, "    if (!klass->%s) return WindowsDuplicateString( NULL, class_name );\n", class_name );
+        put_str( indent, "    return WindowsCreateString( klass->%s, wcslen( klass->%s ), class_name );\n", class_name, class_name );
+    }
+    else
+    {
+        put_str( indent, "    FIXME( \"%s %%p class_name %%p stub!\\n\", impl, class_name );\n", impl->name );
+        put_str( indent, "    return E_NOTIMPL;\n" );
+    }
+    put_str( indent, "}\n" );
+    put_str( indent, "static HRESULT WINAPI %s_GetTrustLevel( %s *iface, TrustLevel *trust_level )\n", prefix, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+    put_str( indent, "    FIXME( \"%s %%p trust_level %%p stub!\\n\", impl, trust_level );\n", impl->name );
+    put_str( indent, "    return E_NOTIMPL;\n" );
+    put_str( indent, "}\n" );
+}
+
 static void write_iface_forwarding( const type_t *klass, const type_t *impl, const type_t *iface, const type_t *default_iface,
                                     const char *forward, const type_t *forward_iface )
 {
@@ -136,20 +213,24 @@ static void write_iface_impl_from( const type_t *klass, const type_t *impl, cons
 
 static void write_impl( const type_t *impl, const type_t *klass )
 {
-    bool from_klass;
+    bool from_klass, destroy;
     struct strbuf str = {0};
-    const var_t *var, *def = NULL, *out = NULL;
+    const var_t *var, *def = NULL, *out = NULL, *ref = NULL, *cls = NULL;
     const type_t *forward_iface;
     const char *forward;
 
     put_str( indent, "#ifdef WIDL_impl_%s\n\n", impl->name );
 
+    if (impl != klass) put_str( indent, "struct %s;\n", impl->name );
     put_str( indent, "struct %s\n", klass->name );
     put_str( indent++, "{\n" );
     LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
     {
         if (!def && strendswith( var->name, "_iface" )) def = var;
         if (!out && strendswith( var->name, "_outer" )) out = var;
+        if (!ref && !strcmp( var->name, "ref" )) ref = var;
+        if (!ref && !strcmp( var->name, "refcount" )) ref = var;
+        if (!cls && !strcmp( var->name, "class_name" )) cls = var;
         append_declspec( &str, &var->declspec, NAME_C, "WINAPI", false, var->name );
         put_str( indent, "%s;\n", str.buf );
         str.pos = 0;
@@ -157,16 +238,19 @@ static void write_impl( const type_t *impl, const type_t *klass )
     put_str( --indent, "};\n\n" );
 
     from_klass = impl != klass;
+    destroy = ref != NULL;
 
     put_str( indent, "static const struct %s_funcs\n", impl->name );
     put_str( indent, "{\n" );
     if (from_klass) put_str( indent, "    struct %s *(*from_klass)( struct %s *klass );\n", impl->name, klass->name );
+    if (destroy)    put_str( indent, "    void (*destroy)( struct %s *impl );\n", impl->name );
     put_str( indent, "    int placeholder;\n" );
     put_str( indent, "} %s_funcs;\n\n", impl->name );
 
     put_str( indent++, "#define %s_FUNCS_INIT \\\n", strupper( strdup( impl->name ) ) );
     put_str( indent++, "{ \\\n" );
     if (from_klass) put_str( indent, ".from_klass = %s_from_klass, \\\n", impl->name );
+    if (destroy)    put_str( indent, ".destroy = %s_destroy, \\\n", impl->name );
     put_str( indent, "0 \\\n" );
     put_str( --indent, "}\n" );
     put_str( --indent, "\n" );
@@ -193,6 +277,11 @@ static void write_impl( const type_t *impl, const type_t *klass )
     {
         if (!strendswith( var->name, "_iface" )) continue;
         if (var != def) write_iface_forwarding( klass, impl, var->declspec.type, def->declspec.type, forward, forward_iface );
+        else
+        {
+            write_default_IUnknown( klass, impl, var->declspec.type, ref ? ref->name : NULL );
+            write_default_IInspectable( klass, impl, var->declspec.type, cls ? cls->name : NULL );
+        }
     }
     put_str( indent, "\n" );
 

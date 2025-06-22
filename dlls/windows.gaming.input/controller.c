@@ -109,49 +109,11 @@ static HRESULT WINAPI controller_QueryInterface( IGameControllerImpl *iface, REF
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI controller_AddRef( IGameControllerImpl *iface )
+static void controller_destroy( struct controller *impl )
 {
-    struct controller *impl = controller_from_IGameControllerImpl( iface );
-    ULONG ref = InterlockedIncrement( &impl->klass.ref );
-    TRACE( "iface %p increasing refcount to %lu.\n", iface, ref );
-    return ref;
-}
-
-static ULONG WINAPI controller_Release( IGameControllerImpl *iface )
-{
-    struct controller *impl = controller_from_IGameControllerImpl( iface );
-    ULONG ref = InterlockedDecrement( &impl->klass.ref );
-
-    TRACE( "iface %p decreasing refcount to %lu.\n", iface, ref );
-
-    if (!ref)
-    {
-        if (impl->wine_provider)
-            IWineGameControllerProvider_Release( impl->wine_provider );
-        IGameControllerProvider_Release( impl->provider );
-        free( impl );
-    }
-
-    return ref;
-}
-
-static HRESULT WINAPI controller_GetIids( IGameControllerImpl *iface, ULONG *iid_count, IID **iids )
-{
-    FIXME( "iface %p, iid_count %p, iids %p stub!\n", iface, iid_count, iids );
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI controller_GetRuntimeClassName( IGameControllerImpl *iface, HSTRING *class_name )
-{
-    return WindowsCreateString( RuntimeClass_Windows_Gaming_Input_RawGameController,
-                                ARRAY_SIZE(RuntimeClass_Windows_Gaming_Input_RawGameController),
-                                class_name );
-}
-
-static HRESULT WINAPI controller_GetTrustLevel( IGameControllerImpl *iface, TrustLevel *trust_level )
-{
-    FIXME( "iface %p, trust_level %p stub!\n", iface, trust_level );
-    return E_NOTIMPL;
+    if (impl->wine_provider) IWineGameControllerProvider_Release( impl->wine_provider );
+    IGameControllerProvider_Release( impl->provider );
+    free( impl );
 }
 
 static HRESULT WINAPI controller_Initialize( IGameControllerImpl *iface, IGameController *outer,
@@ -180,12 +142,12 @@ static HRESULT WINAPI controller_Initialize( IGameControllerImpl *iface, IGameCo
 static const struct IGameControllerImplVtbl controller_vtbl =
 {
     controller_QueryInterface,
-    controller_AddRef,
-    controller_Release,
+    controller_IGameControllerImpl_AddRef,
+    controller_IGameControllerImpl_Release,
     /* IInspectable methods */
-    controller_GetIids,
-    controller_GetRuntimeClassName,
-    controller_GetTrustLevel,
+    controller_IGameControllerImpl_GetIids,
+    controller_IGameControllerImpl_GetRuntimeClassName,
+    controller_IGameControllerImpl_GetTrustLevel,
     /* IGameControllerImpl methods */
     controller_Initialize,
 };
@@ -420,38 +382,8 @@ static HRESULT WINAPI factory_QueryInterface( IActivationFactory *iface, REFIID 
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI factory_AddRef( IActivationFactory *iface )
+static void controller_statics_destroy( struct controller_statics *impl )
 {
-    struct controller_statics *impl = controller_statics_from_IActivationFactory( iface );
-    ULONG ref = InterlockedIncrement( &impl->ref );
-    TRACE( "iface %p increasing refcount to %lu.\n", iface, ref );
-    return ref;
-}
-
-static ULONG WINAPI factory_Release( IActivationFactory *iface )
-{
-    struct controller_statics *impl = controller_statics_from_IActivationFactory( iface );
-    ULONG ref = InterlockedDecrement( &impl->ref );
-    TRACE( "iface %p decreasing refcount to %lu.\n", iface, ref );
-    return ref;
-}
-
-static HRESULT WINAPI factory_GetIids( IActivationFactory *iface, ULONG *iid_count, IID **iids )
-{
-    FIXME( "iface %p, iid_count %p, iids %p stub!\n", iface, iid_count, iids );
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI factory_GetRuntimeClassName( IActivationFactory *iface, HSTRING *class_name )
-{
-    FIXME( "iface %p, class_name %p stub!\n", iface, class_name );
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI factory_GetTrustLevel( IActivationFactory *iface, TrustLevel *trust_level )
-{
-    FIXME( "iface %p, trust_level %p stub!\n", iface, trust_level );
-    return E_NOTIMPL;
 }
 
 static HRESULT WINAPI factory_ActivateInstance( IActivationFactory *iface, IInspectable **instance )
@@ -463,12 +395,12 @@ static HRESULT WINAPI factory_ActivateInstance( IActivationFactory *iface, IInsp
 static const struct IActivationFactoryVtbl factory_vtbl =
 {
     factory_QueryInterface,
-    factory_AddRef,
-    factory_Release,
+    controller_statics_IActivationFactory_AddRef,
+    controller_statics_IActivationFactory_Release,
     /* IInspectable methods */
-    factory_GetIids,
-    factory_GetRuntimeClassName,
-    factory_GetTrustLevel,
+    controller_statics_IActivationFactory_GetIids,
+    controller_statics_IActivationFactory_GetRuntimeClassName,
+    controller_statics_IActivationFactory_GetTrustLevel,
     /* IActivationFactory methods */
     factory_ActivateInstance,
 };
@@ -567,6 +499,7 @@ static HRESULT WINAPI controller_factory_CreateGameController( ICustomGameContro
     impl->klass.IGameControllerInputSink_iface.lpVtbl = &input_sink_vtbl;
     impl->klass.IRawGameController_iface.lpVtbl = &raw_controller_vtbl;
     impl->klass.IRawGameController2_iface.lpVtbl = &raw_controller_2_vtbl;
+    impl->klass.class_name = RuntimeClass_Windows_Gaming_Input_RawGameController;
     impl->klass.ref = 1;
 
     TRACE( "created RawGameController %p\n", impl );
@@ -646,6 +579,7 @@ static const struct IAgileObjectVtbl controller_statics_agile_vtbl =
     controller_statics_IAgileObject_Release,
 };
 
+static const struct controller_statics_funcs controller_statics_funcs = CONTROLLER_STATICS_FUNCS_INIT;
 static struct controller_statics controller_statics =
 {
     {&factory_vtbl},
