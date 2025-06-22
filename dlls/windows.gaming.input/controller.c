@@ -190,8 +190,6 @@ static const struct IGameControllerImplVtbl controller_vtbl =
     controller_Initialize,
 };
 
-DEFINE_IINSPECTABLE_( input_sink, IGameControllerInputSink, struct controller, impl_from_IGameControllerInputSink, klass.IGameControllerInputSink_iface, impl->klass.IGameController_outer )
-
 static HRESULT WINAPI input_sink_OnInputResumed( IGameControllerInputSink *iface, UINT64 timestamp )
 {
     FIXME( "iface %p, timestamp %I64u stub!\n", iface, timestamp );
@@ -206,29 +204,27 @@ static HRESULT WINAPI input_sink_OnInputSuspended( IGameControllerInputSink *ifa
 
 static const struct IGameControllerInputSinkVtbl input_sink_vtbl =
 {
-    input_sink_QueryInterface,
-    input_sink_AddRef,
-    input_sink_Release,
+    controller_IGameControllerInputSink_QueryInterface,
+    controller_IGameControllerInputSink_AddRef,
+    controller_IGameControllerInputSink_Release,
     /* IInspectable methods */
-    input_sink_GetIids,
-    input_sink_GetRuntimeClassName,
-    input_sink_GetTrustLevel,
+    controller_IGameControllerInputSink_GetIids,
+    controller_IGameControllerInputSink_GetRuntimeClassName,
+    controller_IGameControllerInputSink_GetTrustLevel,
     /* IGameControllerInputSink methods */
     input_sink_OnInputResumed,
     input_sink_OnInputSuspended,
 };
 
-DEFINE_IINSPECTABLE_( raw_controller, IRawGameController, struct controller, impl_from_IRawGameController, klass.IRawGameController_iface, impl->klass.IGameController_outer )
-
 static HRESULT WINAPI raw_controller_get_AxisCount( IRawGameController *iface, INT32 *value )
 {
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     return IWineGameControllerProvider_get_AxisCount( impl->wine_provider, value );
 }
 
 static HRESULT WINAPI raw_controller_get_ButtonCount( IRawGameController *iface, INT32 *value )
 {
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     return IWineGameControllerProvider_get_ButtonCount( impl->wine_provider, value );
 }
 
@@ -241,7 +237,7 @@ static HRESULT WINAPI raw_controller_get_ForceFeedbackMotors( IRawGameController
         .iterable = &IID_IIterable_ForceFeedbackMotor,
         .iterator = &IID_IIterator_ForceFeedbackMotor,
     };
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     IVector_ForceFeedbackMotor *vector;
     IForceFeedbackMotor *motor;
     HRESULT hr;
@@ -264,19 +260,19 @@ static HRESULT WINAPI raw_controller_get_ForceFeedbackMotors( IRawGameController
 
 static HRESULT WINAPI raw_controller_get_HardwareProductId( IRawGameController *iface, UINT16 *value )
 {
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     return IGameControllerProvider_get_HardwareProductId( impl->provider, value );
 }
 
 static HRESULT WINAPI raw_controller_get_HardwareVendorId( IRawGameController *iface, UINT16 *value )
 {
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     return IGameControllerProvider_get_HardwareVendorId( impl->provider, value );
 }
 
 static HRESULT WINAPI raw_controller_get_SwitchCount( IRawGameController *iface, INT32 *value )
 {
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     return IWineGameControllerProvider_get_SwitchCount( impl->wine_provider, value );
 }
 
@@ -291,7 +287,7 @@ static HRESULT WINAPI raw_controller_GetCurrentReading( IRawGameController *ifac
                                                         UINT32 switches_size, enum GameControllerSwitchPosition *switches,
                                                         UINT32 axes_size, DOUBLE *axes, UINT64 *timestamp )
 {
-    struct controller *impl = impl_from_IRawGameController( iface );
+    struct controller *impl = controller_from_IRawGameController( iface );
     WineGameControllerState state;
     HRESULT hr;
 
@@ -316,13 +312,13 @@ static HRESULT WINAPI raw_controller_GetSwitchKind( IRawGameController *iface, I
 
 static const struct IRawGameControllerVtbl raw_controller_vtbl =
 {
-    raw_controller_QueryInterface,
-    raw_controller_AddRef,
-    raw_controller_Release,
+    controller_IRawGameController_QueryInterface,
+    controller_IRawGameController_AddRef,
+    controller_IRawGameController_Release,
     /* IInspectable methods */
-    raw_controller_GetIids,
-    raw_controller_GetRuntimeClassName,
-    raw_controller_GetTrustLevel,
+    controller_IRawGameController_GetIids,
+    controller_IRawGameController_GetRuntimeClassName,
+    controller_IRawGameController_GetTrustLevel,
     /* IRawGameController methods */
     raw_controller_get_AxisCount,
     raw_controller_get_ButtonCount,
@@ -334,8 +330,6 @@ static const struct IRawGameControllerVtbl raw_controller_vtbl =
     raw_controller_GetCurrentReading,
     raw_controller_GetSwitchKind,
 };
-
-DEFINE_IINSPECTABLE_( raw_controller_2, IRawGameController2, struct controller, impl_from_IRawGameController2, klass.IRawGameController2_iface, impl->klass.IGameController_outer )
 
 static HRESULT WINAPI raw_controller_2_get_SimpleHapticsControllers( IRawGameController2 *iface, IVectorView_SimpleHapticsController** value)
 {
@@ -374,13 +368,13 @@ static HRESULT WINAPI raw_controller_2_get_DisplayName( IRawGameController2 *ifa
 
 static const struct IRawGameController2Vtbl raw_controller_2_vtbl =
 {
-    raw_controller_2_QueryInterface,
-    raw_controller_2_AddRef,
-    raw_controller_2_Release,
+    controller_IRawGameController2_QueryInterface,
+    controller_IRawGameController2_AddRef,
+    controller_IRawGameController2_Release,
     /* IInspectable methods */
-    raw_controller_2_GetIids,
-    raw_controller_2_GetRuntimeClassName,
-    raw_controller_2_GetTrustLevel,
+    controller_IRawGameController2_GetIids,
+    controller_IRawGameController2_GetRuntimeClassName,
+    controller_IRawGameController2_GetTrustLevel,
     /* IRawGameController2 methods */
     raw_controller_2_get_SimpleHapticsControllers,
     raw_controller_2_get_NonRoamableId,
@@ -479,8 +473,6 @@ static const struct IActivationFactoryVtbl factory_vtbl =
     factory_ActivateInstance,
 };
 
-DEFINE_IINSPECTABLE( statics, IRawGameControllerStatics, struct controller_statics, IActivationFactory_iface )
-
 static HRESULT WINAPI statics_add_RawGameControllerAdded( IRawGameControllerStatics *iface,
                                                           IEventHandler_RawGameController *handler,
                                                           EventRegistrationToken *token )
@@ -528,7 +520,7 @@ static HRESULT WINAPI statics_get_RawGameControllers( IRawGameControllerStatics 
 static HRESULT WINAPI statics_FromGameController( IRawGameControllerStatics *iface, IGameController *game_controller,
                                                   IRawGameController **value )
 {
-    struct controller_statics *impl = impl_from_IRawGameControllerStatics( iface );
+    struct controller_statics *impl = controller_statics_from_IRawGameControllerStatics( iface );
     IGameController *controller;
     HRESULT hr;
 
@@ -547,13 +539,13 @@ static HRESULT WINAPI statics_FromGameController( IRawGameControllerStatics *ifa
 
 static const struct IRawGameControllerStaticsVtbl statics_vtbl =
 {
-    statics_QueryInterface,
-    statics_AddRef,
-    statics_Release,
+    controller_statics_IRawGameControllerStatics_QueryInterface,
+    controller_statics_IRawGameControllerStatics_AddRef,
+    controller_statics_IRawGameControllerStatics_Release,
     /* IInspectable methods */
-    statics_GetIids,
-    statics_GetRuntimeClassName,
-    statics_GetTrustLevel,
+    controller_statics_IRawGameControllerStatics_GetIids,
+    controller_statics_IRawGameControllerStatics_GetRuntimeClassName,
+    controller_statics_IRawGameControllerStatics_GetTrustLevel,
     /* IRawGameControllerStatics methods */
     statics_add_RawGameControllerAdded,
     statics_remove_RawGameControllerAdded,
@@ -562,8 +554,6 @@ static const struct IRawGameControllerStaticsVtbl statics_vtbl =
     statics_get_RawGameControllers,
     statics_FromGameController,
 };
-
-DEFINE_IINSPECTABLE( controller_factory, ICustomGameControllerFactory, struct controller_statics, IActivationFactory_iface )
 
 static HRESULT WINAPI controller_factory_CreateGameController( ICustomGameControllerFactory *iface, IGameControllerProvider *provider,
                                                                IInspectable **value )
@@ -636,20 +626,25 @@ static HRESULT WINAPI controller_factory_OnGameControllerRemoved( ICustomGameCon
 
 static const struct ICustomGameControllerFactoryVtbl controller_factory_vtbl =
 {
-    controller_factory_QueryInterface,
-    controller_factory_AddRef,
-    controller_factory_Release,
+    controller_statics_ICustomGameControllerFactory_QueryInterface,
+    controller_statics_ICustomGameControllerFactory_AddRef,
+    controller_statics_ICustomGameControllerFactory_Release,
     /* IInspectable methods */
-    controller_factory_GetIids,
-    controller_factory_GetRuntimeClassName,
-    controller_factory_GetTrustLevel,
+    controller_statics_ICustomGameControllerFactory_GetIids,
+    controller_statics_ICustomGameControllerFactory_GetRuntimeClassName,
+    controller_statics_ICustomGameControllerFactory_GetTrustLevel,
     /* ICustomGameControllerFactory methods */
     controller_factory_CreateGameController,
     controller_factory_OnGameControllerAdded,
     controller_factory_OnGameControllerRemoved,
 };
 
-DEFINE_IAGILEOBJECT( controller_statics, IActivationFactory, &object->IActivationFactory_iface );
+static const struct IAgileObjectVtbl controller_statics_agile_vtbl =
+{
+    controller_statics_IAgileObject_QueryInterface,
+    controller_statics_IAgileObject_AddRef,
+    controller_statics_IAgileObject_Release,
+};
 
 static struct controller_statics controller_statics =
 {
