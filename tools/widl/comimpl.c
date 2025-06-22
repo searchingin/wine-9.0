@@ -74,10 +74,26 @@ static bool iface_inherits( const type_t *iface, const char *name )
 
 static void write_default_IUnknown( const type_t *klass, const type_t *impl, const type_t *iface, const char *refcount )
 {
-    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const char *query_name, *short_name = iface->short_name ? iface->short_name : iface->name;
     const char *prefix = strmake( "%s_%s", impl->name, short_name );
+    const var_t *var;
 
     if (!iface_inherits( iface, "IUnknown" )) return;
+
+    put_str( indent, "static HRESULT WINAPI %s_QueryInterface( %s *iface, REFIID iid, void **out )\n", prefix, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    struct %s *klass = %s_from_%s( iface );\n", klass->name, klass->name, short_name );
+    put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+    put_str( indent, "    HRESULT hr;\n" );
+    put_str( indent, "    TRACE( \"%s %%p iid %%s out %%p\\n\", impl, debugstr_guid(iid), out );\n", impl->name );
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        if (!strendswith( var->name, "_iface" )) continue;
+        query_name = var->declspec.type->short_name ? var->declspec.type->short_name : var->declspec.type->name;
+        put_str( indent, "    if (SUCCEEDED(hr = %s_query_%s( klass, iid, out ))) return hr;\n", klass->name, query_name );
+    }
+    put_str( indent, "    return %s_funcs.missing_interface( impl, iid, out );\n", impl->name );
+    put_str( indent, "}\n" );
 
     if (!refcount)
     {
@@ -237,7 +253,7 @@ static void write_iface_query( const type_t *klass, const type_t *impl, const va
 
 static void write_impl( const type_t *impl, const type_t *klass )
 {
-    bool from_klass, destroy;
+    bool from_klass, miss_iface, destroy;
     struct strbuf str = {0};
     const var_t *var, *def = NULL, *out = NULL, *ref = NULL, *cls = NULL;
     const type_t *forward_iface;
@@ -261,12 +277,14 @@ static void write_impl( const type_t *impl, const type_t *klass )
     }
     put_str( --indent, "};\n\n" );
 
+    miss_iface = def && iface_inherits( def->declspec.type, "IUnknown" );
     from_klass = impl != klass;
     destroy = ref != NULL;
 
     put_str( indent, "static const struct %s_funcs\n", impl->name );
     put_str( indent, "{\n" );
     if (from_klass) put_str( indent, "    struct %s *(*from_klass)( struct %s *klass );\n", impl->name, klass->name );
+    if (miss_iface) put_str( indent, "    HRESULT (*missing_interface)( struct %s *%s, REFIID iid, void **out );\n", impl->name, impl->name );
     if (destroy)    put_str( indent, "    void (*destroy)( struct %s *impl );\n", impl->name );
     put_str( indent, "    int placeholder;\n" );
     put_str( indent, "} %s_funcs;\n\n", impl->name );
@@ -274,6 +292,7 @@ static void write_impl( const type_t *impl, const type_t *klass )
     put_str( indent++, "#define %s_FUNCS_INIT \\\n", strupper( strdup( impl->name ) ) );
     put_str( indent++, "{ \\\n" );
     if (from_klass) put_str( indent, ".from_klass = %s_from_klass, \\\n", impl->name );
+    if (miss_iface) put_str( indent, ".missing_interface = %s_missing_interface, \\\n", impl->name );
     if (destroy)    put_str( indent, ".destroy = %s_destroy, \\\n", impl->name );
     put_str( indent, "0 \\\n" );
     put_str( --indent, "}\n" );

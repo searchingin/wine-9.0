@@ -72,18 +72,8 @@ static struct controller *controller_from_klass( struct controller_klass *klass 
     return CONTAINING_RECORD( klass, struct controller, klass );
 }
 
-static HRESULT WINAPI controller_QueryInterface( IGameControllerImpl *iface, REFIID iid, void **out )
+static HRESULT controller_missing_interface( struct controller *impl, REFIID iid, void **out )
 {
-    struct controller *impl = controller_from_IGameControllerImpl( iface );
-    HRESULT hr;
-
-    TRACE( "iface %p, iid %s, out %p.\n", iface, debugstr_guid( iid ), out );
-
-    if (SUCCEEDED(hr = controller_klass_query_IGameControllerImpl( &impl->klass, iid, out ))) return hr;
-    if (SUCCEEDED(hr = controller_klass_query_IGameControllerInputSink( &impl->klass, iid, out ))) return hr;
-    if (SUCCEEDED(hr = controller_klass_query_IRawGameController( &impl->klass, iid, out ))) return hr;
-    if (SUCCEEDED(hr = controller_klass_query_IRawGameController2( &impl->klass, iid, out ))) return hr;
-
     FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( iid ) );
     *out = NULL;
     return E_NOINTERFACE;
@@ -121,7 +111,7 @@ static HRESULT WINAPI controller_Initialize( IGameControllerImpl *iface, IGameCo
 
 static const struct IGameControllerImplVtbl controller_vtbl =
 {
-    controller_QueryInterface,
+    controller_IGameControllerImpl_QueryInterface,
     controller_IGameControllerImpl_AddRef,
     controller_IGameControllerImpl_Release,
     /* IInspectable methods */
@@ -325,18 +315,8 @@ static const struct IRawGameController2Vtbl raw_controller_2_vtbl =
 
 static const struct controller_funcs controller_funcs = CONTROLLER_FUNCS_INIT;
 
-static HRESULT WINAPI factory_QueryInterface( IActivationFactory *iface, REFIID iid, void **out )
+static HRESULT controller_statics_missing_interface( struct controller_statics *impl, REFIID iid, void **out )
 {
-    struct controller_statics *impl = controller_statics_from_IActivationFactory( iface );
-    HRESULT hr;
-
-    TRACE( "iface %p, iid %s, out %p.\n", iface, debugstr_guid( iid ), out );
-
-    if (SUCCEEDED(hr = controller_statics_query_IActivationFactory( impl, iid, out ))) return hr;
-    if (SUCCEEDED(hr = controller_statics_query_IRawGameControllerStatics( impl, iid, out ))) return hr;
-    if (SUCCEEDED(hr = controller_statics_query_ICustomGameControllerFactory( impl, iid, out ))) return hr;
-    if (SUCCEEDED(hr = controller_statics_query_IAgileObject( impl, iid, out ))) return hr;
-
     FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( iid ) );
     *out = NULL;
     return E_NOINTERFACE;
@@ -354,7 +334,7 @@ static HRESULT WINAPI factory_ActivateInstance( IActivationFactory *iface, IInsp
 
 static const struct IActivationFactoryVtbl factory_vtbl =
 {
-    factory_QueryInterface,
+    controller_statics_IActivationFactory_QueryInterface,
     controller_statics_IActivationFactory_AddRef,
     controller_statics_IActivationFactory_Release,
     /* IInspectable methods */
