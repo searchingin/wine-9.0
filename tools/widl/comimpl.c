@@ -244,6 +244,8 @@ static void write_iface_methods( const type_t *klass, const type_t *impl, const 
     STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
     {
         const var_t *func = stmt->u.var;
+        decl_spec_t ret = *type_function_get_ret( func->declspec.type );
+        bool is_void = ret.type->type_type == TYPE_VOID;
 
         if (is_override_method( iface, top_iface, func )) continue;
         if (is_callas( func->attrs )) continue;
@@ -255,6 +257,13 @@ static void write_iface_methods( const type_t *klass, const type_t *impl, const 
         put_str( indent, "{\n" );
         put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
 
+        if (!is_void)
+        {
+            append_declspec( &str, &ret, NAME_C, "WINAPI", false, "ret" );
+            put_str( indent, "    %s;\n", str.buf );
+            str.pos = 0;
+        }
+
         strappend( &str, "\"%s %%p", impl->name );
         append_method_args_debug_format( &str, type_function_get_args(func->declspec.type) );
         strappend( &str, "\\n\", impl" );
@@ -264,9 +273,24 @@ static void write_iface_methods( const type_t *klass, const type_t *impl, const 
 
         strappend( &str, "impl" );
         append_method_args_call( &str, type_function_get_args( func->declspec.type ), false );
-        put_str( indent, "    return %s_funcs.%s( %s );\n", impl_prefix, get_name( func ), str.buf );
+        put_str( indent, "    %s%s_funcs.%s( %s );\n", is_void ? "" : "ret = ", impl_prefix, get_name( func ), str.buf );
         str.pos = 0;
 
+        strappend( &str, "\"%s %%p", impl->name );
+        if (is_void || !ret.type->name || strcmp( ret.type->name, "HRESULT" ))
+        {
+            strappend( &str, "\\n\", impl" );
+            put_str( indent, "    TRACE( %s );\n", str.buf );
+        }
+        else
+        {
+            strappend( &str, " -> %%#lx\\n\", impl" );
+            put_str( indent, "    if (FAILED(ret)) WARN( %s, ret );\n", str.buf );
+            put_str( indent, "    else TRACE( %s, ret );\n", str.buf );
+        }
+        str.pos = 0;
+
+        if (!is_void) put_str( indent, "    return ret;\n" );
         put_str( indent, "}\n" );
     }
 }
