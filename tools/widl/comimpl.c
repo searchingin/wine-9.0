@@ -495,6 +495,26 @@ static void write_impl( const type_t *impl, const type_t *klass )
     }
     put_str( indent, "\n" );
 
+    put_str( indent, "static const struct %s %s_default =\n", klass->name, klass->name );
+    put_str( indent, "{\n" );
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        const type_t *iface = var->declspec.type;
+        const char *short_name = iface->short_name ? iface->short_name : iface->name;
+        const char *prefix = strmake( "%s_%s", impl->name, short_name );
+        if (!strendswith( var->name, "_iface" )) continue;
+        put_str( indent, "    .%s.lpVtbl = &%s_vtbl,\n", var->name, prefix );
+    }
+    if (ref) put_str( indent, "    .%s = 1,\n", ref->name );
+    put_str( indent, "};\n\n" );
+
+    put_str( indent, "static inline void %s_init( struct %s *klass%s )\n", klass->name, klass->name,
+             cls ? ", const WCHAR *class_name" : "" );
+    put_str( indent, "{\n" );
+    put_str( indent, "    *klass = %s_default;\n", klass->name );
+    if (cls) put_str( indent, "    klass->class_name = class_name;\n" );
+    put_str( indent, "};\n\n" );
+
     put_str( indent, "#endif /* WIDL_impl_%s */\n", impl->name );
 }
 

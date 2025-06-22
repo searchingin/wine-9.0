@@ -326,12 +326,7 @@ static HRESULT controller_statics_CreateGameController( struct controller_static
     TRACE( "statics %p, provider %p, value %p.\n", statics, provider, value );
 
     if (!(impl = calloc( 1, sizeof(*impl) ))) return E_OUTOFMEMORY;
-    impl->klass.IGameControllerImpl_iface.lpVtbl = &controller_IGameControllerImpl_vtbl;
-    impl->klass.IGameControllerInputSink_iface.lpVtbl = &controller_IGameControllerInputSink_vtbl;
-    impl->klass.IRawGameController_iface.lpVtbl = &controller_IRawGameController_vtbl;
-    impl->klass.IRawGameController2_iface.lpVtbl = &controller_IRawGameController2_vtbl;
-    impl->klass.class_name = RuntimeClass_Windows_Gaming_Input_RawGameController;
-    impl->klass.ref = 1;
+    controller_klass_init( &impl->klass, RuntimeClass_Windows_Gaming_Input_RawGameController );
 
     TRACE( "created RawGameController %p\n", statics );
 
@@ -389,13 +384,5 @@ static HRESULT controller_statics_OnGameControllerRemoved( struct controller_sta
 }
 
 static const struct controller_statics_funcs controller_statics_funcs = CONTROLLER_STATICS_FUNCS_INIT;
-static struct controller_statics controller_statics =
-{
-    {&controller_statics_IActivationFactory_vtbl},
-    {&controller_statics_IRawGameControllerStatics_vtbl},
-    {&controller_statics_ICustomGameControllerFactory_vtbl},
-    {&controller_statics_IAgileObject_vtbl},
-    1,
-};
-
+static struct controller_statics controller_statics = controller_statics_default;
 ICustomGameControllerFactory *controller_factory = &controller_statics.ICustomGameControllerFactory_iface;
