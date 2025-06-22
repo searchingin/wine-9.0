@@ -124,6 +124,7 @@ static void write_iface_methods( const type_t *klass, const type_t *impl, const 
     if ((base = type_iface_get_inherit( iface ))) write_iface_methods( klass, impl, impl_prefix, base, top_iface );
     if (!strcmp( iface->name, "IUnknown" )) return;
     if (!strcmp( iface->name, "IInspectable" )) return;
+    if (!strcmp( iface->name, "IClassFactory" )) return;
 
     STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
     {
@@ -181,9 +182,11 @@ static void write_default_IUnknown( const type_t *klass, const type_t *impl, con
 {
     const char *query_name, *short_name = iface->short_name ? iface->short_name : iface->name;
     const char *prefix = strmake( "%s_%s", impl->name, short_name );
+    bool sealed = false;
     const var_t *var;
 
     if (!iface_inherits( iface, "IUnknown" )) return;
+    if (iface_inherits( iface, "IClassFactory" )) sealed = true;
 
     put_str( indent, "static HRESULT WINAPI %s_QueryInterface( %s *iface, REFIID iid, void **out )\n", prefix, iface->c_name );
     put_str( indent, "{\n" );
@@ -197,7 +200,12 @@ static void write_default_IUnknown( const type_t *klass, const type_t *impl, con
         query_name = var->declspec.type->short_name ? var->declspec.type->short_name : var->declspec.type->name;
         put_str( indent, "    if (SUCCEEDED(hr = %s_query_%s( klass, iid, out ))) return hr;\n", klass->name, query_name );
     }
-    put_str( indent, "    return %s_funcs.missing_interface( impl, iid, out );\n", impl->name );
+    if (!sealed) put_str( indent, "    return %s_funcs.missing_interface( impl, iid, out );\n", impl->name );
+    else
+    {
+        put_str( indent, "    *out = NULL;\n" );
+        put_str( indent, "    return E_NOINTERFACE;\n" );
+    }
     put_str( indent, "}\n" );
 
     if (!refcount)
@@ -267,6 +275,25 @@ static void write_default_IInspectable( const type_t *klass, const type_t *impl,
     put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
     put_str( indent, "    FIXME( \"%s %%p trust_level %%p stub!\\n\", impl, trust_level );\n", impl->name );
     put_str( indent, "    return E_NOTIMPL;\n" );
+    put_str( indent, "}\n" );
+}
+
+static void write_default_IClassFactory( const type_t *klass, const type_t *impl, const type_t *iface, const char *class_name )
+{
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const char *prefix = strmake( "%s_%s", impl->name, short_name );
+
+    if (!iface_inherits( iface, "IClassFactory" )) return;
+
+    put_str( indent, "static HRESULT WINAPI %s_CreateInstance( %s *iface, IUnknown *outer, REFIID riid, void **out )\n", prefix, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+    put_str( indent, "    TRACE( \"%s %%p outer %%p riid %%s out %%p\\n\", impl, outer, debugstr_guid(riid), out );\n", impl->name );
+    put_str( indent, "    return %s_funcs.create_instance( outer, riid, out );\n", impl->name );
+    put_str( indent, "}\n" );
+    put_str( indent, "static HRESULT WINAPI %s_LockServer( %s *iface, BOOL lock )\n", prefix, iface->c_name );
+    put_str( indent, "{\n" );
+    put_str( indent, "    return S_OK;\n" );
     put_str( indent, "}\n" );
 }
 
@@ -369,6 +396,7 @@ static void write_iface_methods_impl( const type_t *klass, const type_t *impl, c
     if ((base = type_iface_get_inherit( iface ))) write_iface_methods_impl( klass, impl, base, top_iface );
     if (!strcmp( iface->name, "IUnknown" )) return;
     if (!strcmp( iface->name, "IInspectable" )) return;
+    if (!strcmp( iface->name, "IClassFactory" )) return;
 
     STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
     {
@@ -391,6 +419,7 @@ static void write_iface_methods_init( const type_t *klass, const type_t *impl, c
     if ((base = type_iface_get_inherit( iface ))) write_iface_methods_init( klass, impl, base, top_iface );
     if (!strcmp( iface->name, "IUnknown" )) return;
     if (!strcmp( iface->name, "IInspectable" )) return;
+    if (!strcmp( iface->name, "IClassFactory" )) return;
 
     STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
     {
@@ -405,7 +434,7 @@ static void write_iface_methods_init( const type_t *klass, const type_t *impl, c
 
 static void write_impl( const type_t *impl, const type_t *klass )
 {
-    bool from_klass, miss_iface, destroy;
+    bool create_ins, from_klass, miss_iface, destroy;
     struct strbuf str = {0};
     const var_t *var, *def = NULL, *out = NULL, *ref = NULL, *cls = NULL;
     const type_t *forward_iface;
@@ -429,7 +458,8 @@ static void write_impl( const type_t *impl, const type_t *klass )
     }
     put_str( --indent, "};\n\n" );
 
-    miss_iface = def && iface_inherits( def->declspec.type, "IUnknown" );
+    create_ins = def && iface_inherits( def->declspec.type, "IClassFactory" );
+    miss_iface = def && iface_inherits( def->declspec.type, "IUnknown" ) && !create_ins;
     from_klass = impl != klass;
     destroy = ref != NULL;
 
@@ -438,6 +468,7 @@ static void write_impl( const type_t *impl, const type_t *klass )
     if (from_klass) put_str( indent, "    struct %s *(*from_klass)( struct %s *klass );\n", impl->name, klass->name );
     if (miss_iface) put_str( indent, "    HRESULT (*missing_interface)( struct %s *%s, REFIID iid, void **out );\n", impl->name, impl->name );
     if (destroy)    put_str( indent, "    void (*destroy)( struct %s *impl );\n", impl->name );
+    if (create_ins) put_str( indent, "    HRESULT (*create_instance)( IUnknown *outer, REFIID riid, void **out );\n" );
     LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
     {
         if (!strendswith( var->name, "_iface" )) continue;
@@ -451,6 +482,7 @@ static void write_impl( const type_t *impl, const type_t *klass )
     if (from_klass) put_str( indent, ".from_klass = %s_from_klass, \\\n", impl->name );
     if (miss_iface) put_str( indent, ".missing_interface = %s_missing_interface, \\\n", impl->name );
     if (destroy)    put_str( indent, ".destroy = %s_destroy, \\\n", impl->name );
+    if (create_ins) put_str( indent, ".create_instance = %s_create_instance, \\\n", impl->name );
     LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
     {
         if (!strendswith( var->name, "_iface" )) continue;
@@ -493,6 +525,7 @@ static void write_impl( const type_t *impl, const type_t *klass )
         {
             write_default_IUnknown( klass, impl, var->declspec.type, ref ? ref->name : NULL );
             write_default_IInspectable( klass, impl, var->declspec.type, cls ? cls->name : NULL );
+            write_default_IClassFactory( klass, impl, var->declspec.type, cls ? cls->name : NULL );
         }
         write_iface_methods( klass, impl, impl->name, var->declspec.type, var->declspec.type );
         write_iface_vtable( impl, var->declspec.type );
