@@ -72,6 +72,82 @@ static bool iface_inherits( const type_t *iface, const char *name )
     return iface_inherits( type_iface_get_inherit( iface ), name );
 }
 
+static void append_method_args_decl( struct strbuf *str, const var_list_t *args )
+{
+    const var_t *arg;
+    if (args) LIST_FOR_EACH_ENTRY( arg, args, const var_t, entry )
+    {
+        strappend( str, ", " );
+        append_declspec( str, &arg->declspec, NAME_C, "WINAPI", false, arg->name );
+    }
+}
+
+static void append_method_args_call( struct strbuf *str, const var_list_t *args )
+{
+    const var_t *arg;
+    if (args) LIST_FOR_EACH_ENTRY( arg, args, const var_t, entry )
+        strappend( str, ", %s", arg->name );
+}
+
+static void append_method_decl_klass( struct strbuf *str, const type_t *impl, const type_t *iface, const var_t *func )
+{
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const decl_spec_t *ret = type_function_get_ret( func->declspec.type );
+
+    strappend( str, "static " );
+    append_type_left( str, ret, NAME_C, NULL );
+    strappend( str, " WINAPI %s_%s_%s( ", impl->name, short_name, get_name( func ) );
+    strappend( str, "%s *iface", iface->c_name );
+    append_method_args_decl( str, type_function_get_args( func->declspec.type ) );
+    strappend( str, " )" );
+}
+
+static void append_method_decl_impl( struct strbuf *str, const type_t *impl, const var_t *func )
+{
+    const decl_spec_t *ret = type_function_get_ret( func->declspec.type );
+
+    strappend( str, "    " );
+    append_type_left( str, ret, NAME_C, NULL );
+    strappend( str, " (*%s)( ", get_name( func ) );
+    strappend( str, "struct %s *impl", impl->name );
+    append_method_args_decl( str, type_function_get_args( func->declspec.type ) );
+    strappend( str, " )" );
+}
+
+static void write_iface_methods( const type_t *klass, const type_t *impl, const char *impl_prefix, const type_t *iface, const type_t *top_iface )
+{
+    const char *short_name = iface->short_name ? iface->short_name : iface->name;
+    const statement_t *stmt;
+    struct strbuf str = {0};
+    const type_t *base;
+
+    if ((base = type_iface_get_inherit( iface ))) write_iface_methods( klass, impl, impl_prefix, base, top_iface );
+    if (!strcmp( iface->name, "IUnknown" )) return;
+    if (!strcmp( iface->name, "IInspectable" )) return;
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
+    {
+        const var_t *func = stmt->u.var;
+
+        if (is_override_method( iface, top_iface, func )) continue;
+        if (is_callas( func->attrs )) continue;
+
+        append_method_decl_klass( &str, impl, top_iface, func );
+        put_str( indent, "%s\n", str.buf );
+        str.pos = 0;
+
+        put_str( indent, "{\n" );
+        put_str( indent, "    struct %s *impl = %s_from_%s( iface );\n", impl->name, impl->name, short_name );
+
+        strappend( &str, "impl" );
+        append_method_args_call( &str, type_function_get_args( func->declspec.type ) );
+        put_str( indent, "    return %s_funcs.%s( %s );\n", impl_prefix, get_name( func ), str.buf );
+        str.pos = 0;
+
+        put_str( indent, "}\n" );
+    }
+}
+
 static void write_default_IUnknown( const type_t *klass, const type_t *impl, const type_t *iface, const char *refcount )
 {
     const char *query_name, *short_name = iface->short_name ? iface->short_name : iface->name;
@@ -251,6 +327,49 @@ static void write_iface_query( const type_t *klass, const type_t *impl, const va
     put_str( indent, "}\n" );
 }
 
+static void write_iface_methods_impl( const type_t *klass, const type_t *impl, const type_t *iface, const type_t *top_iface )
+{
+    const statement_t *stmt;
+    struct strbuf str = {0};
+    const type_t *base;
+
+    if ((base = type_iface_get_inherit( iface ))) write_iface_methods_impl( klass, impl, base, top_iface );
+    if (!strcmp( iface->name, "IUnknown" )) return;
+    if (!strcmp( iface->name, "IInspectable" )) return;
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
+    {
+        const var_t *func = stmt->u.var;
+
+        if (is_override_method( iface, top_iface, func )) continue;
+        if (is_callas( func->attrs )) continue;
+
+        append_method_decl_impl( &str, impl, func );
+        put_str( indent, "%s;\n", str.buf );
+        str.pos = 0;
+    }
+}
+
+static void write_iface_methods_init( const type_t *klass, const type_t *impl, const type_t *iface, const type_t *top_iface )
+{
+    const statement_t *stmt;
+    const type_t *base;
+
+    if ((base = type_iface_get_inherit( iface ))) write_iface_methods_init( klass, impl, base, top_iface );
+    if (!strcmp( iface->name, "IUnknown" )) return;
+    if (!strcmp( iface->name, "IInspectable" )) return;
+
+    STATEMENTS_FOR_EACH_FUNC( stmt, type_iface_get_stmts( iface ) )
+    {
+        const var_t *func = stmt->u.var;
+
+        if (is_override_method( iface, top_iface, func )) continue;
+        if (is_callas( func->attrs )) continue;
+
+        put_str( indent, ".%s = %s_%s, \\\n", get_name( func ), impl->name, get_name( func ) );
+    }
+}
+
 static void write_impl( const type_t *impl, const type_t *klass )
 {
     bool from_klass, miss_iface, destroy;
@@ -286,6 +405,11 @@ static void write_impl( const type_t *impl, const type_t *klass )
     if (from_klass) put_str( indent, "    struct %s *(*from_klass)( struct %s *klass );\n", impl->name, klass->name );
     if (miss_iface) put_str( indent, "    HRESULT (*missing_interface)( struct %s *%s, REFIID iid, void **out );\n", impl->name, impl->name );
     if (destroy)    put_str( indent, "    void (*destroy)( struct %s *impl );\n", impl->name );
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        if (!strendswith( var->name, "_iface" )) continue;
+        write_iface_methods_impl( klass, impl, var->declspec.type, var->declspec.type );
+    }
     put_str( indent, "    int placeholder;\n" );
     put_str( indent, "} %s_funcs;\n\n", impl->name );
 
@@ -294,6 +418,11 @@ static void write_impl( const type_t *impl, const type_t *klass )
     if (from_klass) put_str( indent, ".from_klass = %s_from_klass, \\\n", impl->name );
     if (miss_iface) put_str( indent, ".missing_interface = %s_missing_interface, \\\n", impl->name );
     if (destroy)    put_str( indent, ".destroy = %s_destroy, \\\n", impl->name );
+    LIST_FOR_EACH_ENTRY( var, type_struct_get_fields( klass ), var_t, entry )
+    {
+        if (!strendswith( var->name, "_iface" )) continue;
+        write_iface_methods_init( klass, impl, var->declspec.type, var->declspec.type );
+    }
     put_str( indent, "0 \\\n" );
     put_str( --indent, "}\n" );
     put_str( --indent, "\n" );
@@ -332,6 +461,7 @@ static void write_impl( const type_t *impl, const type_t *klass )
             write_default_IUnknown( klass, impl, var->declspec.type, ref ? ref->name : NULL );
             write_default_IInspectable( klass, impl, var->declspec.type, cls ? cls->name : NULL );
         }
+        write_iface_methods( klass, impl, impl->name, var->declspec.type, var->declspec.type );
     }
     put_str( indent, "\n" );
 
