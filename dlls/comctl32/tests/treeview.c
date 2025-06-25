@@ -3184,7 +3184,7 @@ static void test_treeview_delete_midclick(void)
     }
 
     flush_events();
-    ok_sequence(sequences, TREEVIEW_SEQ_INDEX, test_click_delete_seq, "treeview click and destroy sequence", TRUE);
+    ok_sequence(sequences, TREEVIEW_SEQ_INDEX, test_click_delete_seq, "treeview click and destroy sequence", FALSE);
 
     flush_sequences(sequences, NUM_MSG_SEQUENCES);
     SetCursorPos(orig_pos.x, orig_pos.y);
