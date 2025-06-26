@@ -4117,3 +4117,17 @@ struct handle_info
 @REPLY
     int enable;                /* previous state of auto-repeat enable */
 @END
+
+
+enum inproc_sync_type
+{
+    INPROC_SYNC_UNKNOWN = 0,
+    INPROC_SYNC_EVENT = 1,
+};
+
+/* Get the in-process synchronization fd associated with the waitable handle */
+@REQ(get_inproc_sync_fd)
+    obj_handle_t handle;        /* handle to the object */
+@REPLY
+    unsigned char type;         /* inproc sync type */
+@END
