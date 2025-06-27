@@ -6089,7 +6089,6 @@ static void test_file_map_large_size(void)
 
     status = NtMapViewOfSection(hmapfile, GetCurrentProcess(), &addr, 0, 0, NULL, &size,
             ViewUnmap, MEM_RESERVE, PAGE_READONLY);
-    todo_wine
     ok(!status, "Failed to map the section %#lx.\n", status);
 
     ret = GetFileSize(hfile, NULL);
@@ -6099,15 +6098,12 @@ static void test_file_map_large_size(void)
     ok(!!addr, "Failed to resize, error %ld.\n", GetLastError());
 
     ret = GetFileSize(hfile, NULL);
-    todo_wine
     ok(ret == 0x1000, "Unexpected size %lu.\n", ret);
 
     addr = VirtualAlloc(addr, 0x1100, MEM_COMMIT, PAGE_READONLY);
-    todo_wine
     ok(!!addr, "Failed to resize, error %ld.\n", GetLastError());
 
     ret = GetFileSize(hfile, NULL);
-    todo_wine
     ok(ret == 0x2000, "Unexpected size %lu.\n", ret);
 
     CloseHandle(hmapfile);
