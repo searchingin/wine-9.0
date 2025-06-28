@@ -235,6 +235,9 @@ called from the command line.\n"
   WCMD_TITLE,
 "TITLE <string> sets the window title for the cmd window.\n"
 
+  WCMD_MODE,
+"MODE tells the cmd window size.\n"
+
   WCMD_TYPE,
 "TYPE <filename> copies <filename> to the console device (or elsewhere if\n\
 redirected). No check is made that the file is readable text.\n"
@@ -406,4 +409,16 @@ Enter HELP <command> for further information on any of the above commands.\n"
   WCMD_BADTOKEN, "Syntax error: unexpected %1\n"
   WCMD_ENDOFLINE, "End of line"
   WCMD_ENDOFFILE, "End of file"
+  WCMD_MODE_NODEVICE, "Device %1 not found\n"
+  WCMD_MODE_CON_CANTRESIZE, "Can't set the requested size\n"
+  WCMD_MODE_CON_OUTPUT,
+"\n\
+Status for device CON:\n\
+----------------------\n\
+    Lines:          %u\n\
+    Columns:        %u\n\
+    Keyboard rate:  %u\n\
+    Keyboard delay: %u\n\
+    Code page:      %u\n\
+\n"
 }

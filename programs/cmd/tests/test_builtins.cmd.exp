@@ -1861,6 +1861,19 @@ footype=cmd.exe /c "echo '%*'"
 foobar@or_broken@Skipped as not enough permissions
 --- resetting association
 original value@or_broken@buggyXP@or_broken@!WINE_FOO!
+------------ Testing mode ------------
+SUCCESS
+0
+FAILURE
+1
+SUCCESS
+0
+SUCCESS
+0
+FAILURE
+-1
+FAILURE
+-1
 ------------ Testing CALL ------------
 --- external script
 foo@space@
