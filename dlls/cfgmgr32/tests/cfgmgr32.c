@@ -584,25 +584,25 @@ static void test_DevGetObjectProperties( DEV_OBJECT_TYPE type, const WCHAR *id, 
     HRESULT hr;
 
     hr = DevGetObjectProperties( type, id, DevQueryFlagUpdateResults, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( type, id, DevQueryFlagAsyncClose, 0, NULL, &buf_len, &buf );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( type, id, DevQueryFlagAsyncClose, 0, NULL, &buf_len, &buf );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( type, id, DevQueryFlagNone, 1, NULL, &buf_len, &buf );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( type, id, DevQueryFlagNone, 0, (DEVPROPCOMPKEY *)0xdeadbeef, &buf_len, &buf );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     buf = NULL;
     buf_len = 0;
     hr = DevGetObjectProperties( type, id, DevQueryFlagAllProperties, 0, NULL, &buf_len, &buf );
-    todo_wine ok( hr == S_OK, "got hr %#lx\n", hr );
-    todo_wine ok( buf_len == props_len, "%lu != %lu\n", buf_len, props_len );
+    ok( hr == S_OK, "got hr %#lx\n", hr );
+    ok( buf_len == props_len, "%lu != %lu\n", buf_len, props_len );
     for (i = 0; i < props_len; i++)
     {
         ULONG j;
@@ -622,16 +622,16 @@ static void test_DevGetObjectProperties( DEV_OBJECT_TYPE type, const WCHAR *id, 
             }
         }
     }
-    todo_wine ok( rem_props == 0, "got rem_props %lu\n", rem_props );
+    ok( rem_props == 0, "got rem_props %lu\n", rem_props );
     DevFreeObjectProperties( buf_len, buf );
 
     buf = (DEVPROPERTY *)0xdeadbeef;
     buf_len = 0xdeadbeef;
     rem_props = props_len;
     hr = DevGetObjectProperties( type, id, DevQueryFlagNone, 0, NULL, &buf_len, &buf );
-    todo_wine ok( hr == S_OK, "got hr %#lx\n", hr );
-    todo_wine ok( buf_len == 0, "got buf_len %lu\n", buf_len );
-    todo_wine ok( !buf, "got buf %p\n", buf );
+    ok( hr == S_OK, "got hr %#lx\n", hr );
+    ok( buf_len == 0, "got buf_len %lu\n", buf_len );
+    ok( !buf, "got buf %p\n", buf );
 
     buf = NULL;
     buf_len = 0;
@@ -639,8 +639,8 @@ static void test_DevGetObjectProperties( DEV_OBJECT_TYPE type, const WCHAR *id, 
     for (i = 0; i < props_len; i++)
         keys[i] = exp_props[i].CompKey;
     hr = DevGetObjectProperties( type, id, DevQueryFlagNone, props_len, keys, &buf_len, &buf );
-    todo_wine ok( hr == S_OK, "got hr %#lx\n", hr );
-    todo_wine ok( buf_len == props_len, "%lu != %lu\n", buf_len, props_len );
+    ok( hr == S_OK, "got hr %#lx\n", hr );
+    ok( buf_len == props_len, "%lu != %lu\n", buf_len, props_len );
     for (i = 0; i < props_len; i++)
     {
         ULONG j;
@@ -653,15 +653,15 @@ static void test_DevGetObjectProperties( DEV_OBJECT_TYPE type, const WCHAR *id, 
             }
         }
     }
-    todo_wine ok( rem_props == 0, "got rem_props %lu\n", rem_props );
+    ok( rem_props == 0, "got rem_props %lu\n", rem_props );
     DevFreeObjectProperties( buf_len, buf );
 
     buf_len = 0;
     buf = NULL;
     hr = DevGetObjectProperties( type, id, DevQueryFlagNone, 1, &dummy_propcompkey, &buf_len, &buf );
-    todo_wine ok( hr == S_OK, "got hr %#lx\n", hr );
-    todo_wine ok( !!buf, "got buf %p", buf );
-    todo_wine ok( buf_len == 1, "got buf_len %lu\n", buf_len );
+    ok( hr == S_OK, "got hr %#lx\n", hr );
+    ok( !!buf, "got buf %p", buf );
+    ok( buf_len == 1, "got buf_len %lu\n", buf_len );
     if (buf)
     {
         ok( IsEqualDevPropKey( buf[0].CompKey.Key, dummy_propkey ), "got propkey {%s, %#lx}\n",
@@ -1051,34 +1051,34 @@ static void test_DevGetObjectProperties_invalid( void )
     HRESULT hr;
 
     hr = DevGetObjectProperties( DevObjectTypeUnknown, NULL, 0, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
+    ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeUnknown, L"", 0, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
+    ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeUnknown, NULL, DevQueryFlagAsyncClose, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeDeviceInterface, L"foobar", DevQueryFlagUpdateResults, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeDeviceInterface, L"foobar", 0xdeadbeef, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeUnknown, NULL, 0, 1, NULL, NULL, NULL );
-    todo_wine ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
+    ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeUnknown, NULL, 0, 0, (DEVPROPCOMPKEY *)0xdeadbeef, NULL, NULL );
-    todo_wine ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
+    ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeDeviceInterface, L"foobar", 0, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
+    ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeDeviceInterfaceDisplay, L"foobar", 0, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
+    ok( hr == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND ), "got hr %#lx\n", hr );
 
     hr = DevGetObjectProperties( DevObjectTypeDeviceInterface, NULL, 0, 0, NULL, NULL, NULL );
-    todo_wine ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
+    ok( hr == E_INVALIDARG, "got hr %#lx\n", hr );
 }
 
 START_TEST(cfgmgr32)

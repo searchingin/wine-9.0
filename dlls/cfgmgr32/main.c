@@ -316,15 +316,16 @@ static BOOL dev_properties_append( DEVPROPERTY **properties, ULONG *props_len, c
     return TRUE;
 }
 
-static HRESULT dev_object_iface_get_props( DEV_OBJECT *obj, HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface_data,
-                                           ULONG props_len, const DEVPROPCOMPKEY *props, BOOL all_props )
+static HRESULT dev_object_iface_get_props( ULONG *props_len, DEVPROPERTY **props, HDEVINFO set,
+                                           SP_DEVICE_INTERFACE_DATA *iface_data, ULONG propkeys_len,
+                                           const DEVPROPCOMPKEY *propkeys, BOOL all_props )
 {
     DEVPROPKEY *all_keys = NULL;
     DWORD keys_len = 0, i = 0;
     HRESULT hr = S_OK;
 
-    obj->cPropertyCount = 0;
-    obj->pProperties = NULL;
+    *props_len = 0;
+    *props = NULL;
     if (!props && !all_props)
         return S_OK;
 
@@ -345,25 +346,24 @@ static HRESULT dev_object_iface_get_props( DEV_OBJECT *obj, HDEVINFO set, SP_DEV
         }
     }
     else
-        keys_len = props_len;
+        keys_len = propkeys_len;
 
     for (i = 0; i < keys_len; i++)
     {
-        const DEVPROPKEY *key = all_keys ? &all_keys[i] : &props[i].Key;
+        const DEVPROPKEY *key = all_keys ? &all_keys[i] : &propkeys[i].Key;
         DWORD req = 0, size;
         DEVPROPTYPE type;
         BYTE *buf;
 
-        if (props && props[i].Store != DEVPROP_STORE_SYSTEM)
+        if (propkeys && propkeys[i].Store != DEVPROP_STORE_SYSTEM)
         {
-            FIXME( "Unsupported Store value: %d\n", props[i].Store );
+            FIXME( "Unsupported Store value: %d\n", propkeys[i].Store );
             continue;
         }
         if (SetupDiGetDeviceInterfacePropertyW( set, iface_data, key, &type, NULL, 0, &req, 0 )
             || GetLastError() != ERROR_INSUFFICIENT_BUFFER)
         {
-            if (props && !dev_properties_append( (DEVPROPERTY **)&obj->pProperties, &obj->cPropertyCount, key,
-                                                 DEVPROP_TYPE_EMPTY, 0, NULL ))
+            if (propkeys && !dev_properties_append( props, props_len, key, DEVPROP_TYPE_EMPTY, 0, NULL ))
             {
                 hr = E_OUTOFMEMORY;
                 goto done;
@@ -383,7 +383,7 @@ static HRESULT dev_object_iface_get_props( DEV_OBJECT *obj, HDEVINFO set, SP_DEV
             free( buf );
             goto done;
         }
-        if (!dev_properties_append( (DEVPROPERTY **)&obj->pProperties, &obj->cPropertyCount, key, type, size, buf ))
+        if (!dev_properties_append( props, props_len, key, type, size, buf ))
         {
             free( buf );
             hr = E_OUTOFMEMORY;
@@ -395,11 +395,9 @@ done:
     free( all_keys );
     if (FAILED( hr ))
     {
-        for (i = 0; i < obj->cPropertyCount; i++)
-            free( ( (DEVPROPERTY *)obj[i].pProperties )->Buffer );
-        free( (DEVPROPERTY *)obj->pProperties );
-        obj->cPropertyCount = 0;
-        obj->pProperties = NULL;
+        DevFreeObjectProperties( *props_len, *props );
+        *props_len = 0;
+        *props = NULL;
     }
     return hr;
 }
@@ -476,7 +474,9 @@ static HRESULT enum_dev_objects( DEV_OBJECT_TYPE type, ULONG props_len, const DE
 
             obj.ObjectType = type;
             obj.pszObjectId = detail->DevicePath;
-            if (SUCCEEDED( (hr = dev_object_iface_get_props( &obj, set, &iface, props_len, props, all_props )) ))
+            hr = dev_object_iface_get_props( &obj.cPropertyCount, (DEVPROPERTY **)&obj.pProperties, set, &iface, props_len,
+                                             props, all_props );
+            if (SUCCEEDED( hr ))
                 hr = callback( obj, data );
         }
 
@@ -565,13 +565,7 @@ void WINAPI DevFreeObjects( ULONG objs_len, const DEV_OBJECT *objs )
 
     for (i = 0; i < objs_len; i++)
     {
-        DEVPROPERTY *props = (DEVPROPERTY *)objects[i].pProperties;
-        ULONG j;
-
-        for (j = 0; j < objects[i].cPropertyCount; j++)
-            free( props[j].Buffer );
-        free( props );
-
+        DevFreeObjectProperties( objects[i].cPropertyCount, objects[i].pProperties );
         free( (void *)objects[i].pszObjectId );
     }
     free( objects );
@@ -841,13 +835,58 @@ HRESULT WINAPI DevGetObjectPropertiesEx( DEV_OBJECT_TYPE type, const WCHAR *id, 
                                          const DEVPROPCOMPKEY *props, ULONG params_len,
                                          const DEV_QUERY_PARAMETER *params, ULONG *buf_len, const DEVPROPERTY **buf )
 {
-    FIXME( "(%d, %s, %#lx, %lu, %p, %lu, %p, %p, %p): stub!\n", type, debugstr_w( id ), flags, props_len, props,
+    HRESULT hr;
+    ULONG valid_flags = DevQueryFlagAllProperties | DevQueryFlagLocalize;
+
+    TRACE( "(%d, %s, %#lx, %lu, %p, %lu, %p, %p, %p)\n", type, debugstr_w( id ), flags, props_len, props,
            params_len, params, buf_len, buf );
-    return E_NOTIMPL;
+
+    if (flags & ~valid_flags)
+        return E_INVALIDARG;
+    if (type == DevObjectTypeUnknown || type > DevObjectTypeAEPProtocol)
+        return HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND );
+    if (!id || !!props_len != !!props || !!params_len != !!params
+        || (props_len && (flags & DevQueryFlagAllProperties)))
+        return E_INVALIDARG;
+
+    switch (type)
+    {
+    case DevObjectTypeDeviceInterface:
+    case DevObjectTypeDeviceInterfaceDisplay:
+    {
+        SP_DEVICE_INTERFACE_DATA iface = {0};
+        HDEVINFO set;
+
+        set = SetupDiCreateDeviceInfoListExW( NULL, NULL, NULL, NULL );
+        if (set == INVALID_HANDLE_VALUE) return HRESULT_FROM_WIN32( GetLastError() );
+        iface.cbSize = sizeof( iface );
+        if (!SetupDiOpenDeviceInterfaceW( set, id, 0, &iface ))
+        {
+            DWORD err = GetLastError();
+            SetupDiDestroyDeviceInfoList( set );
+            return HRESULT_FROM_WIN32(err == ERROR_NO_SUCH_DEVICE_INTERFACE ? ERROR_FILE_NOT_FOUND : err);
+        }
+
+        hr = dev_object_iface_get_props( buf_len, (DEVPROPERTY **)buf, set, &iface, props_len, props,
+                                         !!(flags & DevQueryFlagAllProperties) );
+
+        break;
+    }
+    default:
+        FIXME( "Unsupported DEV_OBJECT_TYPE: %d\n", type );
+        hr = HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND );
+    }
+
+    return hr;
 }
 
 void WINAPI DevFreeObjectProperties( ULONG len, const DEVPROPERTY *props )
 {
-    FIXME( "(%lu, %p): stub!\n", len, props );
+    DEVPROPERTY *properties = (DEVPROPERTY *)props;
+    ULONG i;
+
+    for (i = 0; i < len; i++)
+        free( properties[i].Buffer );
+    free( properties );
     return;
 }
