@@ -177,6 +177,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
     conf->scale = NtUserGetSystemDpiForProcess(0) / 96.0;
     conf->visible = (style & WS_VISIBLE) == WS_VISIBLE;
     conf->managed = data->managed;
+    conf->no_decoration = (style & WS_CAPTION) == 0;
 }
 
 static void reapply_cursor_clipping(void)
@@ -242,7 +243,7 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *dat
 static void wayland_surface_update_state_toplevel(struct wayland_surface *surface)
 {
     BOOL processing_config = surface->processing.serial &&
-                             !surface->processing.processed;
+                             !surface->processing_processed;
 
     TRACE("hwnd=%p window_state=%#x %s->state=%#x\n",
           surface->hwnd, surface->window.state,
@@ -279,7 +280,7 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
     }
     else
     {
-        surface->processing.processed = TRUE;
+        surface->processing_processed = TRUE;
     }
 }
 
@@ -300,7 +301,7 @@ static void wayland_win_data_update_wayland_state(struct wayland_win_data *data)
         /* Although subsurfaces don't have a dedicated surface config mechanism,
          * we use the config fields to mark them as updated. */
         surface->processing.serial = 1;
-        surface->processing.processed = TRUE;
+        surface->processing_processed = TRUE;
         break;
     }
 
@@ -522,7 +523,7 @@ static void wayland_configure_window(HWND hwnd)
     INT window_surf_width, window_surf_height;
     UINT flags = 0;
     uint32_t state;
-    DWORD style;
+    DWORD style, flip_style = 0;
     BOOL needs_enter_size_move = FALSE;
     BOOL needs_exit_size_move = FALSE;
     struct wayland_win_data *data;
@@ -542,15 +543,15 @@ static void wayland_configure_window(HWND hwnd)
         return;
     }
 
-    if (!surface->requested.serial)
+    if (!(surface->requested.mask & WAYLAND_SURFACE_CONFIG_DELTA_SERIAL))
     {
         TRACE("requested configure event already handled, returning\n");
         wayland_win_data_release(data);
         return;
     }
 
-    surface->processing = surface->requested;
-    memset(&surface->requested, 0, sizeof(surface->requested));
+    wayland_surface_config_apply_delta(&surface->processing, &surface->requested, NULL);
+    surface->processing_processed = FALSE;
 
     state = surface->processing.state;
     /* Ignore size hints if we don't have a state that requires strict
@@ -599,7 +600,8 @@ static void wayland_configure_window(HWND hwnd)
     if ((surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) &&
         wayland_surface_config_is_compatible(&surface->processing,
                                              window_surf_width, window_surf_height,
-                                             surface->window.state))
+                                             surface->window.state,
+                                             surface->window.no_decoration))
     {
         flags |= SWP_NOSIZE;
     }
@@ -619,7 +621,17 @@ static void wayland_configure_window(HWND hwnd)
 
     style = NtUserGetWindowLongW(hwnd, GWL_STYLE);
     if (!(state & WAYLAND_SURFACE_CONFIG_STATE_MAXIMIZED) != !(style & WS_MAXIMIZE))
-        NtUserSetWindowLong(hwnd, GWL_STYLE, style ^ WS_MAXIMIZE, FALSE);
+        flip_style |= WS_MAXIMIZE;
+    if (surface->processing.decoration_mode) {
+        if (surface->processing.decoration_mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
+            flip_style |= style & WS_CAPTION;
+        else
+            flip_style |= ~style & WS_CAPTION;
+    }
+    if (flip_style & WS_CAPTION)
+        flags |= SWP_FRAMECHANGED;
+    if (flip_style)
+        NtUserSetWindowLong(hwnd, GWL_STYLE, style ^ flip_style, FALSE);
 
     /* The Wayland maximized and fullscreen states are very strict about
      * surface size, so don't let the application override it. The tiled state
@@ -862,7 +874,7 @@ void ensure_window_surface_contents(HWND hwnd)
         /* Handle any processed configure request, to ensure the related
          * surface state is applied by the compositor. */
         if (wayland_surface->processing.serial &&
-            wayland_surface->processing.processed &&
+            wayland_surface->processing_processed &&
             wayland_surface_reconfigure(wayland_surface))
         {
             wl_surface_commit(wayland_surface->wl_surface);

@@ -54,11 +54,13 @@ static void xdg_surface_handle_configure(void *private, struct xdg_surface *xdg_
         /* If we have a previously requested config, we have already sent a
          * WM_WAYLAND_CONFIGURE which hasn't been handled yet. In that case,
          * avoid sending another message to reduce message queue traffic. */
-        should_post = surface->requested.serial == 0;
+        should_post = !(surface->requested.mask & WAYLAND_SURFACE_CONFIG_DELTA_SERIAL);
         initial_configure = surface->current.serial == 0;
-        surface->pending.serial = serial;
-        surface->requested = surface->pending;
-        memset(&surface->pending, 0, sizeof(surface->pending));
+        surface->pending.mask |= WAYLAND_SURFACE_CONFIG_DELTA_SERIAL;
+        surface->pending.config.serial = serial;
+        wayland_surface_config_apply_delta(&surface->requested.config,
+                                           &surface->pending,
+                                           &surface->requested.mask);
     }
 
     wayland_win_data_release(data);
@@ -119,9 +121,11 @@ static void xdg_toplevel_handle_configure(void *private,
 
     if ((surface = data->wayland_surface) && wayland_surface_is_toplevel(surface))
     {
-        surface->pending.width = width;
-        surface->pending.height = height;
-        surface->pending.state = config_state;
+        surface->pending.mask |= WAYLAND_SURFACE_CONFIG_DELTA_SIZE;
+        surface->pending.config.width = width;
+        surface->pending.config.height = height;
+        surface->pending.mask |= WAYLAND_SURFACE_CONFIG_DELTA_STATE;
+        surface->pending.config.state = config_state;
     }
 
     wayland_win_data_release(data);
@@ -136,6 +140,30 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener =
 {
     xdg_toplevel_handle_configure,
     xdg_toplevel_handle_close
+};
+
+static void xdg_decoration_handle_configure(void *private,
+                                            struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1,
+                                            uint32_t mode)
+{
+    struct wayland_surface *surface;
+    HWND hwnd = private;
+    struct wayland_win_data *data;
+
+    if (!(data = wayland_win_data_get(hwnd))) return;
+
+    if ((surface = data->wayland_surface) && wayland_surface_is_toplevel(surface))
+    {
+        surface->pending.mask |= WAYLAND_SURFACE_CONFIG_DELTA_DECORATION;
+        surface->pending.config.decoration_mode = mode;
+    }
+
+    wayland_win_data_release(data);
+}
+
+static const struct zxdg_toplevel_decoration_v1_listener zxdg_decoration_listener =
+{
+    xdg_decoration_handle_configure
 };
 
 /**********************************************************************
@@ -255,6 +283,16 @@ void wayland_surface_make_toplevel(struct wayland_surface *surface)
     if (!surface->xdg_toplevel) goto err;
     xdg_toplevel_add_listener(surface->xdg_toplevel, &xdg_toplevel_listener, surface->hwnd);
 
+    if (process_wayland.zxdg_decoration_manager_v1) {
+        surface->zxdg_toplevel_decoration =
+            zxdg_decoration_manager_v1_get_toplevel_decoration(process_wayland.zxdg_decoration_manager_v1,
+                                                               surface->xdg_toplevel);
+        if (surface->zxdg_toplevel_decoration)
+            zxdg_toplevel_decoration_v1_add_listener(surface->zxdg_toplevel_decoration,
+                                                     &zxdg_decoration_listener,
+                                                     surface->hwnd);
+    }
+
     if (process_name)
         xdg_toplevel_set_app_id(surface->xdg_toplevel, process_name);
 
@@ -343,6 +381,13 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
             surface->big_icon_buffer = NULL;
             surface->small_icon_buffer = NULL;
             surface->xdg_toplevel_icon = NULL;
+            surface->configured = FALSE;
+        }
+
+        if (surface->zxdg_toplevel_decoration)
+        {
+            zxdg_toplevel_decoration_v1_destroy(surface->zxdg_toplevel_decoration);
+            surface->zxdg_toplevel_decoration = NULL;
         }
 
         if (surface->xdg_toplevel)
@@ -373,6 +418,7 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
     memset(&surface->requested, 0, sizeof(surface->requested));
     memset(&surface->processing, 0, sizeof(surface->processing));
     memset(&surface->current, 0, sizeof(surface->current));
+    surface->processing_processed = FALSE;
     surface->toplevel_hwnd = 0;
 
     /* Ensure no buffer is attached, otherwise future role assignments may fail. */
@@ -453,7 +499,8 @@ void wayland_surface_attach_shm(struct wayland_surface *surface,
  */
 BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
                                           int width, int height,
-                                          enum wayland_surface_config_state state)
+                                          enum wayland_surface_config_state state,
+                                          BOOL no_decoration)
 {
     static enum wayland_surface_config_state mask =
         WAYLAND_SURFACE_CONFIG_STATE_MAXIMIZED;
@@ -468,6 +515,12 @@ BOOL wayland_surface_config_is_compatible(struct wayland_surface_config *conf,
         (width < conf->width || height < conf->height))
     {
         return FALSE;
+    }
+
+    if (conf->decoration_mode) {
+        BOOL ssd = conf->decoration_mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
+        if (ssd != no_decoration)
+            return FALSE;
     }
 
     /* The fullscreen state requires a size smaller or equal to the configured
@@ -622,38 +675,41 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface,
     struct wayland_window_config *window = &surface->window;
 
     /* Acknowledge any compatible processed config. */
-    if (surface->processing.serial && surface->processing.processed &&
+    if (surface->processing.serial && surface->processing_processed &&
         wayland_surface_config_is_compatible(&surface->processing,
                                              width, height,
-                                             window->state))
+                                             window->state, window->no_decoration))
     {
         surface->current = surface->processing;
-        memset(&surface->processing, 0, sizeof(surface->processing));
+        surface->processing_processed = FALSE;
         xdg_surface_ack_configure(surface->xdg_surface, surface->current.serial);
+        surface->configured = TRUE;
     }
     /* If this is the initial configure, and we have a compatible requested
      * config, use that, in order to draw windows that don't go through the
      * message loop (e.g., some splash screens). */
-    else if (!surface->current.serial && surface->requested.serial &&
-             wayland_surface_config_is_compatible(&surface->requested,
+    else if (!surface->current.serial &&
+             (surface->requested.mask & WAYLAND_SURFACE_CONFIG_DELTA_SERIAL) &&
+             wayland_surface_config_is_compatible(&surface->requested.config,
                                                   width, height,
-                                                  window->state))
+                                                  window->state, window->no_decoration))
     {
-        surface->current = surface->requested;
-        memset(&surface->requested, 0, sizeof(surface->requested));
+        wayland_surface_config_apply_delta(&surface->processing, &surface->requested, NULL);
+        surface->current = surface->processing;
         xdg_surface_ack_configure(surface->xdg_surface, surface->current.serial);
+        surface->configured = TRUE;
     }
-    else if (!surface->current.serial ||
-             !wayland_surface_config_is_compatible(&surface->current,
+    else if (!wayland_surface_config_is_compatible(&surface->current,
                                                    width, height,
-                                                   window->state))
+                                                   window->state, window->no_decoration))
     {
         return FALSE;
     }
 
-    wayland_surface_reconfigure_geometry(surface, width, height);
+    if (surface->configured)
+        wayland_surface_reconfigure_geometry(surface, width, height);
 
-    return TRUE;
+    return surface->configured;
 }
 
 /**********************************************************************
@@ -668,7 +724,7 @@ static void wayland_surface_reconfigure_subsurface(struct wayland_surface *surfa
     struct wayland_surface *toplevel_surface;
     int local_x, local_y, x, y;
 
-    if (surface->processing.serial && surface->processing.processed &&
+    if (surface->processing.serial && surface->processing_processed &&
         (toplevel_data = wayland_win_data_get_nolock(surface->toplevel_hwnd)) &&
         (toplevel_surface = toplevel_data->wayland_surface))
     {
@@ -686,7 +742,7 @@ static void wayland_surface_reconfigure_subsurface(struct wayland_surface *surfa
             wl_subsurface_place_above(surface->wl_subsurface, toplevel_surface->wl_surface);
         wl_surface_commit(toplevel_surface->wl_surface);
 
-        memset(&surface->processing, 0, sizeof(surface->processing));
+        surface->processing_processed = FALSE;
     }
 }
 
@@ -730,6 +786,35 @@ BOOL wayland_surface_reconfigure(struct wayland_surface *surface)
     wayland_surface_reconfigure_size(surface, width, height);
 
     return TRUE;
+}
+
+/**********************************************************************
+ *          wayland_surface_config_apply_delta
+ *
+ * Applies an xdg configuration delta to a persistent configuration and
+ * resets the delta. If target_mask is not null, the mask of the delta
+ * will be OR'd into it.
+ */
+void wayland_surface_config_apply_delta(struct wayland_surface_config *target,
+                                        struct wayland_surface_config_delta *delta,
+                                        enum wayland_surface_config_delta_mask *target_mask)
+{
+    enum wayland_surface_config_delta_mask mask = delta->mask;
+
+    if (mask & WAYLAND_SURFACE_CONFIG_DELTA_SERIAL)
+        target->serial = delta->config.serial;
+    if (mask & WAYLAND_SURFACE_CONFIG_DELTA_SIZE) {
+        target->width = delta->config.width;
+        target->height = delta->config.height;
+    }
+    if (mask & WAYLAND_SURFACE_CONFIG_DELTA_STATE)
+        target->state = delta->config.state;
+    if (delta->mask & WAYLAND_SURFACE_CONFIG_DELTA_DECORATION)
+        target->decoration_mode = delta->config.decoration_mode;
+    delta->mask = 0;
+
+    if (target_mask)
+        *target_mask |= mask;
 }
 
 /**********************************************************************
