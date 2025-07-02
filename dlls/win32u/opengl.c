@@ -205,7 +205,7 @@ void update_opengl_drawables( HWND hwnd )
     pthread_mutex_unlock( &drawables_lock );
 }
 
-void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd, HDC hdc )
+void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd )
 {
     struct opengl_drawable *drawable;
 
@@ -216,7 +216,6 @@ void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *fun
     drawable->format = format;
     drawable->interval = INT_MIN;
     drawable->hwnd = hwnd;
-    drawable->hdc = hdc;
 
     if (!hwnd) list_init( &drawable->entry ); /* pbuffer, keep it unlinked */
     else
@@ -542,7 +541,7 @@ static BOOL egldrv_pbuffer_create( HDC hdc, int format, BOOL largest, GLenum tex
     }
     *attrib++ = EGL_NONE;
 
-    if (!(gl = opengl_drawable_create( sizeof(*gl), &egldrv_pbuffer_funcs, format, 0, hdc ))) return FALSE;
+    if (!(gl = opengl_drawable_create( sizeof(*gl), &egldrv_pbuffer_funcs, format, 0 ))) return FALSE;
     if (!(gl->surface = funcs->p_eglCreatePbufferSurface( egl->display, egl_config_for_format( egl, gl->format ), attribs )))
     {
         opengl_drawable_release( gl );

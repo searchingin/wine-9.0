@@ -114,7 +114,7 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, HDC hdc
     }
     *attrib++ = EGL_NONE;
 
-    if (!(gl = opengl_drawable_create(sizeof(*gl), &wayland_drawable_funcs, format, hwnd, hdc))) return NULL;
+    if (!(gl = opengl_drawable_create(sizeof(*gl), &wayland_drawable_funcs, format, hwnd))) return NULL;
 
     /* Get the client surface for the HWND. If don't have a wayland surface
      * (e.g., HWND_MESSAGE windows) just create a dummy surface to act as the
