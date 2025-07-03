@@ -66,12 +66,21 @@ struct wgl_pixel_format
 /* Wine internal opengl driver version, needs to be bumped upon opengl_funcs changes. */
 #define WINE_OPENGL_DRIVER_VERSION 36
 
+struct opengl_drawable;
 struct wgl_context;
 struct wgl_pbuffer;
+
+struct wgl_context
+{
+    void *driver_private;
+    struct opengl_drawable *draw;
+    struct opengl_drawable *read;
+};
 
 /* interface between opengl32 and win32u */
 struct opengl_funcs
 {
+    BOOL       (*p_wgl_context_reset)( struct wgl_context *context, HDC hdc, struct wgl_context *share, const int *attribs );
     BOOL       (*p_wgl_context_flush)( struct wgl_context *context, void (*flush)(void) );
     BOOL       (*p_wglCopyContext)( struct wgl_context * hglrcSrc, struct wgl_context * hglrcDst, UINT mask );
     struct wgl_context * (*p_wglCreateContext)( HDC hDc );
@@ -126,8 +135,6 @@ struct egl_platform
     BOOL        has_EGL_EXT_pixel_format_float;
 };
 
-/* a driver opengl drawable, either a client surface of a pbuffer */
-struct opengl_drawable;
 struct opengl_drawable_funcs
 {
     void (*destroy)( struct opengl_drawable *iface );
@@ -146,6 +153,7 @@ struct opengl_drawable_funcs
 #define GL_FLUSH_INTERVAL      0x02
 #define GL_FLUSH_UPDATED       0x04
 
+/* a driver opengl drawable, either a client surface of a pbuffer */
 struct opengl_drawable
 {
     const struct opengl_drawable_funcs *funcs;
@@ -154,7 +162,6 @@ struct opengl_drawable
     int         format;         /* pixel format of the drawable */
     int         interval;       /* last set surface swap interval */
     HWND        hwnd;           /* window the drawable was created for */
-    HDC         hdc;            /* DC the drawable was created for */
     struct list entry;          /* entry in win32u managed list */
     LONG        updated;        /* has been moved / resized / reparented */
     EGLSurface  surface;        /* surface for EGL based drivers */
@@ -163,10 +170,10 @@ struct opengl_drawable
 static inline const char *debugstr_opengl_drawable( struct opengl_drawable *drawable )
 {
     if (!drawable) return "(null)";
-    return wine_dbg_sprintf( "%p (format %u, hwnd %p, hdc %p)", drawable, drawable->format, drawable->hwnd, drawable->hdc );
+    return wine_dbg_sprintf( "%p (format %u, hwnd %p)", drawable, drawable->format, drawable->hwnd );
 }
 
-W32KAPI void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd, HDC hdc );
+W32KAPI void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd );
 W32KAPI void opengl_drawable_add_ref( struct opengl_drawable *drawable );
 W32KAPI void opengl_drawable_release( struct opengl_drawable *drawable );
 

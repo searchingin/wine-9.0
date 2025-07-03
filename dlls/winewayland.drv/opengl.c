@@ -114,7 +114,7 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, HDC hdc
     }
     *attrib++ = EGL_NONE;
 
-    if (!(gl = opengl_drawable_create(sizeof(*gl), &wayland_drawable_funcs, format, hwnd, hdc))) return NULL;
+    if (!(gl = opengl_drawable_create(sizeof(*gl), &wayland_drawable_funcs, format, hwnd))) return NULL;
 
     /* Get the client surface for the HWND. If don't have a wayland surface
      * (e.g., HWND_MESSAGE windows) just create a dummy surface to act as the
@@ -214,38 +214,7 @@ static BOOL wayland_drawable_swap(struct opengl_drawable *base)
     return TRUE;
 }
 
-static BOOL wayland_pbuffer_create(HDC hdc, int format, BOOL largest, GLenum texture_format, GLenum texture_target,
-                                   GLint max_level, GLsizei *width, GLsizei *height, struct opengl_drawable **surface)
-{
-    struct wayland_gl_drawable *drawable;
-
-    TRACE("hdc %p, format %d, largest %u, texture_format %#x, texture_target %#x, max_level %#x, width %d, height %d, private %p\n",
-          hdc, format, largest, texture_format, texture_target, max_level, *width, *height, surface);
-
-    /* Use an unmapped wayland surface as our offscreen "pbuffer" surface. */
-    if (!(drawable = wayland_gl_drawable_create(0, hdc, format, *width, *height))) return FALSE;
-    *surface = &drawable->base;
-    return TRUE;
-}
-
-static BOOL wayland_pbuffer_updated(HDC hdc, struct opengl_drawable *base, GLenum cube_face, GLint mipmap_level)
-{
-    return GL_TRUE;
-}
-
-static UINT wayland_pbuffer_bind(HDC hdc, struct opengl_drawable *base, GLenum buffer)
-{
-    return -1; /* use default implementation */
-}
-
-static struct opengl_driver_funcs wayland_driver_funcs =
-{
-    .p_init_egl_platform = wayland_init_egl_platform,
-    .p_surface_create = wayland_opengl_surface_create,
-    .p_pbuffer_create = wayland_pbuffer_create,
-    .p_pbuffer_updated = wayland_pbuffer_updated,
-    .p_pbuffer_bind = wayland_pbuffer_bind,
-};
+static struct opengl_driver_funcs wayland_driver_funcs;
 
 static const struct opengl_drawable_funcs wayland_drawable_funcs =
 {
@@ -271,13 +240,9 @@ UINT WAYLAND_OpenGLInit(UINT version, const struct opengl_funcs *opengl_funcs, c
     if (!opengl_funcs->egl_handle) return STATUS_NOT_SUPPORTED;
     funcs = opengl_funcs;
 
-    wayland_driver_funcs.p_get_proc_address = (*driver_funcs)->p_get_proc_address;
-    wayland_driver_funcs.p_init_pixel_formats = (*driver_funcs)->p_init_pixel_formats;
-    wayland_driver_funcs.p_describe_pixel_format = (*driver_funcs)->p_describe_pixel_format;
-    wayland_driver_funcs.p_init_wgl_extensions = (*driver_funcs)->p_init_wgl_extensions;
-    wayland_driver_funcs.p_context_create = (*driver_funcs)->p_context_create;
-    wayland_driver_funcs.p_context_destroy = (*driver_funcs)->p_context_destroy;
-    wayland_driver_funcs.p_make_current = (*driver_funcs)->p_make_current;
+    wayland_driver_funcs = **driver_funcs;
+    wayland_driver_funcs.p_init_egl_platform = wayland_init_egl_platform;
+    wayland_driver_funcs.p_surface_create = wayland_opengl_surface_create;
 
     *driver_funcs = &wayland_driver_funcs;
     return STATUS_SUCCESS;
