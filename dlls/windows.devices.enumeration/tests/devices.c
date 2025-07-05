@@ -401,7 +401,7 @@ static void test_DeviceInformation( void )
     ok( status == DeviceWatcherStatus_Started, "got status %u\n", status );
 
     ref = IDeviceWatcher_AddRef( device_watcher );
-    todo_wine ok( ref == 2, "got ref %lu\n", ref );
+    ok( ref == 2, "got ref %lu\n", ref );
     hr = IDeviceWatcher_Stop( device_watcher );
     ok( hr == S_OK, "got hr %#lx\n", hr );
     ok( !WaitForSingleObject( stopped_handler.event, 1000 ), "wait for stopped_handler.event failed\n" );
@@ -448,7 +448,7 @@ static void test_DeviceInformation( void )
     ok( status == DeviceWatcherStatus_Started, "got status %u\n", status );
 
     ref = IDeviceWatcher_AddRef( device_watcher );
-    todo_wine ok( ref == 2, "got ref %lu\n", ref );
+    ok( ref == 2, "got ref %lu\n", ref );
     hr = IDeviceWatcher_Stop( device_watcher );
     ok( hr == S_OK, "got hr %#lx\n", hr );
     ok( !WaitForSingleObject( stopped_handler.event, 1000 ), "wait for stopped_handler.event failed\n" );
