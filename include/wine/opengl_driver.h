@@ -119,6 +119,11 @@ struct opengl_funcs
 
 struct egl_platform
 {
+    EGLenum              type;
+    EGLNativeDisplayType native_display;
+    BOOL                 force_pbuffer_formats;
+
+    /* filled by win32u after init_egl_platform */
     EGLDisplay  display;
     UINT        config_count;
     EGLConfig  *configs;
@@ -154,7 +159,6 @@ struct opengl_drawable
     int         format;         /* pixel format of the drawable */
     int         interval;       /* last set surface swap interval */
     HWND        hwnd;           /* window the drawable was created for */
-    HDC         hdc;            /* DC the drawable was created for */
     struct list entry;          /* entry in win32u managed list */
     LONG        updated;        /* has been moved / resized / reparented */
     EGLSurface  surface;        /* surface for EGL based drivers */
@@ -163,10 +167,10 @@ struct opengl_drawable
 static inline const char *debugstr_opengl_drawable( struct opengl_drawable *drawable )
 {
     if (!drawable) return "(null)";
-    return wine_dbg_sprintf( "%p (format %u, hwnd %p, hdc %p)", drawable, drawable->format, drawable->hwnd, drawable->hdc );
+    return wine_dbg_sprintf( "%p (format %u, hwnd %p)", drawable, drawable->format, drawable->hwnd );
 }
 
-W32KAPI void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd, HDC hdc );
+W32KAPI void *opengl_drawable_create( UINT size, const struct opengl_drawable_funcs *funcs, int format, HWND hwnd );
 W32KAPI void opengl_drawable_add_ref( struct opengl_drawable *drawable );
 W32KAPI void opengl_drawable_release( struct opengl_drawable *drawable );
 
@@ -176,7 +180,7 @@ W32KAPI void set_window_opengl_drawable( HWND hwnd, struct opengl_drawable *draw
 /* interface between win32u and the user drivers */
 struct opengl_driver_funcs
 {
-    GLenum (*p_init_egl_platform)(const struct egl_platform*,EGLNativeDisplayType*);
+    void (*p_init_egl_platform)(struct egl_platform*);
     void *(*p_get_proc_address)(const char *);
     UINT (*p_init_pixel_formats)(UINT*);
     BOOL (*p_describe_pixel_format)(int,struct wgl_pixel_format*);
