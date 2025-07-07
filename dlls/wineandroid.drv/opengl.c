@@ -75,7 +75,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, HDC hdc, int format, A
     static const int attribs[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
     struct gl_drawable *gl;
 
-    if (!(gl = opengl_drawable_create( sizeof(*gl), &android_drawable_funcs, format, hwnd, hdc ))) return NULL;
+    if (!(gl = opengl_drawable_create( sizeof(*gl), &android_drawable_funcs, format, hwnd ))) return NULL;
 
     if (!window) gl->window = create_ioctl_window( hwnd, TRUE, 1.0f );
     else gl->window = grab_ioctl_window( window );
@@ -134,7 +134,6 @@ static BOOL android_surface_create( HWND hwnd, HDC hdc, int format, struct openg
         funcs->p_eglGetConfigAttrib( egl->display, egl_config_for_format(format), EGL_NATIVE_VISUAL_ID, &pf );
         gl->window->perform( gl->window, NATIVE_WINDOW_SET_BUFFERS_FORMAT, pf );
         gl->base.hwnd = hwnd;
-        gl->base.hdc = hdc;
         gl->base.format = format;
 
         TRACE( "Updated drawable %s\n", debugstr_opengl_drawable( *drawable ) );
@@ -146,11 +145,11 @@ static BOOL android_surface_create( HWND hwnd, HDC hdc, int format, struct openg
     return TRUE;
 }
 
-static EGLenum android_init_egl_platform( const struct egl_platform *platform, EGLNativeDisplayType *platform_display )
+static void android_init_egl_platform( struct egl_platform *platform )
 {
+    platform->type = EGL_PLATFORM_ANDROID_KHR;
+    platform->native_display = EGL_DEFAULT_DISPLAY;
     egl = platform;
-    *platform_display = EGL_DEFAULT_DISPLAY;
-    return EGL_PLATFORM_ANDROID_KHR;
 }
 
 static void *android_get_proc_address( const char *name )

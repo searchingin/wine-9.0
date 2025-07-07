@@ -93,9 +93,6 @@ static struct gl_drawable *impl_from_opengl_drawable(struct opengl_drawable *bas
 static struct list context_list = LIST_INIT(context_list);
 static pthread_mutex_t context_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static CFMutableDictionaryRef dc_pbuffers;
-static pthread_mutex_t dc_pbuffers_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 static void *opengl_handle;
 static const struct opengl_funcs *funcs;
 static const struct opengl_driver_funcs macdrv_driver_funcs;
@@ -1487,7 +1484,7 @@ static BOOL macdrv_surface_create(HWND hwnd, HDC hdc, int format, struct opengl_
     data->pixel_format = format;
     release_win_data(data);
 
-    if (!(gl = opengl_drawable_create(sizeof(*gl), &macdrv_surface_funcs, format, hwnd, hdc))) return FALSE;
+    if (!(gl = opengl_drawable_create(sizeof(*gl), &macdrv_surface_funcs, format, hwnd))) return FALSE;
     *drawable = &gl->base;
 
     return TRUE;
@@ -2360,7 +2357,7 @@ static BOOL macdrv_pbuffer_create(HDC hdc, int format, BOOL largest, GLenum text
         texture_format = GL_RGB;
     }
 
-    if (!(gl = opengl_drawable_create(sizeof(*gl), &macdrv_pbuffer_funcs, format, 0, hdc))) return FALSE;
+    if (!(gl = opengl_drawable_create(sizeof(*gl), &macdrv_pbuffer_funcs, format, 0))) return FALSE;
 
     err = CGLCreatePBuffer(*width, *height, texture_target, texture_format, max_level, &gl->pbuffer);
     if (err != kCGLNoError)
@@ -2369,10 +2366,6 @@ static BOOL macdrv_pbuffer_create(HDC hdc, int format, BOOL largest, GLenum text
         opengl_drawable_release(&gl->base);
         return FALSE;
     }
-
-    pthread_mutex_lock(&dc_pbuffers_mutex);
-    CFDictionarySetValue(dc_pbuffers, hdc, gl->pbuffer);
-    pthread_mutex_unlock(&dc_pbuffers_mutex);
 
     *drawable = &gl->base;
     TRACE(" -> %p\n", gl);
@@ -2385,24 +2378,7 @@ static void macdrv_pbuffer_destroy(struct opengl_drawable *base)
 
     TRACE("drawable %s\n", debugstr_opengl_drawable(base));
 
-    pthread_mutex_lock(&dc_pbuffers_mutex);
-    CFDictionaryRemoveValue(dc_pbuffers, gl->pbuffer);
-    pthread_mutex_unlock(&dc_pbuffers_mutex);
-
     CGLReleasePBuffer(gl->pbuffer);
-}
-
-static void macdrv_pbuffer_detach(struct opengl_drawable *base)
-{
-}
-
-static void macdrv_pbuffer_flush(struct opengl_drawable *base, UINT flags)
-{
-}
-
-static BOOL macdrv_pbuffer_swap(struct opengl_drawable *base)
-{
-    return FALSE;
 }
 
 static BOOL macdrv_make_current(struct opengl_drawable *draw_base, struct opengl_drawable *read_base, void *private)
@@ -2439,22 +2415,9 @@ static BOOL macdrv_make_current(struct opengl_drawable *draw_base, struct opengl
     }
     else
     {
-        CGLPBufferObj pbuffer;
-
-        pthread_mutex_lock(&dc_pbuffers_mutex);
-        pbuffer = (CGLPBufferObj)CFDictionaryGetValue(dc_pbuffers, draw->base.hdc);
-        if (!pbuffer)
-        {
-            WARN("no window or pbuffer for DC\n");
-            pthread_mutex_unlock(&dc_pbuffers_mutex);
-            RtlSetLastWin32Error(ERROR_INVALID_HANDLE);
-            return FALSE;
-        }
-
         context->draw_hwnd = NULL;
         context->draw_view = NULL;
-        context->draw_pbuffer = pbuffer;
-        pthread_mutex_unlock(&dc_pbuffers_mutex);
+        context->draw_pbuffer = draw->pbuffer;
     }
 
     context->read_view = NULL;
@@ -2476,9 +2439,7 @@ static BOOL macdrv_make_current(struct opengl_drawable *draw_base, struct opengl
         }
         else
         {
-            pthread_mutex_lock(&dc_pbuffers_mutex);
-            context->read_pbuffer = (CGLPBufferObj)CFDictionaryGetValue(dc_pbuffers, read->base.hdc);
-            pthread_mutex_unlock(&dc_pbuffers_mutex);
+            context->read_pbuffer = read->pbuffer;
         }
     }
 
@@ -2790,13 +2751,6 @@ UINT macdrv_OpenGLInit(UINT version, const struct opengl_funcs *opengl_funcs, co
     }
     funcs = opengl_funcs;
 
-    dc_pbuffers = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
-    if (!dc_pbuffers)
-    {
-        WARN("CFDictionaryCreateMutable failed\n");
-        return STATUS_NOT_SUPPORTED;
-    }
-
     opengl_handle = dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL", RTLD_LAZY|RTLD_LOCAL|RTLD_NOLOAD);
     if (!opengl_handle)
     {
@@ -2951,49 +2905,27 @@ static void *macdrv_get_proc_address(const char *name)
 static BOOL macdrv_surface_swap(struct opengl_drawable *base)
 {
     struct macdrv_context *context = NtCurrentTeb()->glReserved2;
+    struct macdrv_win_data *data;
     HWND hwnd = base->hwnd;
-    HDC hdc = base->hdc;
     BOOL match = FALSE;
 
-    TRACE("hdc %p context %p/%p/%p\n", hdc, context, (context ? context->context : NULL),
+    TRACE("%s context %p/%p/%p\n", debugstr_opengl_drawable(base), context, (context ? context->context : NULL),
           (context ? context->cglcontext : NULL));
 
-    if (hwnd)
+    if (!(data = get_win_data(hwnd)))
     {
-        struct macdrv_win_data *data;
-
-        if (!(data = get_win_data(hwnd)))
-        {
-            RtlSetLastWin32Error(ERROR_INVALID_HANDLE);
-            return FALSE;
-        }
-
-        if (context && context->draw_view == data->client_cocoa_view)
-            match = TRUE;
-
-        release_win_data(data);
+        RtlSetLastWin32Error(ERROR_INVALID_HANDLE);
+        return FALSE;
     }
-    else
-    {
-        CGLPBufferObj pbuffer;
 
-        pthread_mutex_lock(&dc_pbuffers_mutex);
-        pbuffer = (CGLPBufferObj)CFDictionaryGetValue(dc_pbuffers, hdc);
-        pthread_mutex_unlock(&dc_pbuffers_mutex);
+    if (context && context->draw_view == data->client_cocoa_view)
+        match = TRUE;
 
-        if (!pbuffer)
-        {
-            RtlSetLastWin32Error(ERROR_INVALID_HANDLE);
-            return FALSE;
-        }
-
-        if (context && context->draw_pbuffer == pbuffer)
-            match = TRUE;
-    }
+    release_win_data(data);
 
     if (!match)
     {
-        FIXME("current context %p doesn't match hdc %p; can't swap\n", context, hdc);
+        FIXME("current context %p doesn't match; can't swap\n", context);
         return FALSE;
     }
 
@@ -3028,7 +2960,4 @@ static const struct opengl_drawable_funcs macdrv_surface_funcs =
 static const struct opengl_drawable_funcs macdrv_pbuffer_funcs =
 {
     .destroy = macdrv_pbuffer_destroy,
-    .detach = macdrv_pbuffer_detach,
-    .flush = macdrv_pbuffer_flush,
-    .swap = macdrv_pbuffer_swap,
 };
