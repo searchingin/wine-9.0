@@ -181,6 +181,7 @@ extern const char *build_dir;
 extern const char *config_dir;
 extern const char *wineloader;
 extern const char *user_name;
+extern const char *xdg_data_dirs;
 extern const char **dll_paths;
 extern const char **system_dll_paths;
 extern pthread_key_t teb_key;
