@@ -32,6 +32,15 @@ namespace Windows.ApplicationModel.Core {
     runtimeclass AppListEntry;
 }
 
+namespace Windows.Storage {
+    runtimeclass StorageFolder;
+}
+
+namespace Windows.System {
+    typedef enum ProcessorArchitecture ProcessorArchitecture;
+    runtimeclass User;
+}
+
 namespace Windows.ApplicationModel {
     typedef enum AppExecutionContext AppExecutionContext;
     typedef struct PackageVersion PackageVersion;
