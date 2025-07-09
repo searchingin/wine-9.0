@@ -124,6 +124,8 @@ struct media_stream
     IMFMediaStream IMFMediaStream_iface;
     LONG ref;
 
+    SRWLOCK source_lock;
+
     IMFMediaSource *media_source;
     IMFMediaEventQueue *event_queue;
     IMFStreamDescriptor *descriptor;
@@ -190,6 +192,7 @@ struct media_source
     UINT64 duration;
 
     IMFStreamDescriptor **descriptors;
+    wg_parser_stream_t *wg_streams;
     struct media_stream **streams;
     ULONG stream_count;
 
@@ -550,6 +553,8 @@ static void flush_token_queue(struct media_stream *stream, BOOL send)
             IUnknown *op;
             HRESULT hr;
 
+            assert(stream->media_source);
+
             if (SUCCEEDED(hr = source_create_async_op(SOURCE_ASYNC_REQUEST_SAMPLE, &op)))
             {
                 struct source_async_command *command = impl_from_async_command_IUnknown(op);
@@ -590,6 +595,9 @@ static HRESULT media_stream_start(struct media_stream *stream, BOOL active, BOOL
             &GUID_NULL, S_OK, position);
 }
 
+static HRESULT media_stream_create(IMFMediaSource *source, IMFStreamDescriptor *descriptor,
+        wg_parser_stream_t wg_stream, struct media_stream **out);
+
 static HRESULT media_source_start(struct media_source *source, IMFPresentationDescriptor *descriptor,
         GUID *format, PROPVARIANT *position)
 {
@@ -603,6 +611,26 @@ static HRESULT media_source_start(struct media_source *source, IMFPresentationDe
 
     if (source->state == SOURCE_SHUTDOWN)
         return MF_E_SHUTDOWN;
+
+    /* if starting for the first time, create the streams */
+    if (source->stream_count && !source->streams[0])
+    {
+        assert(source->state == SOURCE_STOPPED);
+
+        for (i = 0; i < source->stream_count; ++i)
+        {
+            wg_parser_stream_t wg_stream = source->wg_streams[i];
+            struct media_stream *stream;
+
+            if (FAILED(hr = media_stream_create(&source->IMFMediaSource_iface,
+                    source->descriptors[i], wg_stream, &stream)))
+                return hr;
+
+            source->streams[i] = stream;
+        }
+        free(source->wg_streams);
+        source->wg_streams = NULL;
+    }
 
     /* seek to beginning on stop->play */
     if (source->state == SOURCE_STOPPED && position->vt == VT_EMPTY)
@@ -987,7 +1015,11 @@ static ULONG WINAPI media_stream_Release(IMFMediaStream *iface)
 
     if (!ref)
     {
-        IMFMediaSource_Release(stream->media_source);
+        if (stream->media_source)
+        {
+            IMFMediaSource_Release(stream->media_source);
+            stream->media_source = NULL;
+        }
         IMFStreamDescriptor_Release(stream->descriptor);
         IMFMediaEventQueue_Release(stream->event_queue);
         flush_token_queue(stream, FALSE);
@@ -1034,21 +1066,38 @@ static HRESULT WINAPI media_stream_QueueEvent(IMFMediaStream *iface, MediaEventT
     return IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, event_type, ext_type, hr, value);
 }
 
+static struct media_source *media_stream_get_media_source(struct media_stream *stream)
+{
+    IMFMediaSource *source_iface;
+
+    AcquireSRWLockShared(&stream->source_lock);
+    if ((source_iface = stream->media_source))
+        IMFMediaSource_AddRef(source_iface);
+    ReleaseSRWLockShared(&stream->source_lock);
+
+    return source_iface ? impl_from_IMFMediaSource(source_iface) : NULL;
+}
+
 static HRESULT WINAPI media_stream_GetMediaSource(IMFMediaStream *iface, IMFMediaSource **out)
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+    struct media_source *source = media_stream_get_media_source(stream);
     HRESULT hr = S_OK;
 
     TRACE("%p, %p.\n", iface, out);
 
+    if (!source)
+        return MF_E_SHUTDOWN;
+
     EnterCriticalSection(&source->cs);
 
     if (source->state == SOURCE_SHUTDOWN)
+    {
+        IMFMediaSource_Release(&source->IMFMediaSource_iface);
         hr = MF_E_SHUTDOWN;
+    }
     else
     {
-        IMFMediaSource_AddRef(&source->IMFMediaSource_iface);
         *out = &source->IMFMediaSource_iface;
     }
 
@@ -1060,10 +1109,13 @@ static HRESULT WINAPI media_stream_GetMediaSource(IMFMediaStream *iface, IMFMedi
 static HRESULT WINAPI media_stream_GetStreamDescriptor(IMFMediaStream* iface, IMFStreamDescriptor **descriptor)
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+    struct media_source *source = media_stream_get_media_source(stream);
     HRESULT hr = S_OK;
 
     TRACE("%p, %p.\n", iface, descriptor);
+
+    if (!source)
+        return MF_E_SHUTDOWN;
 
     EnterCriticalSection(&source->cs);
 
@@ -1077,17 +1129,21 @@ static HRESULT WINAPI media_stream_GetStreamDescriptor(IMFMediaStream* iface, IM
 
     LeaveCriticalSection(&source->cs);
 
+    IMFMediaSource_Release(&source->IMFMediaSource_iface);
     return hr;
 }
 
 static HRESULT WINAPI media_stream_RequestSample(IMFMediaStream *iface, IUnknown *token)
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
-    struct media_source *source = impl_from_IMFMediaSource(stream->media_source);
+    struct media_source *source = media_stream_get_media_source(stream);
     IUnknown *op;
     HRESULT hr;
 
     TRACE("%p, %p.\n", iface, token);
+
+    if (!source)
+        return MF_E_SHUTDOWN;
 
     EnterCriticalSection(&source->cs);
 
@@ -1111,6 +1167,7 @@ static HRESULT WINAPI media_stream_RequestSample(IMFMediaStream *iface, IUnknown
 
     LeaveCriticalSection(&source->cs);
 
+    IMFMediaSource_Release(&source->IMFMediaSource_iface);
     return hr;
 }
 
@@ -1141,6 +1198,8 @@ static HRESULT media_stream_create(IMFMediaSource *source, IMFStreamDescriptor *
 
     object->IMFMediaStream_iface.lpVtbl = &media_stream_vtbl;
     object->ref = 1;
+
+    InitializeSRWLock(&object->source_lock);
 
     if (FAILED(hr = MFCreateEventQueue(&object->event_queue)))
     {
@@ -1673,10 +1732,20 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
     {
         struct media_stream *stream = source->streams[source->stream_count];
         IMFStreamDescriptor_Release(source->descriptors[source->stream_count]);
-        IMFMediaEventQueue_Shutdown(stream->event_queue);
-        IMFMediaStream_Release(&stream->IMFMediaStream_iface);
+        if (stream)
+        {
+            IMFMediaEventQueue_Shutdown(stream->event_queue);
+            /* Media Foundation documentation says circular references such as
+             * those between the source and its streams should be released here. */
+            IMFMediaSource_Release(stream->media_source);
+            AcquireSRWLockExclusive(&stream->source_lock);
+            stream->media_source = NULL;
+            ReleaseSRWLockExclusive(&stream->source_lock);
+            IMFMediaStream_Release(&stream->IMFMediaStream_iface);
+        }
     }
     free(source->descriptors);
+    free(source->wg_streams);
     free(source->streams);
 
     if (source->shutdown_result)
@@ -1717,13 +1786,12 @@ static void media_source_init_descriptors(struct media_source *source)
 
     for (i = 0; i < source->stream_count; i++)
     {
-        struct media_stream *stream = source->streams[i];
-        IMFStreamDescriptor *descriptor = stream->descriptor;
+        IMFStreamDescriptor *descriptor = source->descriptors[i];
 
-        if (FAILED(hr = stream_descriptor_set_tag(descriptor, stream->wg_stream,
+        if (FAILED(hr = stream_descriptor_set_tag(descriptor, source->wg_streams[i],
                 &MF_SD_LANGUAGE, WG_PARSER_TAG_LANGUAGE)))
             WARN("Failed to set stream descriptor language, hr %#lx\n", hr);
-        if (FAILED(hr = stream_descriptor_set_tag(descriptor, stream->wg_stream,
+        if (FAILED(hr = stream_descriptor_set_tag(descriptor, source->wg_streams[i],
                 &MF_SD_STREAM_NAME, WG_PARSER_TAG_NAME)))
             WARN("Failed to set stream descriptor name, hr %#lx\n", hr);
     }
@@ -1777,6 +1845,7 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
     stream_count = wg_parser_get_stream_count(parser);
 
     if (!(object->descriptors = calloc(stream_count, sizeof(*object->descriptors)))
+            || !(object->wg_streams = calloc(stream_count, sizeof(*object->wg_streams)))
             || !(object->streams = calloc(stream_count, sizeof(*object->streams))))
     {
         hr = E_OUTOFMEMORY;
@@ -1785,24 +1854,23 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
 
     for (i = 0; i < stream_count; ++i)
     {
+        /* It is valid to create and release a MF source without ever calling Start() and
+         * Shutdown(). Each MF stream holds a reference to the source, and that ref should
+         * be released in Shutdown(), so streams are not created here.
+         * The wg streams are needed now to get the format and duration. Their buffer is
+         * freed in Start(). */
         wg_parser_stream_t wg_stream = wg_parser_get_stream(object->wg_parser, i);
         IMFStreamDescriptor *descriptor;
-        struct media_stream *stream;
         struct wg_format format;
 
         wg_parser_stream_get_current_format(wg_stream, &format);
         if (FAILED(hr = stream_descriptor_create(i, &format, &descriptor)))
             goto fail;
-        if (FAILED(hr = media_stream_create(&object->IMFMediaSource_iface, descriptor, wg_stream, &stream)))
-        {
-            IMFStreamDescriptor_Release(descriptor);
-            goto fail;
-        }
 
         object->duration = max(object->duration, wg_parser_stream_get_duration(wg_stream));
         IMFStreamDescriptor_AddRef(descriptor);
         object->descriptors[i] = descriptor;
-        object->streams[i] = stream;
+        object->wg_streams[i] = wg_stream;
         object->stream_count++;
     }
 
@@ -1816,13 +1884,12 @@ static HRESULT media_source_create(struct object_context *context, IMFMediaSourc
 fail:
     WARN("Failed to construct MFMediaSource, hr %#lx.\n", hr);
 
-    while (object->streams && object->stream_count--)
+    while (object->descriptors && object->stream_count--)
     {
-        struct media_stream *stream = object->streams[object->stream_count];
         IMFStreamDescriptor_Release(object->descriptors[object->stream_count]);
-        IMFMediaStream_Release(&stream->IMFMediaStream_iface);
     }
     free(object->descriptors);
+    free(object->wg_streams);
     free(object->streams);
 
     if (stream_count != UINT_MAX)
