@@ -267,7 +267,11 @@ static void mutex_destroy( struct object *obj )
 {
     struct mutex *mutex = (struct mutex *)obj;
     assert( obj->ops == &mutex_ops );
-    if (mutex->sync) release_object( mutex->sync );
+    if (mutex->sync)
+    {
+        if (mutex->sync->count) do_release( mutex->sync, current, mutex->sync->count );
+        release_object( mutex->sync );
+    }
 }
 
 /* create a mutex */
