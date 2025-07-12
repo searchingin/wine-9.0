@@ -38,6 +38,7 @@ static LPVOID (WINAPI *pMapViewOfFile3)(HANDLE, HANDLE, PVOID, ULONG64 offset, S
 static LPVOID (WINAPI *pVirtualAlloc2)(HANDLE, void *, SIZE_T, DWORD, DWORD, MEM_EXTENDED_PARAMETER *, ULONG);
 static LPVOID (WINAPI *pVirtualAlloc2FromApp)(HANDLE, void *, SIZE_T, DWORD, DWORD, MEM_EXTENDED_PARAMETER *, ULONG);
 static PVOID (WINAPI *pVirtualAllocFromApp)(PVOID, SIZE_T, DWORD, DWORD);
+static BOOL (WINAPI *pVirtualProtectFromApp)(LPVOID,SIZE_T,ULONG,PULONG);
 static HANDLE (WINAPI *pOpenFileMappingFromApp)( ULONG, BOOL, LPCWSTR);
 static HANDLE (WINAPI *pCreateFileMappingFromApp)(HANDLE, PSECURITY_ATTRIBUTES, ULONG, ULONG64, PCWSTR);
 static LPVOID (WINAPI *pMapViewOfFileFromApp)(HANDLE, ULONG, ULONG64, SIZE_T);
@@ -481,6 +482,36 @@ static void test_VirtualAlloc2FromApp(void)
     }
 }
 
+static void test_VirtualProtectFromApp(void)
+{
+    ULONG old_prot;
+    void *p;
+    BOOL ret;
+
+    if (!pVirtualProtectFromApp)
+    {
+        win_skip("VirtualProtectFromApp is not available.\n");
+        return;
+    }
+
+    SetLastError(0xdeadbeef);
+    p = VirtualAlloc(NULL, 0x1000, MEM_RESERVE, PAGE_READWRITE);
+    ok(p && GetLastError() == 0xdeadbeef, "Got unexpected mem %p, GetLastError() %lu.\n", p, GetLastError());
+
+    ret = pVirtualProtectFromApp(p, 0x1000, PAGE_EXECUTE_READWRITE, &old_prot);
+    ok(!ret, "Unexpected protection PAGE_EXECUTE_READWRITE\n");
+
+    ret = pVirtualProtectFromApp(p, 0x1000, PAGE_EXECUTE_WRITECOPY, &old_prot);
+    ok(!ret, "Unexpected protection PAGE_EXECUTE_WRITECOPY\n");
+
+    ret = pVirtualProtectFromApp(p, 0x1000, PAGE_EXECUTE_WRITECOPY, &old_prot);
+    ok(!ret && old_prot == PAGE_READONLY, "Unexpected protection PAGE_EXECUTE_WRITECOPY old_prot %lu\n",
+        old_prot);
+
+    ret = VirtualFree(p, 0, MEM_RELEASE);
+    ok(ret, "Failed to free mem error %lu.\n", GetLastError());
+}
+
 static void test_OpenFileMappingFromApp(void)
 {
     OBJECT_BASIC_INFORMATION info;
@@ -601,6 +632,7 @@ static void init_funcs(void)
     X(VirtualAlloc2);
     X(VirtualAlloc2FromApp);
     X(VirtualAllocFromApp);
+    X(VirtualProtectFromApp);
     X(UnmapViewOfFile2);
 
     hmod = GetModuleHandleA("ntdll.dll");
@@ -618,6 +650,7 @@ START_TEST(process)
     test_VirtualAlloc2();
     test_VirtualAllocFromApp();
     test_VirtualAlloc2FromApp();
+    test_VirtualProtectFromApp();
     test_OpenFileMappingFromApp();
     test_CreateFileMappingFromApp();
     test_MapViewOfFileFromApp();
