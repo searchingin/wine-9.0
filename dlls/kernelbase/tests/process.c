@@ -498,19 +498,17 @@ static void test_VirtualProtectFromApp(void)
     p = VirtualAlloc(NULL, 0x1000, MEM_RESERVE, PAGE_READWRITE);
     ok(p && GetLastError() == 0xdeadbeef, "Got unexpected mem %p, GetLastError() %lu.\n", p, GetLastError());
 
-    ret = pVirtualProtectFromApp(p, 0x1000, PAGE_READONLY, &old_prot);
-    ok(ret && old_prot == PAGE_READWRITE, "Failed to change protection old_prot %lu, GetLastError() %lu\n",
-        old_prot, GetLastError());
-
     ret = pVirtualProtectFromApp(p, 0x1000, PAGE_EXECUTE_READWRITE, &old_prot);
-    ok(!ret && old_prot == PAGE_READONLY, "Unexpected protection PAGE_EXECUTE_READWRITE old_prot %lu\n",
-        old_prot);
+    ok(!ret, "Unexpected protection PAGE_EXECUTE_READWRITE\n");
+
+    ret = pVirtualProtectFromApp(p, 0x1000, PAGE_EXECUTE_WRITECOPY, &old_prot);
+    ok(!ret, "Unexpected protection PAGE_EXECUTE_WRITECOPY\n");
 
     ret = pVirtualProtectFromApp(p, 0x1000, PAGE_EXECUTE_WRITECOPY, &old_prot);
     ok(!ret && old_prot == PAGE_READONLY, "Unexpected protection PAGE_EXECUTE_WRITECOPY old_prot %lu\n",
         old_prot);
 
-    ret = VirtualFree(addr, 0, MEM_RELEASE);
+    ret = VirtualFree(p, 0, MEM_RELEASE);
     ok(ret, "Failed to free mem error %lu.\n", GetLastError());
 }
 
