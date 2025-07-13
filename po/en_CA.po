@@ -1,4 +1,4 @@
-# English (United States) translations for Wine
+# English (Canada) translations for Wine
 #
 msgid ""
 msgstr ""
@@ -6,9 +6,9 @@ msgstr ""
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
 "PO-Revision-Date: N/A\n"
-"Last-Translator: Automatically generated\n"
-"Language-Team: English (United States)\n"
-"Language: en_US\n"
+"Last-Translator: Ken Sharp\n"
+"Language-Team: English (Canada)\n"
+"Language: en_CA\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -399,7 +399,7 @@ msgstr ""
 
 #: dlls/browseui/browseui.rc:28
 msgid "Canceling..."
-msgstr "Canceling..."
+msgstr "Cancelling..."
 
 #: dlls/browseui/browseui.rc:29
 msgid "%1!u! %2 remaining"
@@ -725,7 +725,7 @@ msgstr "&Underline"
 
 #: dlls/comdlg32/comdlg32.rc:270 programs/winecfg/winecfg.rc:298
 msgid "&Color:"
-msgstr "&Color:"
+msgstr "&Colour:"
 
 #: dlls/comdlg32/comdlg32.rc:273
 msgid "Sample"
@@ -738,15 +738,15 @@ msgstr "Scr&ipt:"
 #: dlls/comdlg32/comdlg32.rc:283 dlls/comdlg32/comdlg32.rc:288
 #: dlls/compstui/compstui.rc:33
 msgid "Color"
-msgstr "Color"
+msgstr "Colour"
 
 #: dlls/comdlg32/comdlg32.rc:286
 msgid "&Basic Colors:"
-msgstr "&Basic Colors:"
+msgstr "&Basic Colours:"
 
 #: dlls/comdlg32/comdlg32.rc:287
 msgid "&Custom Colors:"
-msgstr "&Custom Colors:"
+msgstr "&Custom Colours:"
 
 #: dlls/comdlg32/comdlg32.rc:289
 msgid "|S&olid"
@@ -780,11 +780,11 @@ msgstr "&Lum:"
 
 #: dlls/comdlg32/comdlg32.rc:310
 msgid "&Add to Custom Colors"
-msgstr "&Add to Custom Colors"
+msgstr "&Add to Custom Colours"
 
 #: dlls/comdlg32/comdlg32.rc:311
 msgid "&Define Custom Colors >>"
-msgstr "&Define Custom Colors >>"
+msgstr "&Define Custom Colours >>"
 
 #: dlls/comdlg32/comdlg32.rc:312
 msgctxt "Solid"
@@ -1092,7 +1092,7 @@ msgstr "Teal"
 
 #: dlls/comdlg32/comdlg32.rc:129 programs/wordpad/wordpad.rc:132
 msgid "Gray"
-msgstr "Gray"
+msgstr "Grey"
 
 #: dlls/comdlg32/comdlg32.rc:130 programs/wordpad/wordpad.rc:133
 msgid "Silver"
@@ -1149,7 +1149,7 @@ msgid ""
 "Please reenter margins."
 msgstr ""
 "Margins overlap or fall outside Paper boundaries.\n"
-"Please reenter margins."
+"Please re-enter margins."
 
 #: dlls/comdlg32/comdlg32.rc:65
 msgid "The 'Number of copies' field cannot be empty."
@@ -1289,7 +1289,7 @@ msgstr "Processing; "
 
 #: dlls/comdlg32/comdlg32.rc:100
 msgid "Initializing; "
-msgstr "Initializing; "
+msgstr "Initialising; "
 
 #: dlls/comdlg32/comdlg32.rc:101
 msgid "Warming up; "
@@ -1371,7 +1371,7 @@ msgstr "Print on Both Sides"
 
 #: dlls/compstui/compstui.rc:32
 msgid "C&olor"
-msgstr "C&olor"
+msgstr "C&olour"
 
 #: dlls/compstui/compstui.rc:34
 msgid "Bla&ck && White"
@@ -1609,11 +1609,11 @@ msgstr "Country/Region"
 
 #: dlls/crypt32/crypt32.rc:72
 msgid "Organization"
-msgstr "Organization"
+msgstr "Organisation"
 
 #: dlls/crypt32/crypt32.rc:73
 msgid "Organizational Unit"
-msgstr "Organizational Unit"
+msgstr "Organisational Unit"
 
 #: dlls/crypt32/crypt32.rc:74
 msgid "Common Name"
@@ -1677,7 +1677,7 @@ msgstr "Windows Product Update"
 
 #: dlls/crypt32/crypt32.rc:89
 msgid "Enrollment Name Value Pair"
-msgstr "Enrollment Name Value Pair"
+msgstr "Enrolment Name Value Pair"
 
 #: dlls/crypt32/crypt32.rc:90
 msgid "OS Version"
@@ -1685,7 +1685,7 @@ msgstr "OS Version"
 
 #: dlls/crypt32/crypt32.rc:91
 msgid "Enrollment CSP"
-msgstr "Enrollment CSP"
+msgstr "Enrolment CSP"
 
 #: dlls/crypt32/crypt32.rc:92
 msgid "CRL Number"
@@ -1933,11 +1933,11 @@ msgstr "Embedded Windows System Component Verification"
 
 #: dlls/crypt32/crypt32.rc:153 dlls/cryptui/cryptui.rc:143
 msgid "Key Pack Licenses"
-msgstr "Key Pack Licenses"
+msgstr "Key Pack Licences"
 
 #: dlls/crypt32/crypt32.rc:154 dlls/cryptui/cryptui.rc:144
 msgid "License Server Verification"
-msgstr "License Server Verification"
+msgstr "Licence Server Verification"
 
 #: dlls/crypt32/crypt32.rc:155 dlls/cryptui/cryptui.rc:146
 msgid "Smart Card Logon"
@@ -2284,7 +2284,7 @@ msgstr "Notice Reference"
 
 #: dlls/cryptdlg/cryptdlg.rc:38
 msgid "Organization="
-msgstr "Organization="
+msgstr "Organisation="
 
 #: dlls/cryptdlg/cryptdlg.rc:39
 msgid "Notice Number="
@@ -3461,7 +3461,7 @@ msgstr "&Search"
 
 #: dlls/hhctrl.ocx/hhctrl.rc:34
 msgid "Favor&ites"
-msgstr "Favor&ites"
+msgstr "Favour&ites"
 
 #: dlls/hhctrl.ocx/hhctrl.rc:36
 msgid "Hide &Tabs"
@@ -3567,11 +3567,11 @@ msgstr "&Address bar"
 
 #: dlls/ieframe/ieframe.rc:53 programs/regedit/regedit.rc:73
 msgid "&Favorites"
-msgstr "&Favorites"
+msgstr "&Favourites"
 
 #: dlls/ieframe/ieframe.rc:55 programs/regedit/regedit.rc:75
 msgid "&Add to Favorites..."
-msgstr "&Add to Favorites..."
+msgstr "&Add to Favourites..."
 
 #: dlls/ieframe/ieframe.rc:60
 msgid "&About Internet Explorer"
@@ -4416,7 +4416,7 @@ msgstr "Too many commands.\n"
 
 #: dlls/kernelbase/winerror.mc:253
 msgid "Adapter hardware error.\n"
-msgstr "Adapter hardware error.\n"
+msgstr "Adaptor hardware error.\n"
 
 #: dlls/kernelbase/winerror.mc:258
 msgid "Bad network response.\n"
@@ -4428,7 +4428,7 @@ msgstr "Unexpected network error.\n"
 
 #: dlls/kernelbase/winerror.mc:268
 msgid "Bad remote adapter.\n"
-msgstr "Bad remote adapter.\n"
+msgstr "Bad remote adaptor.\n"
 
 #: dlls/kernelbase/winerror.mc:273
 msgid "Print queue full.\n"
@@ -4440,7 +4440,7 @@ msgstr "No spool space.\n"
 
 #: dlls/kernelbase/winerror.mc:283
 msgid "Print canceled.\n"
-msgstr "Print canceled.\n"
+msgstr "Print cancelled.\n"
 
 #: dlls/kernelbase/winerror.mc:288
 msgid "Network name deleted.\n"
@@ -4916,7 +4916,7 @@ msgstr "More data available.\n"
 
 #: dlls/kernelbase/winerror.mc:888
 msgid "Session canceled.\n"
-msgstr "Session canceled.\n"
+msgstr "Session cancelled.\n"
 
 #: dlls/kernelbase/winerror.mc:893
 msgid "Invalid extended attribute name.\n"
@@ -5300,7 +5300,7 @@ msgstr "No Unicode translation.\n"
 
 #: dlls/kernelbase/winerror.mc:1368
 msgid "DLL initialization failed.\n"
-msgstr "DLL initialization failed.\n"
+msgstr "DLL initialisation failed.\n"
 
 #: dlls/kernelbase/winerror.mc:1373
 msgid "Shutdown in progress.\n"
@@ -5444,7 +5444,7 @@ msgstr "The magazine is not present.\n"
 
 #: dlls/kernelbase/winerror.mc:1548
 msgid "The device needs reinitialization.\n"
-msgstr "The device needs reinitialization.\n"
+msgstr "The device needs reinitialisation.\n"
 
 #: dlls/kernelbase/winerror.mc:1553
 msgid "The device requires cleaning.\n"
@@ -5600,7 +5600,7 @@ msgstr "No network.\n"
 
 #: dlls/kernelbase/winerror.mc:1748
 msgid "Operation canceled by user.\n"
-msgstr "Operation canceled by user.\n"
+msgstr "Operation cancelled by user.\n"
 
 #: dlls/kernelbase/winerror.mc:1753
 msgid "File has a user-mapped section.\n"
@@ -6100,7 +6100,7 @@ msgstr "No user session key.\n"
 
 #: dlls/kernelbase/winerror.mc:2378
 msgid "License quota exceeded.\n"
-msgstr "License quota exceeded.\n"
+msgstr "Licence quota exceeded.\n"
 
 #: dlls/kernelbase/winerror.mc:2383
 msgid "Wrong target name.\n"
@@ -6728,7 +6728,7 @@ msgstr "Invalid authentication identity.\n"
 
 #: dlls/kernelbase/winerror.mc:3168
 msgid "Unknown authorization service.\n"
-msgstr "Unknown authorization service.\n"
+msgstr "Unknown authorisation service.\n"
 
 #: dlls/kernelbase/winerror.mc:3173
 msgid "Invalid entry.\n"
@@ -6996,7 +6996,7 @@ msgstr "No interfaces.\n"
 
 #: dlls/kernelbase/winerror.mc:3503
 msgid "RPC call canceled.\n"
-msgstr "RPC call canceled.\n"
+msgstr "RPC call cancelled.\n"
 
 #: dlls/kernelbase/winerror.mc:3508
 msgid "Binding incomplete.\n"
@@ -7008,7 +7008,7 @@ msgstr "RPC comm failure.\n"
 
 #: dlls/kernelbase/winerror.mc:3518
 msgid "Unsupported authorization level.\n"
-msgstr "Unsupported authorization level.\n"
+msgstr "Unsupported authorisation level.\n"
 
 #: dlls/kernelbase/winerror.mc:3523
 msgid "No principal name registered.\n"
@@ -7028,7 +7028,7 @@ msgstr "Security package error.\n"
 
 #: dlls/kernelbase/winerror.mc:3543
 msgid "Thread not canceled.\n"
-msgstr "Thread not canceled.\n"
+msgstr "Thread not cancelled.\n"
 
 #: dlls/kernelbase/winerror.mc:3548
 msgid "Invalid handle operation.\n"
@@ -7036,7 +7036,7 @@ msgstr "Invalid handle operation.\n"
 
 #: dlls/kernelbase/winerror.mc:3553
 msgid "Wrong serializing package version.\n"
-msgstr "Wrong serializing package version.\n"
+msgstr "Wrong serialising package version.\n"
 
 #: dlls/kernelbase/winerror.mc:3558
 msgid "Wrong stub version.\n"
@@ -7970,7 +7970,7 @@ msgstr "Vector property is required.\n"
 
 #: dlls/mferror/mferror.mc:389
 msgid "Operation was cancelled.\n"
-msgstr "Operation was canceled.\n"
+msgstr "Operation was cancelled.\n"
 
 #: dlls/mferror/mferror.mc:396
 msgid "Bytestream is not seekable.\n"
@@ -8520,7 +8520,7 @@ msgstr "Unregistering modules"
 
 #: dlls/msi/msi.rc:140
 msgid "Initializing ODBC directories"
-msgstr "Initializing ODBC directories"
+msgstr "Initialising ODBC directories"
 
 #: dlls/msi/msi.rc:141
 msgid "Starting services"
@@ -9169,12 +9169,12 @@ msgstr "offscreen"
 #: dlls/oleacc/oleacc.rc:115
 msgctxt "object state"
 msgid "sizeable"
-msgstr "sizable"
+msgstr "sizeable"
 
 #: dlls/oleacc/oleacc.rc:116
 msgctxt "object state"
 msgid "moveable"
-msgstr "movable"
+msgstr "moveable"
 
 #: dlls/oleacc/oleacc.rc:117
 msgctxt "object state"
@@ -9349,7 +9349,7 @@ msgid ""
 "These are the initialization properties for this type of data. To edit a "
 "value, select a property, then choose Edit Value below."
 msgstr ""
-"These are the initialization properties for this type of data. To edit a "
+"These are the initialisation properties for this type of data. To edit a "
 "value, select a property, then choose Edit Value below."
 
 #: dlls/oledb32/version.rc:112
@@ -9717,7 +9717,7 @@ msgstr "Create Shor&tcut"
 #: dlls/shdoclc/shdoclc.rc:137 dlls/shdoclc/shdoclc.rc:164
 #: dlls/shdoclc/shdoclc.rc:188
 msgid "Add to &Favorites..."
-msgstr "Add to &Favorites..."
+msgstr "Add to &Favourites..."
 
 #: dlls/shdoclc/shdoclc.rc:56
 msgid "&Encoding"
@@ -10095,7 +10095,7 @@ msgstr "About %s"
 
 #: dlls/shell32/shell32.rc:325
 msgid "Wine &license"
-msgstr "Wine &license"
+msgstr "Wine &licence"
 
 #: dlls/shell32/shell32.rc:330
 msgid "Running on %s"
@@ -10263,7 +10263,7 @@ msgstr "Documents"
 
 #: dlls/shell32/shell32.rc:205
 msgid "Favorites"
-msgstr "Favorites"
+msgstr "Favourites"
 
 #: dlls/shell32/shell32.rc:206
 msgid "StartUp"
@@ -10526,22 +10526,22 @@ msgid ""
 "Franklin St, Fifth Floor, Boston, MA 02110-1301, USA."
 msgstr ""
 "Wine is free software; you can redistribute it and/or modify it under the "
-"terms of the GNU Lesser General Public License as published by the Free "
-"Software Foundation; either version 2.1 of the License, or (at your option) "
+"terms of the GNU Lesser General Public Licence as published by the Free "
+"Software Foundation; either version 2.1 of the Licence, or (at your option) "
 "any later version.\n"
 "\n"
 "Wine is distributed in the hope that it will be useful, but WITHOUT ANY "
 "WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS "
-"FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more "
+"FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public Licence for more "
 "details.\n"
 "\n"
-"You should have received a copy of the GNU Lesser General Public License "
+"You should have received a copy of the GNU Lesser General Public Licence "
 "along with Wine; if not, write to the Free Software Foundation, Inc., 51 "
 "Franklin St, Fifth Floor, Boston, MA 02110-1301, USA."
 
 #: dlls/shell32/shell32.rc:258
 msgid "Wine License"
-msgstr "Wine License"
+msgstr "Wine Licence"
 
 #: dlls/shell32/shell32.rc:153
 msgid "Trash"
@@ -12532,7 +12532,7 @@ msgstr "Your computer"
 msgid ""
 "This zone contains all Web sites that are on your organization's intranet."
 msgstr ""
-"This zone contains all Web sites that are on your organization's intranet."
+"This zone contains all Web sites that are on your organisation's intranet."
 
 #: dlls/urlmon/urlmon.rc:61
 msgid ""
@@ -12874,7 +12874,7 @@ msgid ""
 "The operation was canceled, usually because the handle on which the request "
 "was operating was closed before the operation completed.\n"
 msgstr ""
-"The operation was canceled, usually because the handle on which the request "
+"The operation was cancelled, usually because the handle on which the request "
 "was operating was closed before the operation completed.\n"
 
 #: dlls/wininet/winineterror.mc:61
@@ -13132,7 +13132,7 @@ msgstr "The device driver is not ready."
 
 #: dlls/winmm/winmm.rc:78
 msgid "A problem occurred in initializing MCI. Try restarting Windows."
-msgstr "A problem occurred in initializing MCI. Try restarting Windows."
+msgstr "A problem occurred in initialising MCI. Try restarting Windows."
 
 #: dlls/winmm/winmm.rc:79
 msgid ""
@@ -13720,7 +13720,7 @@ msgstr "Filter Error"
 
 #: dlls/wldap32/wldap32.rc:120
 msgid "User Canceled"
-msgstr "User Canceled"
+msgstr "User Cancelled"
 
 #: dlls/wldap32/wldap32.rc:121
 msgid "Parameter Error"
@@ -14305,7 +14305,7 @@ msgid ""
 "ENDLOCAL ends localization of environment changes in a batch file which\n"
 "were introduced by a preceding SETLOCAL.\n"
 msgstr ""
-"ENDLOCAL ends localization of environment changes in a batch file which\n"
+"ENDLOCAL ends localisation of environment changes in a batch file which\n"
 "were introduced by a preceding SETLOCAL.\n"
 
 #: programs/cmd/cmd.rc:268
@@ -14317,7 +14317,7 @@ msgid ""
 "file, whichever comes first), at which point the previous environment\n"
 "settings are restored.\n"
 msgstr ""
-"SETLOCAL starts localization of environment changes in a batch file.\n"
+"SETLOCAL starts localisation of environment changes in a batch file.\n"
 "\n"
 "Environment changes done after a SETLOCAL are local to the batch file, and\n"
 "are preserved until the next ENDLOCAL is encountered (or at the end of the\n"
@@ -14481,7 +14481,7 @@ msgstr ""
 "DEL (ERASE)\tDelete a file or set of files\n"
 "DIR\t\tList the contents of a directory\n"
 "ECHO\t\tCopy text directly to the console output\n"
-"ENDLOCAL\tEnd localization of environment changes in a batch file\n"
+"ENDLOCAL\tEnd localisation of environment changes in a batch file\n"
 "FTYPE\t\tShow or modify open commands associated with file types\n"
 "HELP\t\tShow brief help details on a topic\n"
 "MD (MKDIR)\tCreate a subdirectory\n"
@@ -14496,7 +14496,7 @@ msgstr ""
 "REN (RENAME)\tRename a file\n"
 "RD (RMDIR)\tDelete a subdirectory\n"
 "SET\t\tSet or show environment variables\n"
-"SETLOCAL\tStart localization of environment changes in a batch file\n"
+"SETLOCAL\tStart localisation of environment changes in a batch file\n"
 "START\t\tStart a program, or open a document in the associated program\n"
 "TIME\t\tSet or show the current system time\n"
 "TITLE\t\tSet the window title for the CMD session\n"
@@ -14763,7 +14763,7 @@ msgstr "&Font"
 
 #: programs/conhost/conhost.rc:81
 msgid "&Color"
-msgstr "&Color"
+msgstr "&Colour"
 
 #: programs/conhost/conhost.rc:92
 msgid "Configuration"
@@ -14963,7 +14963,7 @@ msgstr "Error: Unknown or invalid command line parameters specified\n"
 
 #: programs/ipconfig/ipconfig.rc:32
 msgid "%1 adapter %2\n"
-msgstr "%1 adapter %2\n"
+msgstr "%1 adaptor %2\n"
 
 #: programs/ipconfig/ipconfig.rc:33
 msgid "Ethernet"
@@ -15426,7 +15426,7 @@ msgstr "&Footer:"
 
 #: programs/notepad/notepad.rc:115
 msgid "Margins (millimeters)"
-msgstr "Margins (millimeters)"
+msgstr "Margins (millimetres)"
 
 #: programs/notepad/notepad.rc:116
 msgid "&Left:"
@@ -16162,7 +16162,7 @@ msgstr "reg: The operation completed successfully\n"
 
 #: programs/reg/reg.rc:131
 msgid "reg: The registry operation was cancelled\n"
-msgstr "reg: The registry operation was canceled\n"
+msgstr "reg: The registry operation was cancelled\n"
 
 #: programs/reg/reg.rc:174
 msgid "reg: Unable to find the specified registry key\n"
@@ -16762,7 +16762,7 @@ msgstr "Sp&lit"
 
 #: programs/regedit/regedit.rc:76
 msgid "&Remove Favorite..."
-msgstr "&Remove Favorite..."
+msgstr "&Remove Favourite..."
 
 #: programs/regedit/regedit.rc:81
 msgid "&About Registry Editor"
@@ -16811,7 +16811,7 @@ msgstr "Whole string only"
 
 #: programs/regedit/regedit.rc:296
 msgid "Add Favorite"
-msgstr "Add Favorite"
+msgstr "Add Favourite"
 
 #: programs/regedit/regedit.rc:299 programs/regedit/regedit.rc:310
 msgid "Name:"
@@ -16819,7 +16819,7 @@ msgstr "Name:"
 
 #: programs/regedit/regedit.rc:307
 msgid "Remove Favorite"
-msgstr "Remove Favorite"
+msgstr "Remove Favourite"
 
 #: programs/regedit/regedit.rc:318
 msgid "Edit String"
@@ -16869,7 +16869,7 @@ msgstr "Contains commands for editing values or keys"
 
 #: programs/regedit/regedit.rc:164
 msgid "Contains commands for customizing the registry window"
-msgstr "Contains commands for customizing the registry window"
+msgstr "Contains commands for customising the registry window"
 
 #: programs/regedit/regedit.rc:165
 msgid "Contains commands for accessing frequently used keys"
@@ -16903,11 +16903,11 @@ msgstr "Export Registry File"
 
 #: programs/regedit/regedit.rc:228
 msgid "Registry files (*.reg)"
-msgstr "Registry Files (*.reg)"
+msgstr "Registry files (*.reg)"
 
 #: programs/regedit/regedit.rc:229
 msgid "Win9x/NT4 Registry files (REGEDIT4)"
-msgstr "Win9x/NT4 Registry Files (REGEDIT4)"
+msgstr "Win9x/NT4 Registry files (REGEDIT4)"
 
 #: programs/regedit/regedit.rc:246
 msgid "(cannot display value)"
@@ -17127,11 +17127,11 @@ msgstr "Quits the Registry Editor"
 
 #: programs/regedit/regedit.rc:192
 msgid "Adds keys to the favorites list"
-msgstr "Adds keys to the favorites list"
+msgstr "Adds keys to the favourites list"
 
 #: programs/regedit/regedit.rc:193
 msgid "Removes keys from the favorites list"
-msgstr "Removes keys from the favorites list"
+msgstr "Removes keys from the favourites list"
 
 #: programs/regedit/regedit.rc:194
 msgid "Shows or hides the status bar"
@@ -18500,8 +18500,8 @@ msgid ""
 "option) any later version."
 msgstr ""
 "This program is free software; you can redistribute it and/or modify it "
-"under the terms of the GNU Lesser General Public License as published by the "
-"Free Software Foundation; either version 2.1 of the License, or (at your "
+"under the terms of the GNU Lesser General Public Licence as published by the "
+"Free Software Foundation; either version 2.1 of the Licence, or (at your "
 "option) any later version."
 
 #: programs/winecfg/winecfg.rc:148
@@ -18514,7 +18514,7 @@ msgstr "&Owner:"
 
 #: programs/winecfg/winecfg.rc:151
 msgid "Organi&zation:"
-msgstr "Organi&zation:"
+msgstr "Organi&sation:"
 
 #: programs/winecfg/winecfg.rc:159
 msgid "Application settings"
@@ -18734,7 +18734,7 @@ msgstr "It&em:"
 
 #: programs/winecfg/winecfg.rc:304
 msgid "C&olor:"
-msgstr "C&olor:"
+msgstr "C&olour:"
 
 #: programs/winecfg/winecfg.rc:310
 msgid "MIME types"
@@ -19051,7 +19051,7 @@ msgstr "Controls Shadow"
 
 #: programs/winecfg/winecfg.rc:126
 msgid "Gray Text"
-msgstr "Gray Text"
+msgstr "Grey Text"
 
 #: programs/winecfg/winecfg.rc:127
 msgid "Controls Highlight"
@@ -19817,7 +19817,7 @@ msgstr "Printer files (*.prn)"
 
 #: programs/wordpad/wordpad.rc:161
 msgid "Center"
-msgstr "Center"
+msgstr "Centre"
 
 #: programs/wordpad/wordpad.rc:167
 msgid "Text"
