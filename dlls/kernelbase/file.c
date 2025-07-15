@@ -3212,48 +3212,56 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetFileType( HANDLE file )
 BOOL WINAPI DECLSPEC_HOTPATCH GetOverlappedResult( HANDLE file, LPOVERLAPPED overlapped,
                                                    LPDWORD result, BOOL wait )
 {
-    return GetOverlappedResultEx( file, overlapped, result, wait ? INFINITE : 0, FALSE );
+    TRACE( "(%p %p %p %d)\n", file, overlapped, result, wait );
+
+    return GetOverlappedResultEx( (HANDLE)((ULONG_PTR)file | 1), overlapped, result,
+                                  wait ? INFINITE : 0, FALSE );
 }
 
 
 /***********************************************************************
  *	GetOverlappedResultEx   (kernelbase.@)
  */
-BOOL WINAPI DECLSPEC_HOTPATCH GetOverlappedResultEx( HANDLE file, OVERLAPPED *overlapped,
+BOOL WINAPI DECLSPEC_HOTPATCH GetOverlappedResultEx( HANDLE handle, OVERLAPPED *overlapped,
                                                      DWORD *result, DWORD timeout, BOOL alertable )
 {
-    NTSTATUS status;
+    NTSTATUS status = STATUS_PENDING;
+    BOOL compat_mode;
     DWORD ret;
 
-    TRACE( "(%p %p %p %lu %d)\n", file, overlapped, result, timeout, alertable );
+    TRACE( "(%p %p %p %lu %d)\n", handle, overlapped, result, timeout, alertable );
 
-    /* Paired with the write-release in set_async_iosb() in ntdll; see the
-     * latter for details. */
-    status = ReadAcquire( (LONG *)&overlapped->Internal );
-    if (status == STATUS_PENDING)
+    compat_mode = (ULONG_PTR)handle & 1;
+    if (compat_mode || !timeout)
     {
-        if (!timeout)
-        {
-            SetLastError( ERROR_IO_INCOMPLETE );
-            return FALSE;
-        }
-        ret = WaitForSingleObjectEx( overlapped->hEvent ? overlapped->hEvent : file, timeout, alertable );
-        if (ret == WAIT_FAILED)
-            return FALSE;
-        else if (ret)
+        /* Paired with the write-release in set_async_iosb() in ntdll; see the
+         * latter for details. */
+        status = ReadAcquire( (LONG *)&overlapped->Internal );
+    }
+
+    if (timeout && status == STATUS_PENDING)
+    {
+        if (overlapped->hEvent) handle = overlapped->hEvent;
+        else                    handle = (HANDLE)((ULONG_PTR)handle & ~(ULONG_PTR)1);
+        ret = WaitForSingleObjectEx( handle, timeout, alertable );
+        if (ret == WAIT_FAILED) return FALSE;
+        if (ret && !(compat_mode && ret == WAIT_TIMEOUT))
         {
             SetLastError( ret );
             return FALSE;
         }
-
         /* We don't need to give this load acquire semantics; the wait above
          * already guarantees that the IOSB and output buffer are filled. */
         status = overlapped->Internal;
-        if (status == STATUS_PENDING) status = STATUS_SUCCESS;
     }
-
+    else if (status == STATUS_PENDING)
+    {
+        SetLastError( ERROR_IO_INCOMPLETE );
+        return FALSE;
+    }
     *result = overlapped->InternalHigh;
-    return set_ntstatus( status );
+    SetLastError( RtlNtStatusToDosError( status ));
+    return !status || status == STATUS_PENDING;
 }
 
 
