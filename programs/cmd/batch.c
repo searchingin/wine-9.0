@@ -289,7 +289,7 @@ static WCHAR *WCMD_fgets_helper(WCHAR *buf, DWORD noChars, HANDLE h, UINT code_p
       LARGE_INTEGER filepos;
       char *bufA;
       const char *p;
-
+/* test */
       bufA = xalloc(noChars);
 
       /* Save current file position */
