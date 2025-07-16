@@ -462,6 +462,7 @@ static struct environment *create_environment( void )
     if (!(ret = calloc( 1, sizeof(*ret) ))) return NULL;
     init_object( &ret->hdr, SQL_HANDLE_ENV, NULL );
     ret->attr_version = SQL_OV_ODBC2;
+    ret->driver_ver = SQL_OV_ODBC2;
     return ret;
 }
 
@@ -1264,6 +1265,9 @@ static SQLRETURN set_env_attr( struct environment *env, SQLINTEGER attr, SQLPOIN
     }
     else if (env->hdr.win32_handle)
     {
+        if (env->hdr.win32_funcs->SQLGetEnvAttr)
+           ret = env->hdr.win32_funcs->SQLGetEnvAttr( env->hdr.win32_handle, SQL_ATTR_ODBC_VERSION, &env->driver_ver, 0, NULL );
+
         if (env->hdr.win32_funcs->SQLSetEnvAttr)
             ret = env->hdr.win32_funcs->SQLSetEnvAttr( env->hdr.win32_handle, attr, value, len );
     }
@@ -2491,11 +2495,35 @@ static SQLRETURN get_data_unix( struct statement *stmt, SQLUSMALLINT column, SQL
     return ret;
 }
 
+static struct object *find_object_type(SQLSMALLINT type, struct object *object)
+{
+    while (object && object->type != type)
+    {
+        object = object->parent;
+    }
+
+    return object;
+}
+
 static SQLRETURN get_data_win32( struct statement *stmt, SQLUSMALLINT column, SQLSMALLINT type, SQLPOINTER value,
                                  SQLLEN buflen, SQLLEN *retlen )
 {
     if (stmt->hdr.win32_funcs->SQLGetData)
+    {
+        struct environment *env = (struct environment *)find_object_type(SQL_HANDLE_ENV, stmt->hdr.parent);
+        if (env && env->driver_ver == SQL_OV_ODBC2)
+        {
+            if (type == SQL_C_TYPE_TIME)
+                type = SQL_C_TIME;
+            else if (type == SQL_C_TYPE_DATE)
+                type = SQL_C_DATE;
+            else if (type == SQL_C_TYPE_TIMESTAMP)
+                type = SQL_C_TIMESTAMP;
+        }
+
         return stmt->hdr.win32_funcs->SQLGetData( stmt->hdr.win32_handle, column, type, value, buflen, retlen );
+    }
+
     return SQL_ERROR;
 }
 
@@ -6259,6 +6287,9 @@ static SQLRETURN col_attribute_win32_w( struct statement *stmt, SQLUSMALLINT col
                                         SQLPOINTER char_attr, SQLSMALLINT buflen, SQLSMALLINT *retlen,
                                         SQLLEN *num_attr )
 {
+    struct environment *env;
+    SQLRETURN ret = SQL_ERROR;
+
     if (stmt->hdr.win32_funcs->SQLColAttributeW)
         return stmt->hdr.win32_funcs->SQLColAttributeW( stmt->hdr.win32_handle, col, field_id, char_attr, buflen,
                                                        retlen, num_attr );
@@ -6319,11 +6350,23 @@ static SQLRETURN col_attribute_win32_w( struct statement *stmt, SQLUSMALLINT col
             return SQL_ERROR;
         }
 
-        return stmt->hdr.win32_funcs->SQLColAttributesW( stmt->hdr.win32_handle, col, field_id, char_attr, buflen,
+        ret = stmt->hdr.win32_funcs->SQLColAttributesW( stmt->hdr.win32_handle, col, field_id, char_attr, buflen,
                                                          retlen, num_attr );
+        /* Convert back for ODBC2 drivers */
+        env = (struct environment *)find_object_type(SQL_HANDLE_ENV, stmt->hdr.parent);
+        if (SQL_SUCCEEDED(ret) && num_attr && field_id == SQL_COLUMN_TYPE &&
+                env && env->attr_version == SQL_OV_ODBC3 && env->driver_ver == SQL_OV_ODBC2)
+        {
+            if (*num_attr == SQL_TIME)
+                *num_attr = SQL_TYPE_TIME;
+            else if (*num_attr == SQL_DATETIME)
+                *num_attr = SQL_TYPE_DATE;
+            else if (*num_attr == SQL_TIMESTAMP)
+                *num_attr = SQL_TYPE_TIMESTAMP;
+        }
     }
 
-    return SQL_ERROR;
+    return ret;
 }
 
 /*************************************************************************
