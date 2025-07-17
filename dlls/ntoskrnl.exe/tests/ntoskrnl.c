@@ -35,6 +35,8 @@
 #include "mssip.h"
 #include "setupapi.h"
 #include "cfgmgr32.h"
+#include "devfiltertypes.h"
+#include "devquery.h"
 #include "newdev.h"
 #include "regstr.h"
 #include "dbt.h"
@@ -1443,6 +1445,125 @@ static void pump_messages(void)
     }
 }
 
+struct devquery_callback_data
+{
+    HANDLE enum_completed_evt;
+    BOOL initial_enum_completed;
+
+    HANDLE device_added_sem;
+    DWORD bus_dev_added;
+    DWORD child_dev_added;
+
+    HANDLE device_removed_sem;
+    DWORD bus_dev_removed;
+    DWORD child_dev_removed;
+};
+
+static void CALLBACK devquery_notify_callback( HDEVQUERY devquery, void *user_data,
+                                               const DEV_QUERY_RESULT_ACTION_DATA *action_data )
+{
+    struct devquery_callback_data *data = user_data;
+
+    switch (action_data->Action)
+    {
+    case DevQueryResultStateChange:
+        if (action_data->Data.State == DevQueryStateEnumCompleted)
+        {
+            data->initial_enum_completed = TRUE;
+            SetEvent( data->enum_completed_evt );
+        }
+        break;
+    case DevQueryResultAdd:
+    {
+        const DEV_OBJECT *obj = &action_data->Data.DeviceObject;
+        DEVPROP_BOOLEAN state = DEVPROP_FALSE;
+        GUID iface_guid = {0};
+        ULONG i;
+
+        if (!data->initial_enum_completed)
+            break;
+        if (obj->ObjectType != DevObjectTypeDeviceInterfaceDisplay)
+            break;
+        ok( obj->cPropertyCount == 2, "got cPropertyCount %lu\n", obj->cPropertyCount );
+        ok( !!obj->pProperties, "got pProperties %p\n", obj->pProperties );
+        if (!obj->pProperties)
+            return;
+        for (i = 0; i < obj->cPropertyCount; i++)
+        {
+            const DEVPROPERTY *prop = &obj->pProperties[i];
+            if (IsEqualDevPropKey( prop->CompKey.Key, DEVPKEY_DeviceInterface_ClassGuid ))
+            {
+                ok( prop->Type == DEVPROP_TYPE_GUID, "got Type %#lx != %#x\n", prop->Type, DEVPROP_TYPE_GUID );
+                ok( prop->BufferSize == sizeof( GUID ), "got BufferSize %lu != %lu\n", prop->BufferSize,
+                    (DWORD)sizeof( GUID ) );
+                if (prop->BufferSize == sizeof( GUID ) && prop->Type == DEVPROP_TYPE_GUID)
+                    iface_guid = *(GUID *)prop->Buffer;
+            }
+            else if (IsEqualDevPropKey( prop->CompKey.Key, DEVPKEY_DeviceInterface_Enabled ))
+            {
+                ok( prop->Type == DEVPROP_TYPE_BOOLEAN, "got Type %#lx != %#x\n", prop->Type, DEVPROP_TYPE_BOOLEAN );
+                ok( prop->BufferSize == sizeof( DEVPROP_BOOLEAN ), "got BufferSize %lu != %lu\n", prop->BufferSize,
+                    (DWORD)sizeof( DEVPROP_BOOLEAN ) );
+                if (prop->BufferSize == sizeof( DEVPROP_BOOLEAN ) && prop->Type == DEVPROP_TYPE_BOOLEAN)
+                    state = *(DEVPROP_BOOLEAN *)prop->Buffer;
+            }
+        }
+
+        ok ( IsEqualGUID( &iface_guid, &bus_class ) || IsEqualGUID( &iface_guid, &child_class ), "got iface_guid %s\n",
+             debugstr_guid( &iface_guid ) );
+        if (IsEqualGUID( &iface_guid, &bus_class ) && state)
+        {
+            data->bus_dev_added++;
+            ok( !wcsicmp( obj->pszObjectId, L"\\\\?\\ROOT#WINETEST#0#{deadbeef-29ef-4538-a5fd-b69573a362c1}" ),
+                "got pszObjectId %s\n", debugstr_w( obj->pszObjectId ) );
+            ReleaseSemaphore( data->device_added_sem, 1, NULL );
+        }
+        else if (IsEqualGUID( &iface_guid, &child_class ) && state)
+        {
+            data->child_dev_added++;
+            ok( !wcsicmp( obj->pszObjectId, L"\\\\?\\Wine#Test#1#{deadbeef-29ef-4538-a5fd-b69573a362c2}" ),
+                "got pszObjectId %s\n", debugstr_w( obj->pszObjectId ) );
+            ReleaseSemaphore( data->device_added_sem, 1, NULL );
+        }
+        break;
+    }
+    case DevQueryResultUpdate:
+    {
+        const DEV_OBJECT *obj = &action_data->Data.DeviceObject;
+        const DEVPROPERTY *prop = &obj->pProperties[0];
+
+        if (!data->initial_enum_completed)
+            break;
+        if (obj->ObjectType != DevObjectTypeDeviceInterfaceDisplay)
+            break;
+        ok( !wcsicmp( obj->pszObjectId, L"\\\\?\\ROOT#WINETEST#0#{deadbeef-29ef-4538-a5fd-b69573a362c1}" ) ||
+                !wcsicmp( obj->pszObjectId, L"\\\\?\\Wine#Test#1#{deadbeef-29ef-4538-a5fd-b69573a362c2}" ),
+            "got pszObjectId %s\n", debugstr_w( obj->pszObjectId ) );
+        ok( obj->cPropertyCount == 1, "got cPropertyCount %lu\n", obj->cPropertyCount );
+        ok( !!obj->pProperties, "got pProperties %p\n", obj->pProperties );
+        if (!obj->pProperties)
+            return;
+        ok( IsEqualDevPropKey( prop->CompKey.Key, DEVPKEY_DeviceInterface_Enabled ), "got CompKey.Key {%s,%#lx}\n",
+            debugstr_guid( &prop->CompKey.Key.fmtid ), prop->CompKey.Key.pid );
+        ok( prop->Type == DEVPROP_TYPE_BOOLEAN, "got Type %#lx != %#x\n", prop->Type, DEVPROP_TYPE_BOOLEAN );
+        ok( prop->BufferSize == sizeof( DEVPROP_BOOLEAN ), "got BufferSize %lu != %lu\n", prop->BufferSize,
+            (DWORD)sizeof( DEVPROP_BOOLEAN ) );
+        if (prop->BufferSize == sizeof( DEVPROP_BOOLEAN ) && prop->Type == DEVPROP_TYPE_BOOLEAN &&
+            !*(DEVPROP_BOOLEAN *)prop->Buffer )
+        {
+            if (!wcsicmp( obj->pszObjectId, L"\\\\?\\ROOT#WINETEST#0#{deadbeef-29ef-4538-a5fd-b69573a362c1}" ))
+                data->bus_dev_removed++;
+            else if (!wcsicmp( obj->pszObjectId, L"\\\\?\\Wine#Test#1#{deadbeef-29ef-4538-a5fd-b69573a362c2}" ))
+                data->child_dev_removed++;
+            ReleaseSemaphore( data->device_removed_sem, 1, NULL );
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 static void test_pnp_devices(void)
 {
     static const GUID expect_container_id_guid = {0x12345678, 0x1234, 0x1234, {0x12, 0x34, 0x12, 0x34, 0x56, 0x78, 0x91, 0x23}};
@@ -1473,6 +1594,12 @@ static void test_pnp_devices(void)
         .lpszClassName = "ntoskrnl_test_wc",
         .lpfnWndProc = device_notify_proc,
     };
+    struct devquery_callback_data devquery_data = {0};
+    DEVPROPCOMPKEY iface_prop_keys[2] =
+    {
+        { DEVPKEY_DeviceInterface_ClassGuid, DEVPROP_STORE_SYSTEM, 0 },
+        { DEVPKEY_DeviceInterface_Enabled, DEVPROP_STORE_SYSTEM, 0 }
+    };
     HDEVNOTIFY notify_handle;
     DWORD size = 0, type, dword;
     HANDLE bus, child, tmp;
@@ -1480,9 +1607,11 @@ static void test_pnp_devices(void)
     UNICODE_STRING string;
     OVERLAPPED ovl = {0};
     IO_STATUS_BLOCK io;
+    HDEVQUERY query;
     HDEVINFO set;
     HWND window;
     LSTATUS status;
+    HRESULT hr;
     HKEY key;
     BOOL ret;
     int id;
@@ -1493,6 +1622,15 @@ static void test_pnp_devices(void)
     ok(!!window, "failed to create window\n");
     notify_handle = RegisterDeviceNotificationA(window, &filter, DEVICE_NOTIFY_ALL_INTERFACE_CLASSES);
     ok(!!notify_handle, "failed to register window, error %lu\n", GetLastError());
+
+    devquery_data.enum_completed_evt = CreateEventW( NULL, FALSE, FALSE, NULL );
+    devquery_data.device_added_sem = CreateSemaphoreW( NULL, 0, 1, NULL );
+    devquery_data.device_removed_sem = CreateSemaphoreW( NULL, 0, 1, NULL );
+    hr = DevCreateObjectQuery( DevObjectTypeDeviceInterfaceDisplay, DevQueryFlagUpdateResults, 2, iface_prop_keys, 0,
+                               NULL, devquery_notify_callback, &devquery_data, &query );
+    ok(hr == S_OK, "Failed to create device query, hr %#lx\n", hr);
+    status = WaitForSingleObject(devquery_data.enum_completed_evt, 5000);
+    ok(!status, "WaitforSingleObject failed, error %lu\n", status);
 
     set = SetupDiGetClassDevsA(&control_class, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
     ok(set != INVALID_HANDLE_VALUE, "failed to get device list, error %#lx\n", GetLastError());
@@ -1573,6 +1711,10 @@ static void test_pnp_devices(void)
     pump_messages();
     ok(got_bus_arrival == 1, "got %u bus arrival messages\n", got_bus_arrival);
     ok(!got_bus_removal, "got %u bus removal messages\n", got_bus_removal);
+    status = WaitForSingleObject(devquery_data.device_added_sem, 1000);
+    ok(!status, "WaitForSingleObject failed, error %lu\n", status);
+    ok(devquery_data.bus_dev_added == 1, "got %lu new bus device objects\n", devquery_data.bus_dev_added);
+    ok(!devquery_data.bus_dev_removed, "got %lu bus device object removals\n", devquery_data.bus_dev_removed);
 
     set = SetupDiGetClassDevsA(&bus_class, NULL, NULL, DIGCF_DEVICEINTERFACE | DIGCF_PRESENT);
     ok(set != INVALID_HANDLE_VALUE, "failed to get device list, error %#lx\n", GetLastError());
@@ -1589,6 +1731,10 @@ static void test_pnp_devices(void)
     pump_messages();
     ok(got_bus_arrival == 1, "got %u bus arrival messages\n", got_bus_arrival);
     ok(got_bus_removal == 1, "got %u bus removal messages\n", got_bus_removal);
+    status = WaitForSingleObject(devquery_data.device_removed_sem, 1000);
+    ok(!status, "WaitForSingleObject failed, error %lu\n", status);
+    ok(devquery_data.bus_dev_added == 1, "got %lu new bus device objects\n", devquery_data.bus_dev_added);
+    ok(devquery_data.bus_dev_removed == 1, "got %lu bus device object removals\n", devquery_data.bus_dev_removed);
 
     set = SetupDiGetClassDevsA(&bus_class, NULL, NULL, DIGCF_DEVICEINTERFACE);
     ok(set != INVALID_HANDLE_VALUE, "failed to get device list, error %#lx\n", GetLastError());
@@ -1615,6 +1761,10 @@ static void test_pnp_devices(void)
     pump_messages();
     ok(got_child_arrival == 1, "got %u child arrival messages\n", got_child_arrival);
     ok(!got_child_removal, "got %u child removal messages\n", got_child_removal);
+    status = WaitForSingleObject(devquery_data.device_added_sem, 1000);
+    ok(!status, "WaitForSingleObject failed, error %lu\n", status);
+    ok(devquery_data.child_dev_added == 1, "got %lu new bus device objects\n", devquery_data.child_dev_added);
+    ok(!devquery_data.child_dev_removed, "got %lu bus device object removals\n", devquery_data.child_dev_removed);
 
     set = SetupDiGetClassDevsA(&child_class, NULL, NULL, DIGCF_DEVICEINTERFACE | DIGCF_PRESENT);
     ok(set != INVALID_HANDLE_VALUE, "failed to get device list, error %#lx\n", GetLastError());
@@ -1783,6 +1933,10 @@ static void test_pnp_devices(void)
     pump_messages();
     ok(got_child_arrival == 1, "got %u child arrival messages\n", got_child_arrival);
     ok(got_child_removal == 1, "got %u child removal messages\n", got_child_removal);
+    status = WaitForSingleObject(devquery_data.device_removed_sem, 1000);
+    ok(!status, "WaitForSingleObject failed, error %lu\n", status);
+    ok(devquery_data.child_dev_added == 1, "got %lu new bus device objects\n", devquery_data.child_dev_added);
+    ok(devquery_data.child_dev_removed == 1, "got %lu bus device object removals\n", devquery_data.child_dev_removed);
 
     ret = DeviceIoControl(child, IOCTL_WINETEST_CHILD_CHECK_REMOVED, NULL, 0, NULL, 0, &size, NULL);
     todo_wine ok(ret, "got error %lu\n", GetLastError());
@@ -1800,6 +1954,12 @@ static void test_pnp_devices(void)
     pump_messages();
     ok(got_child_arrival == 1, "got %u child arrival messages\n", got_child_arrival);
     ok(got_child_removal == 1, "got %u child removal messages\n", got_child_removal);
+    status = WaitForSingleObject(devquery_data.device_added_sem, 1000);
+    ok(status == WAIT_TIMEOUT, "got status %#lx\n", status);
+    status = WaitForSingleObject(devquery_data.device_removed_sem, 1000);
+    ok(status == WAIT_TIMEOUT, "got status %#lx\n", status);
+    ok(devquery_data.child_dev_added == 1, "got %lu new bus device objects\n", devquery_data.child_dev_added);
+    ok(devquery_data.child_dev_removed == 1, "got %lu bus device object removals\n", devquery_data.child_dev_removed);
 
     ret = NtOpenFile(&tmp, SYNCHRONIZE, &attr, &io, 0, FILE_SYNCHRONOUS_IO_NONALERT);
     ok(ret == STATUS_OBJECT_NAME_NOT_FOUND, "got %#x\n", ret);
@@ -1807,6 +1967,10 @@ static void test_pnp_devices(void)
     CloseHandle(bus);
 
     UnregisterDeviceNotification(notify_handle);
+    DevCloseObjectQuery( query );
+    CloseHandle( devquery_data.device_added_sem );
+    CloseHandle( devquery_data.device_removed_sem );
+    CloseHandle( devquery_data.enum_completed_evt );
     DestroyWindow(window);
     UnregisterClassA("ntoskrnl_test_wc", GetModuleHandleA(NULL));
 }
