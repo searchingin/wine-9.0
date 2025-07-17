@@ -2733,7 +2733,7 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
     struct swapchain_fullscreen_state initial_state;
     DXGI_SWAP_CHAIN_DESC swapchain_desc;
     IDXGIAdapter *adapter = NULL;
-    IDXGISwapChain *swapchain;
+    IDXGISwapChain *swapchain = NULL;
     IDXGIFactory *factory;
     IDXGIOutput *output;
     BOOL fullscreen;
@@ -2762,6 +2762,11 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
     capture_fullscreen_state(&initial_state.fullscreen_state, swapchain_desc.OutputWindow);
     hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+    if (FAILED(hr))
+    {
+        skip("Could not create swapchain\n");
+        goto done;
+    }
     hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
     ok(hr == S_OK || broken(hr == DXGI_ERROR_UNSUPPORTED), /* Win 7 testbot */
             "Got unexpected hr %#lx.\n", hr);
@@ -2866,8 +2871,11 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
 done:
     if (adapter)
         IDXGIAdapter_Release(adapter);
-    refcount = IDXGISwapChain_Release(swapchain);
-    ok(!refcount, "IDXGISwapChain has %lu references left.\n", refcount);
+    if (swapchain)
+    {
+        refcount = IDXGISwapChain_Release(swapchain);
+        ok(!refcount, "IDXGISwapChain has %lu references left.\n", refcount);
+    }
     check_window_fullscreen_state(swapchain_desc.OutputWindow, &initial_state.fullscreen_state);
     DestroyWindow(swapchain_desc.OutputWindow);
 
