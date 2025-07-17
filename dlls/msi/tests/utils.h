@@ -23,6 +23,9 @@ extern char APP_DATA_DIR[MAX_PATH];
 extern char WINDOWS_DIR[MAX_PATH];
 extern char CURR_DIR[MAX_PATH];
 
+#define reg_set_str_literal(key, subkey, value) \
+    RegSetValueExA(key, subkey, 0, REG_SZ, (const BYTE *)value, ARRAYSIZE(value))
+
 BOOL get_system_dirs(void);
 BOOL get_user_dirs(void);
 
