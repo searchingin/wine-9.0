@@ -182,6 +182,7 @@ struct media_engine
         BYTE *buffer;
         UINT buffer_size;
         DXGI_FORMAT output_format;
+        BOOL format_mismatch;
 
         struct
         {
@@ -1186,6 +1187,22 @@ static HRESULT media_engine_create_video_renderer(struct media_engine *engine, I
     {
         WARN("Output format was not specified.\n");
         return E_FAIL;
+    }
+
+    switch (output_format)
+    {
+        case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+        case DXGI_FORMAT_R10G10B10A2_UINT:
+            /* IMFMediaSession doesn't support output to these formats. Create an 8-bit
+             * output and ensure the sampled texture is copied via a pixel shader.
+             * TODO: this is a colour depth bottleneck which defeats the purpose of R10G10B10A2 output.
+             * For proper support of 10 bits per channel we would need DXGI_FORMAT_P010 or similar. */
+            output_format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            engine->video_frame.format_mismatch = TRUE;
+            break;
+        default:
+            break;
     }
 
     memcpy(&subtype, &MFVideoFormat_Base, sizeof(subtype));
@@ -2557,7 +2574,7 @@ static HRESULT media_engine_transfer_d3d11(struct media_engine *engine, ID3D11Te
     return hr;
 }
 
-static HRESULT media_engine_transfer_to_d3d11_texture(struct media_engine *engine, ID3D11Texture2D *texture,
+static HRESULT media_engine_transfer_d3d11_via_pipeline(struct media_engine *engine, ID3D11Texture2D *texture,
         const MFVideoNormalizedRect *src_rect, const RECT *dst_rect, const MFARGB *color)
 {
     static const float black[] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -2722,8 +2739,10 @@ static HRESULT WINAPI media_engine_TransferVideoFrame(IMFMediaEngineEx *iface, I
 
     if (SUCCEEDED(IUnknown_QueryInterface(surface, &IID_ID3D11Texture2D, (void **)&texture)))
     {
-        if (!engine->device_manager || FAILED(hr = media_engine_transfer_d3d11(engine, texture, src_rect, dst_rect, color)))
-            hr = media_engine_transfer_to_d3d11_texture(engine, texture, src_rect, dst_rect, color);
+        if (!engine->device_manager
+                || engine->video_frame.format_mismatch
+                || FAILED(hr = media_engine_transfer_d3d11(engine, texture, src_rect, dst_rect, color)))
+            hr = media_engine_transfer_d3d11_via_pipeline(engine, texture, src_rect, dst_rect, color);
         ID3D11Texture2D_Release(texture);
     }
     else
