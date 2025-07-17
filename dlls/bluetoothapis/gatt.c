@@ -38,6 +38,22 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL( bluetoothapis );
 
+static const char *debugstr_BTH_LE_UUID( const BTH_LE_UUID *uuid )
+{
+    if (!uuid)
+        return wine_dbg_sprintf( "(null)" );
+    if (uuid->IsShortUuid)
+        return wine_dbg_sprintf("{ IsShortUuid=1 {%#x} }", uuid->Value.ShortUuid );
+    return wine_dbg_sprintf( "{ IsShortUuid=0 %s }", debugstr_guid( &uuid->Value.LongUuid ) );
+}
+
+static const char *debugstr_BTH_LE_GATT_SERVICE( const BTH_LE_GATT_SERVICE *svc )
+{
+    if (!svc)
+        return wine_dbg_sprintf( "(null)" );
+    return wine_dbg_sprintf( "{ %s %#x }", debugstr_BTH_LE_UUID( &svc->ServiceUuid ), svc->AttributeHandle );
+}
+
 HRESULT WINAPI BluetoothGATTGetServices( HANDLE le_device, USHORT count, BTH_LE_GATT_SERVICE *buf,
                                          USHORT *actual, ULONG flags )
 {
@@ -88,10 +104,72 @@ HRESULT WINAPI BluetoothGATTGetServices( HANDLE le_device, USHORT count, BTH_LE_
         return HRESULT_FROM_WIN32( ERROR_MORE_DATA );
     }
 
-    memcpy( buf, services->services, min( services_count, count ) );
+    memcpy( buf, services->services, min( services_count, count ) * sizeof( *buf ) );
     free( services );
     if (count < services_count)
         return HRESULT_FROM_WIN32( ERROR_INVALID_USER_BUFFER );
 
     return S_OK;
+}
+
+HRESULT WINAPI BluetoothGATTGetCharacteristics( HANDLE device, BTH_LE_GATT_SERVICE *service, USHORT count,
+                                                BTH_LE_GATT_CHARACTERISTIC *buf, USHORT *actual, ULONG flags )
+{
+    struct winebth_le_device_get_gatt_characteristics_params *chars;
+    SIZE_T chars_count = 1;
+
+    TRACE( "(%p, %s, %u, %p, %p, %#lx)\n", device, debugstr_BTH_LE_GATT_SERVICE( service ), count, buf, actual, flags );
+
+    if (!actual)
+        return E_POINTER;
+
+     if ((buf && !count) || !actual)
+          return E_INVALIDARG;
+
+     if (!service)
+         return E_INVALIDARG;
+
+     for (;;)
+     {
+         DWORD size, bytes;
+
+         size = offsetof( struct winebth_le_device_get_gatt_characteristics_params, characteristics[chars_count] );
+         chars = calloc( 1, size );
+         if (!chars)
+             return HRESULT_FROM_WIN32( ERROR_NO_SYSTEM_RESOURCES );
+         chars->service = *service;
+         if (!DeviceIoControl( device, IOCTL_WINEBTH_LE_DEVICE_GET_GATT_CHARACTERISTICS, chars, size, chars,
+                               size, &bytes, NULL ) && GetLastError() != ERROR_MORE_DATA)
+         {
+             free( chars );
+             return HRESULT_FROM_WIN32( GetLastError() );
+         }
+         if (!chars->count)
+         {
+             *actual = 0;
+             free( chars );
+             return S_OK;
+         }
+         if (chars_count != chars->count)
+         {
+             chars_count = chars->count;
+             free( chars );
+             continue;
+         }
+         break;
+     }
+
+     *actual = chars_count;
+     if (!buf)
+     {
+         free( chars );
+         return HRESULT_FROM_WIN32( ERROR_MORE_DATA );
+     }
+
+     memcpy( buf, chars->characteristics, min( chars_count, count ) * sizeof( *buf ) );
+     free( chars );
+     if (count < chars_count)
+         return HRESULT_FROM_WIN32( ERROR_INVALID_USER_BUFFER );
+
+     return S_OK;
 }

@@ -115,6 +115,17 @@ struct bluetooth_gatt_service
     GUID uuid;
     unsigned int primary : 1;
     UINT16 handle;
+
+    CRITICAL_SECTION chars_cs;
+    struct list characteristics; /* Guarded by chars_cs */
+};
+
+struct bluetooth_gatt_characteristic
+{
+    struct list entry;
+
+    winebluetooth_gatt_characteristic_t characteristic;
+    BTH_LE_GATT_CHARACTERISTIC props;
 };
 
 enum bluetooth_pdo_ext_type
@@ -170,10 +181,34 @@ static void uuid_to_le( const GUID *uuid, BTH_LE_UUID *le_uuid )
     }
 }
 
+static void le_to_uuid( const BTH_LE_UUID *le_uuid, GUID *uuid )
+{
+    if (le_uuid->IsShortUuid)
+    {
+        *uuid = BTH_LE_ATT_BLUETOOTH_BASE_GUID;
+        uuid->Data1 = le_uuid->Value.ShortUuid;
+    }
+    else
+        *uuid = le_uuid->Value.LongUuid;
+}
+
+/* Caller should hold props_cs */
+static struct bluetooth_gatt_service *find_gatt_service( struct list *services, const GUID *uuid, UINT16 handle )
+{
+    struct bluetooth_gatt_service *service;
+    LIST_FOR_EACH_ENTRY( service, services, struct bluetooth_gatt_service, entry )
+    {
+        if (IsEqualGUID( &service->uuid, uuid ) && service->handle == handle)
+            return service;
+    }
+    return NULL;
+}
+
 static NTSTATUS bluetooth_remote_device_dispatch( DEVICE_OBJECT *device, struct bluetooth_remote_device *ext, IRP *irp )
 {
     IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation( irp );
     ULONG outsize = stack->Parameters.DeviceIoControl.OutputBufferLength;
+    ULONG insize = stack->Parameters.DeviceIoControl.InputBufferLength;
     ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
     NTSTATUS status = irp->IoStatus.Status;
 
@@ -219,6 +254,53 @@ static NTSTATUS bluetooth_remote_device_dispatch( DEVICE_OBJECT *device, struct 
 
         irp->IoStatus.Information = offsetof( struct winebth_le_device_get_gatt_services_params, services[services->count] );
         if (services->count > rem)
+            status = STATUS_MORE_ENTRIES;
+        break;
+    }
+    case IOCTL_WINEBTH_LE_DEVICE_GET_GATT_CHARACTERISTICS:
+    {
+        const SIZE_T min_size = offsetof( struct winebth_le_device_get_gatt_characteristics_params, characteristics[0] );
+        struct winebth_le_device_get_gatt_characteristics_params *chars = irp->AssociatedIrp.SystemBuffer;
+        struct bluetooth_gatt_characteristic *chrc;
+        struct bluetooth_gatt_service *service;
+        SIZE_T rem;
+        GUID uuid;
+
+        if (!chars || insize < sizeof ( chars->service ) || outsize < sizeof( *chars ))
+        {
+            status = STATUS_INVALID_USER_BUFFER;
+            break;
+        }
+
+        rem = (outsize - min_size)/sizeof( *chars->characteristics );
+        status = STATUS_SUCCESS;
+        chars->count = 0;
+        le_to_uuid( &chars->service.ServiceUuid, &uuid );
+
+        EnterCriticalSection( &ext->props_cs );
+        service = find_gatt_service( &ext->gatt_services, &uuid, chars->service.AttributeHandle );
+        if (!service)
+        {
+            status = STATUS_INVALID_PARAMETER;
+            LeaveCriticalSection( &ext->props_cs );
+            break;
+        }
+
+        EnterCriticalSection( &service->chars_cs );
+        LIST_FOR_EACH_ENTRY( chrc, &service->characteristics, struct bluetooth_gatt_characteristic, entry )
+        {
+            chars->count++;
+            if (rem)
+            {
+                chars->characteristics[chars->count - 1] = chrc->props;
+                rem--;
+            }
+        }
+        LeaveCriticalSection( &service->chars_cs );
+        LeaveCriticalSection( &ext->props_cs );
+
+        irp->IoStatus.Information = offsetof( struct winebth_le_device_get_gatt_characteristics_params, characteristics[chars->count] );
+        if (chars->count > rem)
             status = STATUS_MORE_ENTRIES;
         break;
     }
@@ -1062,6 +1144,9 @@ static void bluetooth_device_add_gatt_service( struct winebluetooth_watcher_even
                 service->primary = !!event.is_primary;
                 service->handle = event.attr_handle;
                 bluetooth_device_enable_le_iface( device );
+                list_init( &service->characteristics );
+                InitializeCriticalSectionEx( &service->chars_cs, 0, RTL_CRITICAL_SECTION_FLAG_FORCE_DEBUG_INFO );
+                service->chars_cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": bluetooth_gatt_service.chars_le");
 
                 EnterCriticalSection( &device->props_cs );
                 list_add_tail( &device->gatt_services, &service->entry );
@@ -1078,6 +1163,174 @@ static void bluetooth_device_add_gatt_service( struct winebluetooth_watcher_even
 
     winebluetooth_device_free( event.device );
     winebluetooth_gatt_service_free( event.service );
+}
+
+static void bluetooth_gatt_service_remove( winebluetooth_gatt_service_t service )
+{
+    struct bluetooth_radio *radio;
+
+    EnterCriticalSection( &device_list_cs );
+    LIST_FOR_EACH_ENTRY( radio, &device_list, struct bluetooth_radio, entry )
+    {
+        struct bluetooth_remote_device *device;
+
+        EnterCriticalSection( &radio->remote_devices_cs );
+        LIST_FOR_EACH_ENTRY( device, &radio->remote_devices, struct bluetooth_remote_device, entry )
+        {
+            struct bluetooth_gatt_service *svc;
+
+            EnterCriticalSection( &device->props_cs );
+            if (!device->le)
+            {
+                LeaveCriticalSection( &device->props_cs );
+                continue;
+            }
+            LIST_FOR_EACH_ENTRY( svc, &device->gatt_services, struct bluetooth_gatt_service, entry )
+            {
+                if (winebluetooth_gatt_service_equal( svc->service, service ))
+                {
+                    struct bluetooth_gatt_characteristic *cur, *next;
+
+                    list_remove( &svc->entry );
+                    LeaveCriticalSection( &device->props_cs );
+                    LeaveCriticalSection( &radio->remote_devices_cs );
+                    LeaveCriticalSection( &device_list_cs );
+                    winebluetooth_gatt_service_free( svc->service );
+                    svc->chars_cs.DebugInfo->Spare[0] = 0;
+                    DeleteCriticalSection( &svc->chars_cs );
+                    LIST_FOR_EACH_ENTRY_SAFE( cur, next, &svc->characteristics, struct bluetooth_gatt_characteristic, entry )
+                    {
+                        winebluetooth_gatt_characteristic_free( cur->characteristic );
+                        free( cur );
+                    }
+                    free( svc );
+                    winebluetooth_gatt_service_free( service );
+                    return;
+                }
+            }
+            LeaveCriticalSection( &device->props_cs );
+        }
+        LeaveCriticalSection( &radio->remote_devices_cs );
+    }
+    LeaveCriticalSection( &device_list_cs );
+    winebluetooth_gatt_service_free( service );
+}
+
+static void
+bluetooth_gatt_service_add_characteristic( struct winebluetooth_watcher_event_gatt_characteristic_added characteristic )
+{
+    struct bluetooth_radio *radio;
+
+    EnterCriticalSection( &device_list_cs );
+    LIST_FOR_EACH_ENTRY( radio, &device_list, struct bluetooth_radio, entry )
+    {
+        struct bluetooth_remote_device *device;
+
+        EnterCriticalSection( &radio->remote_devices_cs );
+        LIST_FOR_EACH_ENTRY( device, &radio->remote_devices, struct bluetooth_remote_device, entry )
+        {
+            struct bluetooth_gatt_service *svc;
+
+            EnterCriticalSection( &device->props_cs );
+            if (!device->le)
+            {
+                LeaveCriticalSection( &device->props_cs );
+                continue;
+            }
+            LIST_FOR_EACH_ENTRY( svc, &device->gatt_services, struct bluetooth_gatt_service, entry )
+            {
+                if (winebluetooth_gatt_service_equal( svc->service, characteristic.service ))
+                {
+                    struct bluetooth_gatt_characteristic *entry;
+                    UINT32 flags = characteristic.flags;
+
+                    if (!(entry = calloc( 1, sizeof( *entry ) )))
+                    {
+                        LeaveCriticalSection( &device->props_cs );
+                        LeaveCriticalSection( &radio->remote_devices_cs );
+                        goto failed;
+                    }
+
+                    TRACE( "Adding GATT characteristic %s under service %s for device %p\n",
+                           debugstr_guid( &characteristic.uuid ), debugstr_guid( &svc->uuid ), (void *)device->device.handle );
+
+                    entry->characteristic = characteristic.characteristic;
+                    uuid_to_le( &characteristic.uuid, &entry->props.CharacteristicUuid );
+                    entry->props.AttributeHandle = characteristic.handle;
+                    entry->props.IsBroadcastable = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_BROADCAST);
+                    entry->props.IsReadable = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_READ);
+                    entry->props.IsWritable = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_WRITE);
+                    entry->props.IsNotifiable = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_NOTIFY);
+                    entry->props.IsIndicatable = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_INDICATE);
+                    entry->props.IsSignedWritable = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_WRITE_SIGNED);
+                    entry->props.HasExtendedProperties = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_EXTENDED_PROPS);
+                    entry->props.IsWritableWithoutResponse = !!(flags & WINEBLUETOOTH_GATT_CHARACTERISTIC_FLAGS_WRITE_WITHOUT_RESPONSE);
+                    list_add_tail( &svc->characteristics, &entry->entry );
+                    LeaveCriticalSection( &device->props_cs );
+                    LeaveCriticalSection( &radio->remote_devices_cs );
+                    LeaveCriticalSection( &device_list_cs );
+                    winebluetooth_gatt_service_free( characteristic.service );
+                    return;
+                }
+            }
+            LeaveCriticalSection( &device->props_cs );
+        }
+        LeaveCriticalSection( &radio->remote_devices_cs );
+    }
+failed:
+    LeaveCriticalSection( &device_list_cs );
+    winebluetooth_gatt_characteristic_free( characteristic.characteristic );
+    winebluetooth_gatt_service_free( characteristic.service );
+}
+
+static void bluetooth_gatt_characteristic_remove( winebluetooth_gatt_characteristic_t handle )
+{
+     struct bluetooth_radio *radio;
+
+    EnterCriticalSection( &device_list_cs );
+    LIST_FOR_EACH_ENTRY( radio, &device_list, struct bluetooth_radio, entry )
+    {
+        struct bluetooth_remote_device *device;
+
+        EnterCriticalSection( &radio->remote_devices_cs );
+        LIST_FOR_EACH_ENTRY( device, &radio->remote_devices, struct bluetooth_remote_device, entry )
+        {
+            struct bluetooth_gatt_service *svc;
+
+            EnterCriticalSection( &device->props_cs );
+            if (!device->le)
+            {
+                LeaveCriticalSection( &device->props_cs );
+                continue;
+            }
+            LIST_FOR_EACH_ENTRY( svc, &device->gatt_services, struct bluetooth_gatt_service, entry )
+            {
+                struct bluetooth_gatt_characteristic *chrc;
+                EnterCriticalSection( &svc->chars_cs );
+                LIST_FOR_EACH_ENTRY( chrc, &svc->characteristics, struct bluetooth_gatt_characteristic, entry )
+                {
+                    if (winebluetooth_gatt_characteristic_equal( chrc->characteristic, handle ))
+                    {
+                        list_remove( &chrc->entry );
+                        LeaveCriticalSection( &svc->chars_cs );
+                        LeaveCriticalSection( &device->props_cs );
+                        LeaveCriticalSection( &radio->remote_devices_cs );
+                        LeaveCriticalSection( &device_list_cs );
+
+                        winebluetooth_gatt_characteristic_free( chrc->characteristic );
+                        winebluetooth_gatt_characteristic_free( handle );
+                        free( chrc );
+                        return;
+                    }
+                }
+                LeaveCriticalSection( &svc->chars_cs );
+            }
+            LeaveCriticalSection( &device->props_cs );
+        }
+        LeaveCriticalSection( &radio->remote_devices_cs );
+    }
+    LeaveCriticalSection( &device_list_cs );
+    winebluetooth_gatt_characteristic_free( handle );
 }
 
 static DWORD CALLBACK bluetooth_event_loop_thread_proc( void *arg )
@@ -1121,6 +1374,15 @@ static DWORD CALLBACK bluetooth_event_loop_thread_proc( void *arg )
                         break;
                     case BLUETOOTH_WATCHER_EVENT_TYPE_DEVICE_GATT_SERVICE_ADDED:
                         bluetooth_device_add_gatt_service( event->event_data.gatt_service_added );
+                        break;
+                    case BLUETOOTH_WATCHER_EVENT_TYPE_DEVICE_GATT_SERVICE_REMOVED:
+                        bluetooth_gatt_service_remove( event->event_data.gatt_service_removed );
+                        break;
+                    case BLUETOOTH_WATCHER_EVENT_TYPE_GATT_CHARACTERISTIC_ADDED:
+                        bluetooth_gatt_service_add_characteristic( event->event_data.gatt_characteristic_added );
+                        break;
+                    case BLUETOOTH_WATCHER_EVENT_TYPE_GATT_CHARACTERISTIC_REMOVED:
+                        bluetooth_gatt_characteristic_remove( event->event_data.gatt_characterisic_removed );
                         break;
                     default:
                         FIXME( "Unknown bluetooth watcher event code: %#x\n", event->event_type );
