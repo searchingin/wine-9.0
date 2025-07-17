@@ -4282,6 +4282,11 @@ static void test_FreeConsole(HANDLE input, HANDLE orig_output)
     ret = WaitForSingleObject(output, 0);
     ok(!ret, "got %d\n", ret);
     ret = WaitForSingleObject(unbound_output, 0);
+    if (broken(ret == -1)) /* Win7 */
+    {
+        win_skip("Skip test on Win7\n");
+        goto cleanup;
+    }
     ok(!ret, "got %d\n", ret);
     ret = WaitForSingleObject(unbound_input, 0);
     ok(!ret, "got %d\n", ret);
@@ -4490,6 +4495,7 @@ static void test_FreeConsole(HANDLE input, HANDLE orig_output)
     todo_wine
     ok(!SetConsoleCtrlHandler(mydummych, FALSE), "FreeConsole() should have reset ctrl handlers' list\n");
 
+cleanup:
     CloseHandle(unbound_input);
     CloseHandle(unbound_output);
     CloseHandle(output);
