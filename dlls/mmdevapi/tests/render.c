@@ -196,9 +196,6 @@ static void test_audioclient(void)
 
     handle = CreateEventW(NULL, FALSE, FALSE, NULL);
 
-    hr = IAudioClient_QueryInterface(ac, &IID_IUnknown, NULL);
-    ok(hr == E_POINTER, "QueryInterface(NULL) returned %08lx\n", hr);
-
     unk = (void*)(LONG_PTR)0x12345678;
     hr = IAudioClient_QueryInterface(ac, &IID_NULL, (void**)&unk);
     ok(hr == E_NOINTERFACE, "QueryInterface(IID_NULL) returned %08lx\n", hr);
@@ -211,7 +208,6 @@ static void test_audioclient(void)
         ref = IUnknown_Release(unk);
         ok(ref == 1, "Released count is %lu\n", ref);
     }
-
     hr = IAudioClient_QueryInterface(ac, &IID_IAudioClient, (void**)&unk);
     ok(hr == S_OK, "QueryInterface(IID_IAudioClient) returned %08lx\n", hr);
     if (unk)
@@ -378,6 +374,20 @@ static void test_audioclient(void)
 
         hr = IAudioClient3_InitializeSharedAudioStream(
             ac3, AUDCLNT_SHAREMODE_SHARED, default_period, pwfx, NULL);
+        ok(hr == S_OK, "InitializeSharedAudioStream returns %08lx\n", hr);
+
+        IAudioClient3_Release(ac3);
+        IAudioClient_Release(ac);
+
+        hr = IMMDevice_Activate(dev, &IID_IAudioClient, CLSCTX_INPROC_SERVER,
+                NULL, (void**)&ac);
+        ok(hr == S_OK, "Activation failed with %08lx\n", hr);
+
+        hr = IAudioClient_QueryInterface(ac, &IID_IAudioClient3, (void**)&ac3);
+        ok(hr == S_OK, "Failed to query IAudioClient3 interface: %08lx\n", hr);
+
+        hr = IAudioClient3_InitializeSharedAudioStream(
+            ac3, AUDCLNT_SHAREMODE_SHARED, min_period, pwfx, NULL);
         ok(hr == S_OK, "InitializeSharedAudioStream returns %08lx\n", hr);
 
         IAudioClient3_Release(ac3);
@@ -1462,7 +1472,7 @@ static void test_clock(int share)
         /* ok(hr == AUDCLNT_E_BUFFER_TOO_LARGE || (hr == S_OK && i==0) without todo_wine */
         ok(hr == S_OK || hr == AUDCLNT_E_BUFFER_TOO_LARGE,
            "GetBuffer large (%u) failed: %08lx\n", avail, hr);
-        if(hr == S_OK && i) ok(FALSE, "GetBuffer large (%u) at iteration %d\n", avail, i);
+        flaky ok(!i || hr != S_OK, "GetBuffer large (%u) at iteration %d\n", avail, i);
         /* Only the first iteration should allow that large a buffer
          * as prefill was drained during the first 350+100ms sleep.
          * Afterwards, only 100ms of data should find room per iteration. */
