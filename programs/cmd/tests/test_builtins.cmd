@@ -2598,11 +2598,7 @@ echo ------------ Testing del ------------
 echo abc > file
 echo deleting 'file'
 del file
-if errorlevel 0 (
-    echo errorlevel is 0, good
-) else (
-    echo unexpected errorlevel, got %errorlevel%
-)
+echo %errorlevel%
 if not exist file (
     echo successfully deleted 'file'
 ) else (
@@ -2610,11 +2606,7 @@ if not exist file (
 )
 echo attempting to delete 'file', even though it is not present
 del file
-if errorlevel 0 (
-    echo errorlevel is 0, good
-) else (
-    echo unexpected errorlevel, got %errorlevel%
-)
+echo %errorlevel%
 
 echo ------------ Testing del /a ------------
 del /f/q *.test > nul
@@ -3418,11 +3410,7 @@ goto :eof
 
 :CheckOutputExist
 find /i "%1" test1.txt >nul 2>&1
-if errorlevel 0 (
-  echo Passed: Found expected %1 in COPY output
-) else (
-  echo Failed: Did not find expected %1 in COPY output
-)
+echo line %1 errorlevel %errorlevel% expected 0
 shift
 if not "%1"=="" goto :CheckOutputExist
 del /q test1.txt >nul 2>&1
@@ -3430,11 +3418,7 @@ goto :eof
 
 :CheckOutputNotExist
 find /i "%1" test1.txt >nul 2>&1
-if errorlevel 1 (
-  echo Passed: Did not find %1 in COPY output
-) else (
-  echo Failed: Unexpectedly found %1 in COPY output
-)
+echo line %1 errorlevel %errorlevel% expected 1
 shift
 if not "%1"=="" goto :CheckOutputNotExist
 del /q test1.txt >nul 2>&1
