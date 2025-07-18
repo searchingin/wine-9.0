@@ -1241,11 +1241,31 @@ static const char *get_target_machine(void)
 /* build a library from the current asm files and any additional object files in argv */
 void output_static_lib( const char *output_name, struct strarray files, int create )
 {
-    struct strarray args;
+    struct strarray args = empty_strarray;
 
     if (!create || target.platform != PLATFORM_WINDOWS)
     {
-        args = find_tool( "ar", NULL );
+        static int init_env_ar = 0;
+        static const char * env_ar;
+
+        if (!init_env_ar)
+        {
+            if ((env_ar = getenv( "WINE_AR" )))
+            {
+                /* duplicate string if non-empty; otherwise set to NULL */
+                env_ar = (env_ar[0]) ? xstrdup( env_ar ) : NULL;
+            }
+            init_env_ar = 1;
+        }
+        if (env_ar)
+        {
+            const char * _cmd[2] = { env_ar, NULL };
+            args = find_tool( "ar", _cmd );
+        }
+        if (!args.count)
+        {
+            args = find_tool( "ar", NULL );
+        }
         strarray_add( &args, create ? "rc" : "r" );
         strarray_add( &args, output_name );
     }
@@ -1263,7 +1283,28 @@ void output_static_lib( const char *output_name, struct strarray files, int crea
 
     if (target.platform != PLATFORM_WINDOWS)
     {
-        struct strarray ranlib = find_tool( "ranlib", NULL );
+        static int init_env_ranlib = 0;
+        static const char * env_ranlib;
+        struct strarray ranlib = empty_strarray;
+
+        if (!init_env_ranlib)
+        {
+            if ((env_ranlib = getenv( "WINE_RANLIB" )))
+            {
+                /* duplicate string if non-empty; otherwise set to NULL */
+                env_ranlib = (env_ranlib[0]) ? xstrdup( env_ranlib ) : NULL;
+            }
+            init_env_ranlib = 1;
+        }
+        if (env_ranlib)
+        {
+            const char * _cmd[2] = { env_ranlib, NULL };
+            ranlib = find_tool( "ranlib", _cmd );
+        }
+        if (!ranlib.count)
+        {
+            ranlib = find_tool( "ranlib", NULL );
+        }
         strarray_add( &ranlib, output_name );
         spawn( ranlib );
     }
