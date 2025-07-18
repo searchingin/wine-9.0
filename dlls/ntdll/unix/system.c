@@ -436,10 +436,10 @@ static void init_xstate_features( XSTATE_CONFIGURATION *xstate )
     TRACE( "XSAVE details %#x, %#x, %#x, %#x.\n", regs[0], regs[1], regs[2], regs[3] );
     supported_mask = ((ULONG64)regs[3] << 32) | regs[0];
     supported_mask &= do_xgetbv(0) & supported_features;
-    if (!(supported_mask >> 2)) return;
 
     xstate->EnabledFeatures = (1 << XSTATE_LEGACY_FLOATING_POINT) | (1 << XSTATE_LEGACY_SSE) | supported_mask;
     xstate->EnabledVolatileFeatures = xstate->EnabledFeatures;
+    if (!(supported_mask >> 2)) return;
     xstate->AllFeatureSize = regs[1];
 
     do_cpuid( 0x0000000d, 1, regs );
