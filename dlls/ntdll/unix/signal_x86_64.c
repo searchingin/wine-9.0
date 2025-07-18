@@ -2014,6 +2014,118 @@ static BOOL handle_syscall_trap( ucontext_t *sigcontext, siginfo_t *siginfo )
 }
 
 
+#ifdef __APPLE__
+/**********************************************************************
+ *		mac_thread_gsbase
+ */
+static void *mac_thread_gsbase(void)
+{
+    struct thread_identifier_info tiinfo;
+    unsigned int info_count = THREAD_IDENTIFIER_INFO_COUNT;
+
+    mach_port_t self = mach_thread_self();
+    kern_return_t kr = thread_info(self, THREAD_IDENTIFIER_INFO, (thread_info_t) &tiinfo, &info_count);
+    mach_port_deallocate(mach_task_self(), self);
+
+    if (kr == KERN_SUCCESS) return (void*)tiinfo.thread_handle;
+    return NULL;
+}
+#endif
+
+
+/***********************************************************************
+ *           check_invalid_gsbase
+ *
+ * Check for fault caused by invalid %gs value (some copy protection schemes mess with it).
+ */
+static inline BOOL check_invalid_gsbase( ucontext_t *sigcontext, CONTEXT *context )
+{
+    unsigned int prefix_count = 0;
+    const BYTE *instr = (const BYTE *)context->Rip;
+    TEB *teb = NtCurrentTeb();
+    ULONG_PTR cur_gsbase = 0;
+
+#ifdef __linux__
+    if (user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE])
+        __asm__ volatile ("rdgsbase %0" : "=r" (cur_gsbase));
+    else
+        arch_prctl( ARCH_GET_GS, &cur_gsbase );
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+    amd64_get_gsbase( &cur_gsbase );
+#elif defined(__NetBSD__)
+    sysarch( X86_64_GET_GSBASE, &cur_gsbase );
+#elif defined(__APPLE__)
+    cur_gsbase = (ULONG_PTR)mac_thread_gsbase();
+#else
+# error Please define getting %gs for your architecture
+#endif
+
+    if (cur_gsbase == (ULONG_PTR)teb) return FALSE;
+
+    for (;;)
+    {
+        switch(*instr)
+        {
+        /* instruction prefixes */
+        case 0x2e:  /* %cs: */
+        case 0x36:  /* %ss: */
+        case 0x3e:  /* %ds: */
+        case 0x26:  /* %es: */
+        case 0x40:  /* rex */
+        case 0x41:  /* rex */
+        case 0x42:  /* rex */
+        case 0x43:  /* rex */
+        case 0x44:  /* rex */
+        case 0x45:  /* rex */
+        case 0x46:  /* rex */
+        case 0x47:  /* rex */
+        case 0x48:  /* rex */
+        case 0x49:  /* rex */
+        case 0x4a:  /* rex */
+        case 0x4b:  /* rex */
+        case 0x4c:  /* rex */
+        case 0x4d:  /* rex */
+        case 0x4e:  /* rex */
+        case 0x4f:  /* rex */
+        case 0x64:  /* %fs: */
+        case 0x66:  /* opcode size */
+        case 0x67:  /* addr size */
+        case 0xf0:  /* lock */
+        case 0xf2:  /* repne */
+        case 0xf3:  /* repe */
+            if (++prefix_count >= 15) return FALSE;
+            instr++;
+            continue;
+        case 0x65:  /* %gs: */
+            GS_sig(sigcontext) = ds64_sel;
+            break;
+        default:
+            return FALSE;
+        }
+        break;      /* %gs: */
+    }
+
+    TRACE( "gsbase %016lx teb %p at instr %p, fixing up\n", cur_gsbase, teb, instr );
+
+#ifdef __linux__
+    if (user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE])
+        __asm__ volatile ("wrgsbase %0" :: "r" (teb));
+    else
+        arch_prctl( ARCH_SET_GS, teb );
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+    amd64_set_gsbase( teb );
+#elif defined(__NetBSD__)
+    sysarch( X86_64_SET_GSBASE, &teb );
+#elif defined(__APPLE__)
+    _thread_set_tsd_base((uint64_t)teb);
+#else
+# error Please define setting %gs for your architecture
+#endif
+
+    return TRUE;
+}
+
+
 /**********************************************************************
  *		segv_handler
  *
@@ -2071,6 +2183,11 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
                                        &flags, sizeof(flags), NULL );
             /* send EXCEPTION_EXECUTE_FAULT only if data execution prevention is enabled */
             if (!(flags & MEM_EXECUTE_OPTION_DISABLE)) rec.ExceptionInformation[0] = EXCEPTION_READ_FAULT;
+        }
+        if (CS_sig(ucontext) == cs64_sel && check_invalid_gsbase( ucontext, &context.c ))
+        {
+            leave_handler( ucontext );
+            return;
         }
         break;
     case TRAP_x86_ALIGNFLT:  /* Alignment check exception */
@@ -2479,24 +2596,6 @@ void signal_free_thread( TEB *teb )
         server_leave_uninterrupted_section( &ldt_mutex, &sigset );
     }
 }
-
-#ifdef __APPLE__
-/**********************************************************************
- *		mac_thread_gsbase
- */
-static void *mac_thread_gsbase(void)
-{
-    struct thread_identifier_info tiinfo;
-    unsigned int info_count = THREAD_IDENTIFIER_INFO_COUNT;
-
-    mach_port_t self = mach_thread_self();
-    kern_return_t kr = thread_info(self, THREAD_IDENTIFIER_INFO, (thread_info_t) &tiinfo, &info_count);
-    mach_port_deallocate(mach_task_self(), self);
-
-    if (kr == KERN_SUCCESS) return (void*)tiinfo.thread_handle;
-    return NULL;
-}
-#endif
 
 
 /**********************************************************************
