@@ -4001,8 +4001,30 @@ NTSTATUS get_nt_and_unix_names( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name
     if (status && status != STATUS_NO_SUCH_FILE)
         TRACE( "%s -> ret %x\n", debugstr_us(orig), status );
     else
+    {
+        /* Trim trailing slashes from anything other than roots of drives. */
+        USHORT nt_len = attr->ObjectName->Length / sizeof(WCHAR);
+        if (nt_len > 7 /* "\??\X:\" */ && attr->ObjectName->Buffer[nt_len - 1] == '\\')
+        {
+            if (nt_name->Buffer)
+            {
+                nt_name->Buffer[nt_len - 1] = 0;
+                nt_name->Length -= sizeof(WCHAR);
+            }
+            else
+            {
+                WCHAR *buffer = malloc( nt_len * sizeof(WCHAR) );
+                if (!buffer) return STATUS_NO_MEMORY;
+                memcpy( buffer, attr->ObjectName->Buffer, (nt_len - 1) * sizeof(WCHAR) );
+                buffer[nt_len - 1] = 0;
+                init_unicode_string( nt_name, buffer );
+                attr->ObjectName = nt_name;
+            }
+        }
+
         TRACE( "%s -> ret %x nt %s unix %s\n", debugstr_us(orig),
                status, debugstr_us(attr->ObjectName), debugstr_a(*unix_name_ret) );
+    }
     return status;
 }
 
