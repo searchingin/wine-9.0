@@ -246,6 +246,12 @@ struct wg_parser_push_data_params
     UINT32 size;
 };
 
+struct wg_parser_set_thin_params
+{
+    wg_parser_t parser;
+    BOOL thin;
+};
+
 struct wg_parser_get_stream_count_params
 {
     wg_parser_t parser;
@@ -429,6 +435,8 @@ enum unix_funcs
 
     unix_wg_parser_get_next_read_offset,
     unix_wg_parser_push_data,
+
+    unix_wg_parser_set_thin,
 
     unix_wg_parser_get_stream_count,
     unix_wg_parser_get_stream,

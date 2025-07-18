@@ -80,6 +80,7 @@ struct wg_parser
     bool output_compressed;
     bool no_more_pads, has_duration, error;
     bool err_on, warn_on;
+    bool thin;
 
     pthread_cond_t read_cond, read_done_cond;
     struct
@@ -222,6 +223,18 @@ static NTSTATUS wg_parser_push_data(void *args)
 
     pthread_mutex_unlock(&parser->mutex);
     pthread_cond_signal(&parser->read_done_cond);
+
+    return S_OK;
+}
+
+static NTSTATUS wg_parser_set_thin(void *args)
+{
+    const struct wg_parser_set_thin_params *params = args;
+    struct wg_parser *parser = get_parser(params->parser);
+
+    pthread_mutex_lock(&parser->mutex);
+    parser->thin = params->thin;
+    pthread_mutex_unlock(&parser->mutex);
 
     return S_OK;
 }
@@ -600,10 +613,93 @@ static void no_more_pads_cb(GstElement *element, gpointer user)
     pthread_cond_signal(&parser->init_cond);
 }
 
+static GstPadProbeReturn decoder_sink_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer user)
+{
+    struct wg_parser *parser = user;
+    GstBuffer *buffer = gst_pad_probe_info_get_buffer(info);
+    bool thin, delta;
+
+    if (!buffer)
+        return GST_PAD_PROBE_OK;
+
+    delta = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
+
+    pthread_mutex_lock(&parser->mutex);
+    thin = parser->thin;
+    pthread_mutex_unlock(&parser->mutex);
+
+    if (thin)
+    {
+        if (delta)
+        {
+            GST_DEBUG("Stream is thinned; discarding delta frame.");
+            return GST_PAD_PROBE_DROP;
+        }
+        else
+        {
+            GST_DEBUG("Stream is thinned; found key frame.");
+        }
+    }
+
+    if (!delta)
+    {
+        GstStructure *structure = gst_structure_new_empty("keyframe");
+        GstEvent *event = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, structure);
+        gst_pad_send_event(pad, event);
+    }
+
+    return GST_PAD_PROBE_OK;
+}
+
+static GstPadProbeReturn decoder_src_event_probe(GstPad *pad, GstPadProbeInfo *info, gpointer user)
+{
+    GstEvent *event = gst_pad_probe_info_get_event(info);
+    bool *keyframe = user;
+
+    if (event && event->type == GST_EVENT_CUSTOM_DOWNSTREAM
+            && gst_structure_has_name(gst_event_get_structure(event), "keyframe"))
+    {
+        *keyframe = true;
+        return GST_PAD_PROBE_DROP;
+    }
+
+    return GST_PAD_PROBE_OK;
+}
+
+static GstPadProbeReturn decoder_src_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer user)
+{
+    GstBuffer *buffer = gst_pad_probe_info_get_buffer(info);
+    bool *keyframe = user;
+
+    if (buffer && !*keyframe)
+        GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
+
+    *keyframe = false;
+
+    return GST_PAD_PROBE_OK;
+}
+
 static void deep_element_added_cb(GstBin *self, GstBin *sub_bin, GstElement *element, gpointer user)
 {
+    struct wg_parser *parser = user;
+
     if (element)
+    {
+        GstElementFactory *fact = GST_ELEMENT_GET_CLASS(element)->elementfactory;
+        const char *klass = gst_element_factory_get_klass(fact);
+        GstPad *sink, *src;
+        if (strstr(klass, GST_ELEMENT_FACTORY_KLASS_DECODER)
+                && (sink = gst_element_get_static_pad(element, "sink"))
+                && (src = gst_element_get_static_pad(element, "src")))
+        {
+            bool *keyframe = calloc(1, sizeof *keyframe);
+            gst_pad_add_probe(sink, GST_PAD_PROBE_TYPE_BUFFER, decoder_sink_buffer_probe, parser, NULL);
+            gst_pad_add_probe(src, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, decoder_src_event_probe, keyframe, NULL);
+            gst_pad_add_probe(src, GST_PAD_PROBE_TYPE_BUFFER, decoder_src_buffer_probe, keyframe, free);
+        }
+
         set_max_threads(element);
+    }
 }
 
 static gboolean sink_event_cb(GstPad *pad, GstObject *parent, GstEvent *event)
@@ -1913,6 +2009,8 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
     X(wg_parser_get_next_read_offset),
     X(wg_parser_push_data),
 
+    X(wg_parser_set_thin),
+
     X(wg_parser_get_stream_count),
     X(wg_parser_get_stream),
 
@@ -2309,6 +2407,8 @@ const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
 
     X(wg_parser_get_next_read_offset),
     X64(wg_parser_push_data),
+
+    X(wg_parser_set_thin),
 
     X(wg_parser_get_stream_count),
     X(wg_parser_get_stream),
