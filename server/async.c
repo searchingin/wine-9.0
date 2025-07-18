@@ -192,7 +192,7 @@ void async_terminate( struct async *async, unsigned int status )
          * files). the client should not fill the IOSB in this case; pass it as
          * NULL to communicate that.
          * note that we check the IOSB status and not the initial status */
-        if (NT_ERROR( status ) && (!is_fd_overlapped( async->fd ) || !async->pending))
+        if (NT_ERROR( status ) && !async->canceled && (!is_fd_overlapped( async->fd ) || !async->pending))
             data.async_io.sb = 0;
         else
             data.async_io.sb = async->data.iosb;
@@ -396,6 +396,12 @@ obj_handle_t async_handoff( struct async *async, data_size_t *result, int force_
         return 0;
     }
 
+    if (async->blocking && is_fd_wait_alertable( async->fd ) && !list_empty( &async->thread->user_apc ))
+    {
+        async->canceled = 1;
+        async_terminate( async, STATUS_CANCELLED );
+    }
+
     if (async->iosb->status != STATUS_PENDING)
     {
         if (result) *result = async->iosb->result;
@@ -512,9 +518,9 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
         /* don't signal completion if the async failed synchronously
          * this can happen if the initial status was unknown (i.e. for device files)
          * note that we check the IOSB status here, not the initial status */
-        if (async->pending || !NT_ERROR( status ))
+        if (async->pending || async->canceled || !NT_ERROR( status ))
         {
-            if (async->data.apc)
+            if (async->data.apc && !(async->blocking && async->canceled))
             {
                 union apc_call data;
                 memset( &data, 0, sizeof(data) );
@@ -525,7 +531,7 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
                 data.user.args[2] = 0;
                 thread_queue_apc( NULL, async->thread, NULL, &data );
             }
-            else if (async->data.apc_context && (async->pending ||
+            else if (!async->data.apc && async->data.apc_context && (async->pending ||
                      !(async->comp_flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)))
             {
                 add_async_completion( async, async->data.apc_context, status, total );
@@ -672,6 +678,22 @@ restart:
         async->canceled = 1;
         fd_cancel_async( async->fd, async );
         goto restart;
+    }
+}
+
+void cancel_alerted_thread_async( struct thread *thread )
+{
+    struct async *async;
+
+    LIST_FOR_EACH_ENTRY( async, &thread->process->asyncs, struct async, process_entry )
+    {
+        if (async->terminated || async->canceled) continue;
+        if (async->blocking && async->thread == thread && async->fd && is_fd_wait_alertable( async->fd ))
+        {
+            async->canceled = 1;
+            fd_cancel_async( async->fd, async );
+            return;
+        }
     }
 }
 
