@@ -523,10 +523,15 @@ TREEVIEW_SendRealNotify(const TREEVIEW_INFO *infoPtr, UINT code, NMHDR *hdr)
 }
 
 static BOOL
-TREEVIEW_SendSimpleNotify(const TREEVIEW_INFO *infoPtr, UINT code)
+TREEVIEW_SendSimpleNotify(const TREEVIEW_INFO *infoPtr, UINT code, BOOL *result)
 {
     NMHDR hdr;
-    return TREEVIEW_SendRealNotify(infoPtr, code, &hdr);
+    HWND hwnd;
+
+    hwnd = infoPtr->hwnd; /* save hwnd before after TREEVIEW_SendRealNotify(), the window could be already destroyed after sending notifications */
+    if (result)
+        *result = TREEVIEW_SendRealNotify(infoPtr, code, &hdr);
+    return IsWindow(hwnd);
 }
 
 static VOID
@@ -4193,6 +4198,7 @@ TREEVIEW_LButtonDoubleClick(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 {
     TREEVIEW_ITEM *item;
     TVHITTESTINFO hit;
+    BOOL notify_result;
 
     TRACE("\n");
     SetFocus(infoPtr->hwnd);
@@ -4211,7 +4217,9 @@ TREEVIEW_LButtonDoubleClick(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 	return 0;
     TRACE("item %d\n", TREEVIEW_GetItemIndex(infoPtr, item));
 
-    if (TREEVIEW_SendSimpleNotify(infoPtr, NM_DBLCLK) == FALSE)
+    if (TREEVIEW_SendSimpleNotify(infoPtr, NM_DBLCLK, &notify_result) == FALSE)
+        return 0;
+    if (notify_result == FALSE)
     {				/* FIXME! */
 	switch (hit.flags)
 	{
@@ -4258,7 +4266,7 @@ TREEVIEW_LButtonDoubleClick(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 static LRESULT
 TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 {
-    BOOL do_track, do_select, bDoLabelEdit;
+    BOOL do_track, do_select, bDoLabelEdit, notify_result;
     HWND hwnd = infoPtr->hwnd;
     TVHITTESTINFO ht;
 
@@ -4315,8 +4323,13 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
         (ht.flags & TVHT_ONITEMLABEL) && (infoPtr->selectedItem == ht.hItem);
 
     /* Send NM_CLICK right away */
-    if (!do_track && TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK))
-        goto setfocus;
+    if (!do_track)
+    {
+        if (!TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK, &notify_result))
+            return 0;
+        if (notify_result)
+            goto setfocus;
+    }
 
     if (ht.flags & TVHT_ONITEMBUTTON)
     {
@@ -4345,8 +4358,13 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
         }
     }
 
-    if (do_track && TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK))
-        goto setfocus;
+    if (do_track)
+    {
+        if (!TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK, &notify_result))
+            return 0;
+        if (notify_result)
+            goto setfocus;
+    }
 
     if (TREEVIEW_IsFullRowSelect(infoPtr))
         do_select = ht.flags & (TVHT_ONITEMINDENT | TVHT_ONITEMICON | TVHT_ONITEMLABEL | TVHT_ONITEMRIGHT);
@@ -4385,6 +4403,7 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 static LRESULT
 TREEVIEW_RButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 {
+    BOOL notify_result;
     TVHITTESTINFO ht;
 
     if (infoPtr->hwndEdit)
@@ -4414,7 +4433,9 @@ TREEVIEW_RButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
     else
     {
 	SetFocus(infoPtr->hwnd);
-	if(!TREEVIEW_SendSimpleNotify(infoPtr, NM_RCLICK))
+        if (!TREEVIEW_SendSimpleNotify(infoPtr, NM_RCLICK, &notify_result))
+            return 0;
+	if (!notify_result)
 	{
 	    /* Send a WM_CONTEXTMENU message in response to the RBUTTONUP */
 	    SendMessageW(infoPtr->hwndNotify, WM_CONTEXTMENU,
@@ -5340,7 +5361,7 @@ TREEVIEW_KeyDown(TREEVIEW_INFO *infoPtr, WPARAM wParam)
 	break;
 
     case VK_RETURN:
-        TREEVIEW_SendSimpleNotify(infoPtr, NM_RETURN);
+        TREEVIEW_SendSimpleNotify(infoPtr, NM_RETURN, NULL);
         break;
 
     case VK_HOME:
@@ -5666,7 +5687,7 @@ TREEVIEW_SetFocus(TREEVIEW_INFO *infoPtr)
     }
 
     TREEVIEW_Invalidate(infoPtr, infoPtr->selectedItem);
-    TREEVIEW_SendSimpleNotify(infoPtr, NM_SETFOCUS);
+    TREEVIEW_SendSimpleNotify(infoPtr, NM_SETFOCUS, NULL);
     return 0;
 }
 
@@ -5677,7 +5698,7 @@ TREEVIEW_KillFocus(const TREEVIEW_INFO *infoPtr)
 
     TREEVIEW_Invalidate(infoPtr, infoPtr->selectedItem);
     UpdateWindow(infoPtr->hwnd);
-    TREEVIEW_SendSimpleNotify(infoPtr, NM_KILLFOCUS);
+    TREEVIEW_SendSimpleNotify(infoPtr, NM_KILLFOCUS, NULL);
     return 0;
 }
 
