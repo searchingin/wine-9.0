@@ -3026,8 +3026,16 @@ HWND WINAPI NtUserFindWindowEx( HWND parent, HWND child, UNICODE_STRING *class, 
     user_handle_t *list;
     HWND retvalue = 0;
     int i = 0, size = 128, title_len;
-    ATOM atom = class ? get_int_atom_value( class ) : 0;
+    WCHAR nameW[MAX_ATOM_LEN + 1];
+    ATOM atom;
     NTSTATUS status;
+
+    if ((atom = class ? get_int_atom_value( class ) : 0))
+    {
+        class->Buffer = nameW;
+        class->MaximumLength = sizeof(nameW);
+        class->Length = NtUserGetAtomName( atom, class ) * sizeof(WCHAR);
+    }
 
     /* empty class is not the same as NULL class */
     if (!atom && class && !class->Length) return 0;
@@ -3042,8 +3050,7 @@ HWND WINAPI NtUserFindWindowEx( HWND parent, HWND child, UNICODE_STRING *class, 
         {
             req->parent = wine_server_user_handle( parent );
             req->child  = wine_server_user_handle( child );
-            req->atom   = atom;
-            if (!atom && class) wine_server_add_data( req, class->Buffer, class->Length );
+            if (class) wine_server_add_data( req, class->Buffer, class->Length );
             wine_server_set_reply( req, list, size * sizeof(user_handle_t) );
             status = wine_server_call( req );
             size = reply->count;
@@ -5370,9 +5377,18 @@ static WND *create_window_handle( HWND parent, HWND owner, UNICODE_STRING *name,
 {
     UINT dpi_context = get_thread_dpi_awareness_context();
     HWND handle = 0, full_parent = 0, full_owner = 0;
+    WCHAR nameW[MAX_ATOM_LEN + 1];
     struct tagCLASS *class = NULL;
     int extra_bytes = 0;
+    ATOM atom;
     WND *win;
+
+    if ((atom = get_int_atom_value( name )))
+    {
+        name->Buffer = nameW;
+        name->MaximumLength = sizeof(nameW);
+        name->Length = NtUserGetAtomName( atom, name ) * sizeof(WCHAR);
+    }
 
     SERVER_START_REQ( create_window )
     {
@@ -5383,8 +5399,7 @@ static WND *create_window_handle( HWND parent, HWND owner, UNICODE_STRING *name,
         req->dpi_context     = dpi_context;
         req->style           = style;
         req->ex_style        = ex_style;
-        if (!(req->atom = get_int_atom_value( name )) && name->Length)
-            wine_server_add_data( req, name->Buffer, name->Length );
+        wine_server_add_data( req, name->Buffer, name->Length );
         if (!wine_server_call_err( req ))
         {
             handle      = wine_server_ptr_handle( reply->handle );
@@ -5418,7 +5433,7 @@ static WND *create_window_handle( HWND parent, HWND owner, UNICODE_STRING *name,
     {
         struct ntuser_thread_info *thread_info = NtUserGetThreadInfo();
 
-        if (name->Buffer == (const WCHAR *)DESKTOP_CLASS_ATOM)
+        if (is_desktop_class( name ))
         {
             if (!thread_info->top_window) thread_info->top_window = HandleToUlong( full_parent ? full_parent : handle );
             else assert( full_parent == UlongToHandle( thread_info->top_window ));
@@ -5547,8 +5562,6 @@ HWND WINAPI NtUserCreateWindowEx( DWORD ex_style, UNICODE_STRING *class_name,
     RECT surface_rect;
     WND *win;
 
-    static const WCHAR messageW[] = {'M','e','s','s','a','g','e'};
-
     cs.lpCreateParams = params;
     cs.hInstance  = instance ? instance : class_instance;
     cs.hMenu      = menu;
@@ -5591,9 +5604,7 @@ HWND WINAPI NtUserCreateWindowEx( DWORD ex_style, UNICODE_STRING *class_name,
         }
 
         /* are we creating the desktop or HWND_MESSAGE parent itself? */
-        if (class_name->Buffer != (LPCWSTR)DESKTOP_CLASS_ATOM &&
-            (class_name->Length != sizeof(messageW) ||
-             wcsnicmp( class_name->Buffer, messageW, ARRAYSIZE(messageW) )))
+        if (!is_desktop_class( class_name ) && !is_message_class( class_name ))
         {
             if (get_process_layout() & LAYOUT_RTL) cs.dwExStyle |= WS_EX_LAYOUTRTL;
             parent = get_desktop_window();
