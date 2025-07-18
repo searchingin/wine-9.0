@@ -94,6 +94,14 @@ nv12frame.bmp RCDATA nv12frame.bmp
 nv12frame-2d.bmp RCDATA nv12frame-2d.bmp
 
 /* Generated from running the tests on Windows */
+/* @makedep: nv12frame-crop.bmp */
+nv12frame-crop.bmp RCDATA nv12frame-crop.bmp
+
+/* Generated from running the tests on Windows */
+/* @makedep: nv12frame-crop-2d.bmp */
+nv12frame-crop-2d.bmp RCDATA nv12frame-crop-2d.bmp
+
+/* Generated from running the tests on Windows */
 /* @makedep: nv12frame-grabber.bmp */
 nv12frame-grabber.bmp RCDATA nv12frame-grabber.bmp
 
