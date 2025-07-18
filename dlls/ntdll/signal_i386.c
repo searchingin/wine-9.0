@@ -215,7 +215,7 @@ void WINAPI KiUserCallbackDispatcher( ULONG id, void *args, ULONG len )
  */
 static inline void save_fpu( CONTEXT *context )
 {
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
     struct
     {
         DWORD ControlWord;
@@ -247,7 +247,7 @@ static inline void save_fpu( CONTEXT *context )
  */
 static inline void save_fpux( CONTEXT *context )
 {
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
     /* we have to enforce alignment by hand */
     char buffer[sizeof(XSAVE_FORMAT) + 16];
     XSAVE_FORMAT *state = (XSAVE_FORMAT *)(((ULONG_PTR)buffer + 15) & ~15);
