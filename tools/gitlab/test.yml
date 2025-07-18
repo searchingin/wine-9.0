@@ -59,6 +59,34 @@
     CI_COMMIT_MESSAGE: ""
     GITLAB_USER_NAME: ""
 
+test-linux-64-non-avx:
+  extends: .wine-test
+  variables:
+    INCLUDE_TESTS: "ntdll"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  needs:
+    - job: build-linux
+  script:
+    - export WINETEST_COLOR=1
+    # Pentium(R) Dual-Core CPU T4500 @ 2.30GHz
+    - export WINE_CPUID_00000000_00000000=0000000d_756e6547_6c65746e_49656e69
+    - export WINE_CPUID_00000001_00000000=0001067a_01020800_0c00e39d_bfebfbff
+    - export WINE_CPUID_00000007_00000000=00000000_00000000_00000000_00000000
+    - export WINE_CPUID_0000000d_00000000=00000003_00000240_00000240_00000000
+    - export WINE_CPUID_80000000_00000000=80000008_00000000_00000000_00000000
+    - export WINE_CPUID_80000001_00000000=00000000_00000000_00000001_20100800
+    - export WINE_CPUID_80000002_00000000=746e6550_286d7569_44202952_2d6c6175
+    - export WINE_CPUID_80000003_00000000=65726f43_55504320_20202020_54202020
+    - export WINE_CPUID_80000004_00000000=30303534_20402020_30332e32_007a4847
+    - wine usr/local/lib/wine/x86_64-windows/winetest.exe -q -q -o - -J winetest.xml $INCLUDE_TESTS
+  artifacts:
+    when: always
+    paths:
+      - winetest.xml
+    reports:
+      junit: winetest.xml
+
 test-linux-64:
   extends: .wine-test
   variables:
