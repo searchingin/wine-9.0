@@ -5365,11 +5365,15 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T 
         status = server_queue_process_apc( process, &call, &result );
         if (status != STATUS_SUCCESS) return status;
 
-        if (result.virtual_protect.status == STATUS_SUCCESS)
+        switch (result.virtual_protect.status)
         {
+        case STATUS_SUCCESS:
             *addr_ptr = wine_server_get_ptr( result.virtual_protect.addr );
             *size_ptr = result.virtual_protect.size;
+        case STATUS_NOT_COMMITTED:
+        case STATUS_INVALID_PARAMETER:
             *old_prot = result.virtual_protect.prot;
+            break;
         }
         return result.virtual_protect.status;
     }
@@ -5389,9 +5393,17 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T 
             old = get_win32_prot( vprot, view->protect );
             status = set_protection( view, base, size, new_prot );
         }
-        else status = STATUS_NOT_COMMITTED;
+        else
+        {
+            status = STATUS_NOT_COMMITTED;
+            *old_prot = PAGE_NOACCESS;
+        }
     }
-    else status = STATUS_INVALID_PARAMETER;
+    else
+    {
+        status = STATUS_INVALID_PARAMETER;
+        *old_prot = PAGE_NOACCESS;
+    }
 
     if (!status) VIRTUAL_DEBUG_DUMP_VIEW( view );
 
