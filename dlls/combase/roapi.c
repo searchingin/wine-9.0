@@ -167,6 +167,11 @@ HRESULT WINAPI DECLSPEC_HOTPATCH RoGetActivationFactory(HSTRING classid, REFIID 
         return hr;
     }
 
+    if (strcmp(debugstr_hstring(classid), "L\"Windows.Storage.StorageFile\"") == 0)
+    {
+       library = L"C:\\windows\\system32\\windows.storage.dll";
+    }
+
     if (!(module = LoadLibraryW(library)))
     {
         ERR("Failed to load module %s\n", debugstr_w(library));
